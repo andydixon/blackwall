@@ -1,0 +1,61 @@
+:root {
+    --charcoal: #1f232a;
+    --charcoal-light: #2a2f38;
+    --charcoal-lighter: #35394 3;
+}
+
+body.bg-charcoal {
+    background-color: var(--charcoal) !important;
+}
+
+.bg-dark {
+    background-color: var(--charcoal-light) !important;
+}
+
+.card.bg-dark {
+    border: 1px solid #3a3f48;
+}
+
+.table-dark {
+    --bs-table-bg: var(--charcoal-light);
+    --bs-table-striped-bg: var(--charcoal-lighter);
+}
+
+.navbar-dark {
+    background-color: var(--charcoal-light) !important;
+}
+
+code {
+    background-color: rgba(0, 0, 0, 0.3);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 0.875em;
+}
+
+.badge {
+    font-weight: 500;
+    padding: 0.35em 0.65em;
+}
+
+.btn-outline-light:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.card-body h6 {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.form-label {
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+}
+
+.alert {
+    border-radius: 0.5rem;
+}
+
+.table-responsive {
+    border-radius: 0.5rem;
+    overflow: hidden;
+}
