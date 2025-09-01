@@ -1,0 +1,294 @@
+<?php
+
+declare(strict_types=1);
+
+namespace BlackWall\Controller;
+
+use BlackWall\Database;
+use BlackWall\Service\WebAuthnService;
+use BlackWall\Service\AuditLogger;
+use BlackWall\Security\SessionManager;
+use BlackWall\Security\CSRFProtection;
+use Psr\Http\Message\ResponseInterface as Response;
+use Psr\Http\Message\ServerRequestInterface as Request;
+use Slim\Views\PhpRenderer;
+
+class PortalController
+{
+    private WebAuthnService $webauthn;
+    private PhpRenderer $renderer;
+
+    public function __construct()
+    {
+        $this->webauthn = new WebAuthnService();
+        $this->renderer = new PhpRenderer(__DIR__ . '/../../templates');
+    }
+
+    private function renderWithLayout(Response $response, string $template, array $data = []): Response
+    {
+        $contentRenderer = new PhpRenderer(__DIR__ . '/../../templates');
+        $contentResponse = $contentRenderer->render(new \Slim\Psr7\Response(), $template, $data);
+        $content = (string) $contentResponse->getBody();
+        
+        $data['content'] = $content;
+        return $this->renderer->render($response, '_layout.php', $data);
+    }
+
+    private function checkAuth(): bool
+    {
+        SessionManager::start();
+        return SessionManager::get('user_id') !== null;
+    }
+
+    public function loginForm(Request $request, Response $response): Response
+    {
+        return $this->renderer->render($response, 'portal/login.php', [
+            'csrfToken' => CSRFProtection::generateToken(),
+        ]);
+    }
+
+    public function loginChallenge(Request $request, Response $response): Response
+    {
+        $challenge = random_bytes(32);
+        
+        SessionManager::start();
+        SessionManager::set('portal_webauthn_challenge', base64_encode($challenge));
+
+        $options = [
+            'challenge' => base64_encode($challenge),
+            'timeout' => 60000,
+            'rpId' => \BlackWall\Config::get('WEBAUTHN_RP_ID'),
+            'userVerification' => 'preferred',
+        ];
+
+        $response->getBody()->write(json_encode($options));
+        return $response->withHeader('Content-Type', 'application/json');
+    }
+
+    public function loginVerify(Request $request, Response $response): Response
+    {
+        SessionManager::start();
+        
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        
+        $body = $request->getParsedBody();
+        $credentialId = $body['id'] ?? null;
+        $rawId = $body['rawId'] ?? null;
+        $authenticatorData = $body['response']['authenticatorData'] ?? null;
+        $clientDataJSON = $body['response']['clientDataJSON'] ?? null;
+        $signature = $body['response']['signature'] ?? null;
+
+        if (!$credentialId || !$rawId || !$authenticatorData || !$clientDataJSON || !$signature) {
+            $audit->logFail('portal.login.fail', ['failure_reason' => 'Missing credential data']);
+            $response->getBody()->write(json_encode(['error' => 'Invalid credential']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        $credential = $this->webauthn->getCredentialById($credentialId);
+        if (!$credential) {
+            $audit->logFail('portal.login.fail', [
+                'failure_reason' => 'Credential not found',
+                'webauthn_credential_public_id' => $credentialId,
+            ]);
+            $response->getBody()->write(json_encode(['error' => 'Invalid credential']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        $expectedChallenge = SessionManager::get('portal_webauthn_challenge');
+        if (!$expectedChallenge) {
+            $audit->logFail('portal.login.fail', [
+                'failure_reason' => 'No challenge in session',
+                'webauthn_credential_public_id' => $credentialId,
+            ]);
+            $response->getBody()->write(json_encode(['error' => 'Session expired']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        $verified = $this->webauthn->verifyAssertion(
+            $credentialId,
+            $clientDataJSON,
+            $authenticatorData,
+            $signature,
+            $expectedChallenge
+        );
+
+        if (!$verified) {
+            $audit->logFail('portal.login.fail', [
+                'failure_reason' => 'Signature verification failed',
+                'webauthn_credential_public_id' => $credentialId,
+            ]);
+            $response->getBody()->write(json_encode(['error' => 'Invalid credential']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        SessionManager::remove('portal_webauthn_challenge');
+
+        $userId = (int) $credential['user_id'];
+        SessionManager::set('user_id', $userId);
+        SessionManager::set('login_credential_id', $credential['id']);
+        SessionManager::regenerateId();
+
+        $audit->logSuccess('portal.login.success', [
+            'actor_user_id' => $userId,
+            'webauthn_credential_id' => $credential['id'],
+            'webauthn_credential_public_id' => $credentialId,
+        ]);
+
+        $response->getBody()->write(json_encode(['success' => true, 'redirect' => '/portal']));
+        return $response->withHeader('Content-Type', 'application/json');
+    }
+
+    public function dashboard(Request $request, Response $response): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/portal/login')->withStatus(302);
+        }
+
+        $userId = SessionManager::get('user_id');
+        $loginCredentialId = SessionManager::get('login_credential_id');
+        $db = Database::getInstance();
+
+        // Get user info
+        $stmt = $db->prepare('SELECT * FROM users WHERE id = ?');
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch();
+
+        // Get user's projects with privilege levels
+        $stmt = $db->prepare(
+            'SELECT p.*, upr.privilege_level, upr.id as assignment_id
+             FROM projects p
+             JOIN user_project_roles upr ON p.id = upr.project_id
+             WHERE upr.user_id = ?
+             ORDER BY p.name'
+        );
+        $stmt->execute([$userId]);
+        $projects = $stmt->fetchAll();
+
+        // Get user's WebAuthn credentials
+        $stmt = $db->prepare(
+            'SELECT * FROM webauthn_credentials WHERE user_id = ? ORDER BY created_at DESC'
+        );
+        $stmt->execute([$userId]);
+        $credentials = $stmt->fetchAll();
+
+        return $this->renderWithLayout($response, 'portal/dashboard.php', [
+            'title' => 'Portal',
+            'user' => $user,
+            'projects' => $projects,
+            'credentials' => $credentials,
+            'loginCredentialId' => $loginCredentialId,
+            'csrfToken' => CSRFProtection::generateToken(),
+        ]);
+    }
+
+    public function addKeyInit(Request $request, Response $response): Response
+    {
+        if (!$this->checkAuth()) {
+            $response->getBody()->write(json_encode(['error' => 'Unauthorized']));
+            return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+        }
+
+        $userId = SessionManager::get('user_id');
+        $db = Database::getInstance();
+
+        $stmt = $db->prepare('SELECT uuid, display_label FROM users WHERE id = ?');
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch();
+
+        $options = $this->webauthn->generateRegistrationOptions($user['uuid'], $user['display_label'] ?? 'User');
+
+        SessionManager::set('portal_registration_challenge', $options['challenge']);
+
+        $response->getBody()->write(json_encode($options));
+        return $response->withHeader('Content-Type', 'application/json');
+    }
+
+    public function addKeyComplete(Request $request, Response $response): Response
+    {
+        if (!$this->checkAuth()) {
+            $response->getBody()->write(json_encode(['error' => 'Unauthorized']));
+            return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+        }
+
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $userId = SessionManager::get('user_id');
+        $body = $request->getParsedBody();
+
+        $credentialId = $body['id'] ?? null;
+        $attestationObject = $body['response']['attestationObject'] ?? null;
+        $label = $body['label'] ?? 'Unnamed Key';
+
+        if (!$credentialId || !$attestationObject) {
+            $response->getBody()->write(json_encode(['error' => 'Invalid credential data']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        $publicKey = $this->webauthn->extractPublicKeyFromAttestation($attestationObject);
+        if (!$publicKey) {
+            $response->getBody()->write(json_encode(['error' => 'Failed to extract public key']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        $credentialData = [
+            'credential_id' => $credentialId,
+            'public_key' => $publicKey,
+            'sign_counter' => 0,
+            'attestation_type' => 'none',
+        ];
+
+        $credentialDbId = $this->webauthn->storeCredential($userId, $credentialData, $label);
+
+        $audit->logSuccess('portal.key.add', [
+            'actor_user_id' => $userId,
+            'webauthn_credential_id' => $credentialDbId,
+        ]);
+
+        $response->getBody()->write(json_encode(['success' => true]));
+        return $response->withHeader('Content-Type', 'application/json');
+    }
+
+    public function deleteKey(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/portal/login')->withStatus(302);
+        }
+
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $userId = SessionManager::get('user_id');
+        $loginCredentialId = SessionManager::get('login_credential_id');
+        $credentialId = (int) $args['id'];
+
+        // Prevent deleting the credential used to log in
+        if ($credentialId === $loginCredentialId) {
+            return $response->withHeader('Location', '/portal?error=cannot_delete_current_key')->withStatus(302);
+        }
+
+        // Verify the credential belongs to this user
+        $db = Database::getInstance();
+        $stmt = $db->prepare('SELECT user_id FROM webauthn_credentials WHERE id = ?');
+        $stmt->execute([$credentialId]);
+        $credential = $stmt->fetch();
+
+        if (!$credential || (int)$credential['user_id'] !== $userId) {
+            return $response->withHeader('Location', '/portal?error=unauthorized')->withStatus(302);
+        }
+
+        $this->webauthn->deleteCredential($credentialId);
+
+        $audit->logSuccess('portal.key.delete', [
+            'actor_user_id' => $userId,
+            'webauthn_credential_id' => $credentialId,
+        ]);
+
+        return $response->withHeader('Location', '/portal?success=key_deleted')->withStatus(302);
+    }
+
+    public function logout(Request $request, Response $response): Response
+    {
+        SessionManager::destroy();
+        return $response->withHeader('Location', '/portal/login')->withStatus(302);
+    }
+}

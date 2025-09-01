@@ -34,26 +34,68 @@
         const options = <?= json_encode($options) ?>;
         const token = <?= json_encode($token) ?>;
 
+        // Helper function to convert base64 to ArrayBuffer
+        function base64ToArrayBuffer(base64) {
+            const binaryString = window.atob(base64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        // Helper function to convert ArrayBuffer to base64
+        function arrayBufferToBase64(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return window.btoa(binary);
+        }
+
         document.getElementById('enroll-btn').addEventListener('click', async () => {
             const statusEl = document.getElementById('status');
             const errorEl = document.getElementById('error');
             
             statusEl.classList.remove('d-none');
-            statusEl.textContent = 'Enrolling credential...';
+            statusEl.textContent = 'Touch your security key...';
             errorEl.classList.add('d-none');
 
             try {
-                // Simplified enrollment - production would use actual WebAuthn
-                const credentialId = 'bootstrap-' + Date.now();
-                
+                // Convert challenge and user.id from base64 to ArrayBuffer
+                const publicKeyOptions = {
+                    ...options,
+                    challenge: base64ToArrayBuffer(options.challenge),
+                    user: {
+                        ...options.user,
+                        id: base64ToArrayBuffer(options.user.id)
+                    }
+                };
+
+                // Call WebAuthn API
+                const credential = await navigator.credentials.create({
+                    publicKey: publicKeyOptions
+                });
+
+                statusEl.textContent = 'Verifying credential...';
+
+                // Prepare credential data for server
+                const credentialData = {
+                    token: token,
+                    id: credential.id,
+                    rawId: arrayBufferToBase64(credential.rawId),
+                    type: credential.type,
+                    response: {
+                        clientDataJSON: arrayBufferToBase64(credential.response.clientDataJSON),
+                        attestationObject: arrayBufferToBase64(credential.response.attestationObject)
+                    }
+                };
+
                 const response = await fetch('/bootstrap/enroll', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        token: token,
-                        credential_id: credentialId,
-                        public_key: 'PLACEHOLDER_PUBLIC_KEY',
-                    })
+                    body: JSON.stringify(credentialData)
                 });
 
                 const data = await response.json();
@@ -69,7 +111,7 @@
             } catch (error) {
                 console.error(error);
                 statusEl.classList.add('d-none');
-                errorEl.textContent = error.message;
+                errorEl.textContent = error.message || 'WebAuthn registration failed';
                 errorEl.classList.remove('d-none');
             }
         });

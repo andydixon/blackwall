@@ -417,13 +417,72 @@ class OAuthController
 
     public function userinfo(Request $request, Response $response): Response
     {
-        // TODO: Implement bearer token extraction and validation
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
 
-        $audit->logInfo('oidc.userinfo');
+        // Extract bearer token from Authorization header
+        $authHeader = $request->getHeaderLine('Authorization');
+        if (empty($authHeader) || !preg_match('/^Bearer\s+(.+)$/i', $authHeader, $matches)) {
+            $audit->logFail('oidc.userinfo.fail', ['failure_reason' => 'Missing or invalid authorization header']);
+            $response->getBody()->write(json_encode([
+                'error' => 'invalid_token',
+                'error_description' => 'Bearer token required'
+            ]));
+            return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+        }
 
-        $response->getBody()->write(json_encode(['sub' => 'user-uuid']));
+        $accessToken = $matches[1];
+
+        // Validate the access token
+        $db = Database::getInstance();
+        $stmt = $db->prepare(
+            'SELECT t.*, u.uuid as user_uuid, u.display_label, p.uuid as project_uuid, p.name as project_name
+             FROM oauth_access_tokens t
+             JOIN users u ON t.user_id = u.id
+             JOIN projects p ON t.project_id = p.id
+             WHERE t.token_hash = ? AND t.revoked_at IS NULL AND t.expires_at > NOW()'
+        );
+        $stmt->execute([hash('sha256', $accessToken)]);
+        $token = $stmt->fetch();
+
+        if (!$token) {
+            $audit->logFail('oidc.userinfo.fail', ['failure_reason' => 'Invalid or expired token']);
+            $response->getBody()->write(json_encode([
+                'error' => 'invalid_token',
+                'error_description' => 'Token is invalid or expired'
+            ]));
+            return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+        }
+
+        // Build userinfo response
+        $userinfo = [
+            'sub' => $token['user_uuid'],
+        ];
+
+        // Add optional claims based on scopes
+        $scopes = explode(' ', $token['scopes']);
+        
+        if (in_array('profile', $scopes)) {
+            $userinfo['name'] = $token['display_label'];
+            $userinfo['preferred_username'] = $token['display_label'];
+        }
+
+        if (in_array('email', $scopes) && !empty($token['display_label'])) {
+            // If display_label looks like an email, include it
+            if (filter_var($token['display_label'], FILTER_VALIDATE_EMAIL)) {
+                $userinfo['email'] = $token['display_label'];
+                $userinfo['email_verified'] = true;
+            }
+        }
+
+        $audit->logSuccess('oidc.userinfo.success', [
+            'actor_user_id' => $token['user_id'],
+            'actor_user_uuid' => $token['user_uuid'],
+            'project_id' => $token['project_id'],
+            'project_uuid' => $token['project_uuid'],
+        ]);
+
+        $response->getBody()->write(json_encode($userinfo));
         return $response->withHeader('Content-Type', 'application/json');
     }
 

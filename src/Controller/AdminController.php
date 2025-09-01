@@ -42,6 +42,18 @@ class AdminController
         $this->renderer = new PhpRenderer(__DIR__ . '/../../templates');
     }
 
+    private function renderWithLayout(Response $response, string $template, array $data = []): Response
+    {
+        // Render the content template
+        $contentRenderer = new PhpRenderer(__DIR__ . '/../../templates');
+        $contentResponse = $contentRenderer->render(new \Slim\Psr7\Response(), $template, $data);
+        $content = (string) $contentResponse->getBody();
+        
+        // Render with layout
+        $data['content'] = $content;
+        return $this->renderer->render($response, '_layout.php', $data);
+    }
+
     public function loginForm(Request $request, Response $response): Response
     {
         return $this->renderer->render($response, 'admin/login.php', [
@@ -51,14 +63,19 @@ class AdminController
 
     public function loginChallenge(Request $request, Response $response): Response
     {
-        // Return WebAuthn challenge for login
-        // Simplified: return a placeholder
-        $challenge = ['challenge' => base64_encode(random_bytes(32))];
+        $challenge = random_bytes(32);
         
         SessionManager::start();
-        SessionManager::set('webauthn_challenge', $challenge['challenge']);
+        SessionManager::set('webauthn_challenge', base64_encode($challenge));
 
-        $response->getBody()->write(json_encode($challenge));
+        $options = [
+            'challenge' => base64_encode($challenge),
+            'timeout' => 60000,
+            'rpId' => \BlackWall\Config::get('WEBAUTHN_RP_ID'),
+            'userVerification' => 'preferred',
+        ];
+
+        $response->getBody()->write(json_encode($options));
         return $response->withHeader('Content-Type', 'application/json');
     }
 
@@ -68,15 +85,16 @@ class AdminController
         
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
-
-        // Simplified: Accept any credential and find user
-        // Real implementation would verify WebAuthn assertion
         
         $body = $request->getParsedBody();
-        $credentialId = $body['credential_id'] ?? null;
+        $credentialId = $body['id'] ?? null;
+        $rawId = $body['rawId'] ?? null;
+        $authenticatorData = $body['response']['authenticatorData'] ?? null;
+        $clientDataJSON = $body['response']['clientDataJSON'] ?? null;
+        $signature = $body['response']['signature'] ?? null;
 
-        if (!$credentialId) {
-            $audit->logFail('admin.login.fail', ['failure_reason' => 'Missing credential_id']);
+        if (!$credentialId || !$rawId || !$authenticatorData || !$clientDataJSON || !$signature) {
+            $audit->logFail('admin.login.fail', ['failure_reason' => 'Missing credential data']);
             $response->getBody()->write(json_encode(['error' => 'Invalid credential']));
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
@@ -90,6 +108,37 @@ class AdminController
             $response->getBody()->write(json_encode(['error' => 'Invalid credential']));
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
+
+        // Verify the WebAuthn assertion
+        $expectedChallenge = SessionManager::get('webauthn_challenge');
+        if (!$expectedChallenge) {
+            $audit->logFail('webauthn.authentication.fail', [
+                'failure_reason' => 'No challenge in session',
+                'webauthn_credential_public_id' => $credentialId,
+            ]);
+            $response->getBody()->write(json_encode(['error' => 'Session expired']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        $verified = $this->webauthn->verifyAssertion(
+            $credentialId,
+            $clientDataJSON,
+            $authenticatorData,
+            $signature,
+            $expectedChallenge
+        );
+
+        if (!$verified) {
+            $audit->logFail('webauthn.authentication.fail', [
+                'failure_reason' => 'Signature verification failed',
+                'webauthn_credential_public_id' => $credentialId,
+            ]);
+            $response->getBody()->write(json_encode(['error' => 'Invalid credential']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        // Clear the challenge from session
+        SessionManager::remove('webauthn_challenge');
 
         $userId = (int) $credential['user_id'];
         SessionManager::set('user_id', $userId);
@@ -117,8 +166,24 @@ class AdminController
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
 
-        return $this->renderer->render($response, 'admin/dashboard.php', [
+        $db = \BlackWall\Database::getInstance();
+        
+        // Get stats
+        $stats = [
+            'users' => $db->query("SELECT COUNT(*) FROM users")->fetchColumn(),
+            'projects' => $db->query("SELECT COUNT(*) FROM projects")->fetchColumn(),
+            'clients' => $db->query("SELECT COUNT(*) FROM oauth_clients")->fetchColumn(),
+            'audit_count' => $db->query("SELECT COUNT(*) FROM audit_log")->fetchColumn(),
+        ];
+        
+        // Get recent activity
+        $stmt = $db->query("SELECT * FROM audit_log ORDER BY created_at DESC LIMIT 10");
+        $recent_logs = $stmt->fetchAll();
+
+        return $this->renderWithLayout($response, 'admin/dashboard.php', [
             'title' => 'Dashboard',
+            'stats' => $stats,
+            'recent_logs' => $recent_logs,
         ]);
     }
 
@@ -130,7 +195,7 @@ class AdminController
 
         $users = $this->userRepo->findAll();
 
-        return $this->renderer->render($response, 'admin/users/list.php', [
+        return $this->renderWithLayout($response, 'admin/users/list.php', [
             'title' => 'Users',
             'users' => $users,
         ]);
@@ -142,7 +207,7 @@ class AdminController
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
 
-        return $this->renderer->render($response, 'admin/users/create.php', [
+        return $this->renderWithLayout($response, 'admin/users/create.php', [
             'title' => 'Create User',
             'csrfToken' => CSRFProtection::generateToken(),
         ]);
@@ -185,7 +250,7 @@ class AdminController
 
         $projects = $this->projectRepo->findAll();
 
-        return $this->renderer->render($response, 'admin/projects/list.php', [
+        return $this->renderWithLayout($response, 'admin/projects/list.php', [
             'title' => 'Projects',
             'projects' => $projects,
         ]);
@@ -197,7 +262,7 @@ class AdminController
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
 
-        return $this->renderer->render($response, 'admin/projects/create.php', [
+        return $this->renderWithLayout($response, 'admin/projects/create.php', [
             'title' => 'Create Project',
             'csrfToken' => CSRFProtection::generateToken(),
         ]);
@@ -248,7 +313,7 @@ class AdminController
             return $response->withStatus(404);
         }
 
-        return $this->renderer->render($response, 'admin/projects/detail.php', [
+        return $this->renderWithLayout($response, 'admin/projects/detail.php', [
             'title' => $project->name,
             'project' => $project,
         ]);
@@ -280,7 +345,7 @@ class AdminController
         $logs = $audit->search($filters, $perPage, $offset);
         $total = $audit->countSearch($filters);
 
-        return $this->renderer->render($response, 'admin/audit/log.php', [
+        return $this->renderWithLayout($response, 'admin/audit/log.php', [
             'title' => 'Audit Log',
             'logs' => $logs,
             'filters' => $filters,
@@ -307,10 +372,102 @@ class AdminController
     public function privilegeLevelCreate(Request $request, Response $response, array $args): Response { return $response; }
     public function privilegeLevelUpdate(Request $request, Response $response, array $args): Response { return $response; }
     public function privilegeLevelDelete(Request $request, Response $response, array $args): Response { return $response; }
-    public function projectAssignments(Request $request, Response $response, array $args): Response { return $response; }
-    public function assignmentCreate(Request $request, Response $response, array $args): Response { return $response; }
-    public function assignmentUpdate(Request $request, Response $response, array $args): Response { return $response; }
-    public function assignmentDelete(Request $request, Response $response, array $args): Response { return $response; }
+    public function projectAssignments(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        $projectId = (int) $args['id'];
+        $project = $this->projectRepo->findById($projectId);
+
+        if (!$project) {
+            return $response->withStatus(404);
+        }
+
+        // Get all assignments for this project with user info
+        $db = \BlackWall\Database::getInstance();
+        $stmt = $db->prepare(
+            'SELECT upr.*, u.uuid as user_uuid, u.display_label as user_display_label
+             FROM user_project_roles upr
+             JOIN users u ON upr.user_id = u.id
+             WHERE upr.project_id = ?
+             ORDER BY upr.created_at DESC'
+        );
+        $stmt->execute([$projectId]);
+        $assignments = $stmt->fetchAll();
+
+        // Get all users for the dropdown
+        $allUsers = $this->userRepo->findAll();
+
+        // Get privilege levels for this project (or create default ones)
+        $privilegeLevels = [];
+        for ($i = 1; $i <= 10; $i++) {
+            $privilegeLevels[] = ['level' => $i, 'name' => "Level $i"];
+        }
+
+        return $this->renderWithLayout($response, 'admin/projects/assignments.php', [
+            'title' => 'User Assignments - ' . $project->name,
+            'project' => $project,
+            'assignments' => $assignments,
+            'allUsers' => $allUsers,
+            'privilegeLevels' => $privilegeLevels,
+        ]);
+    }
+    public function assignmentCreate(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        $projectId = (int) $args['id'];
+        $body = $request->getParsedBody();
+        $userId = (int) ($body['user_id'] ?? 0);
+        $privilegeLevel = (int) ($body['privilege_level'] ?? 0);
+
+        if (!$userId || !$privilegeLevel) {
+            return $response->withHeader('Location', "/admin/projects/{$projectId}/assignments")->withStatus(302);
+        }
+
+        // Check if assignment already exists
+        $existing = $this->roleRepo->findByUserAndProject($userId, $projectId);
+        if (!$existing) {
+            $this->roleRepo->create($userId, $projectId, $privilegeLevel);
+        }
+
+        return $response->withHeader('Location', "/admin/projects/{$projectId}/assignments")->withStatus(302);
+    }
+
+    public function assignmentUpdate(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        $assignmentId = (int) $args['id'];
+        $body = $request->getParsedBody();
+        $privilegeLevel = (int) ($body['privilege_level'] ?? 0);
+
+        if ($privilegeLevel) {
+            $this->roleRepo->update($assignmentId, $privilegeLevel);
+        }
+
+        $referer = $request->getHeaderLine('Referer') ?: '/admin/projects';
+        return $response->withHeader('Location', $referer)->withStatus(302);
+    }
+
+    public function assignmentDelete(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        $assignmentId = (int) $args['id'];
+        $this->roleRepo->delete($assignmentId);
+
+        $referer = $request->getHeaderLine('Referer') ?: '/admin/projects';
+        return $response->withHeader('Location', $referer)->withStatus(302);
+    }
     public function clientsList(Request $request, Response $response, array $args): Response { return $response; }
     public function clientCreate(Request $request, Response $response, array $args): Response { return $response; }
     public function clientStore(Request $request, Response $response, array $args): Response { return $response; }

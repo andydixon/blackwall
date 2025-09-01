@@ -21,9 +21,9 @@ class AuditContextMiddleware implements MiddlewareInterface
 
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
-        $correlationId = $request->getAttribute('correlation_id');
-        $ipAddress = $request->getAttribute('ip_address');
-        $userAgent = $request->getHeaderLine('User-Agent');
+        $correlationId = $request->getAttribute('correlation_id', '');
+        $ipAddress = $request->getAttribute('ip_address', '0.0.0.0');
+        $userAgent = $request->getHeaderLine('User-Agent') ?: null;
 
         $this->auditLogger->setRequestContext($correlationId, $ipAddress, $userAgent);
 

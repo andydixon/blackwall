@@ -45,6 +45,26 @@
     <script>
         const csrfToken = <?= json_encode($csrfToken) ?>;
 
+        // Helper function to convert base64 to ArrayBuffer
+        function base64ToArrayBuffer(base64) {
+            const binaryString = window.atob(base64);
+            const bytes = new Uint8Array(binaryString.length);
+            for (let i = 0; i < binaryString.length; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        // Helper function to convert ArrayBuffer to base64
+        function arrayBufferToBase64(buffer) {
+            const bytes = new Uint8Array(buffer);
+            let binary = '';
+            for (let i = 0; i < bytes.byteLength; i++) {
+                binary += String.fromCharCode(bytes[i]);
+            }
+            return window.btoa(binary);
+        }
+
         document.getElementById('webauthn-login').addEventListener('click', async () => {
             const errorEl = document.getElementById('error-message');
             const statusEl = document.getElementById('status-message');
@@ -63,24 +83,41 @@
 
                 const challengeData = await challengeResp.json();
                 
-                statusEl.querySelector('span').textContent = 'Waiting for authenticator...';
+                statusEl.querySelector('span').textContent = 'Touch your security key...';
 
-                // Simplified WebAuthn - in production use proper WebAuthn library
-                // This is a placeholder that sends credential_id
-                
-                // Simulate credential (replace with actual WebAuthn navigator.credentials.get)
-                const credentialId = 'demo-credential-' + Math.random();
+                // Prepare WebAuthn options
+                const publicKeyOptions = {
+                    challenge: base64ToArrayBuffer(challengeData.challenge),
+                    timeout: challengeData.timeout,
+                    rpId: challengeData.rpId,
+                    userVerification: challengeData.userVerification
+                };
+
+                // Call WebAuthn API to get credential
+                const credential = await navigator.credentials.get({
+                    publicKey: publicKeyOptions
+                });
 
                 statusEl.querySelector('span').textContent = 'Verifying...';
+
+                // Prepare credential data for server
+                const credentialData = {
+                    csrf_token: csrfToken,
+                    id: credential.id,
+                    rawId: arrayBufferToBase64(credential.rawId),
+                    type: credential.type,
+                    response: {
+                        authenticatorData: arrayBufferToBase64(credential.response.authenticatorData),
+                        clientDataJSON: arrayBufferToBase64(credential.response.clientDataJSON),
+                        signature: arrayBufferToBase64(credential.response.signature),
+                        userHandle: credential.response.userHandle ? arrayBufferToBase64(credential.response.userHandle) : null
+                    }
+                };
 
                 const verifyResp = await fetch('/admin/login/verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        csrf_token: csrfToken,
-                        credential_id: credentialId,
-                        // In production: include authenticatorData, clientDataJSON, signature
-                    })
+                    body: JSON.stringify(credentialData)
                 });
 
                 const verifyData = await verifyResp.json();

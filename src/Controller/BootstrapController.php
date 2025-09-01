@@ -120,19 +120,46 @@ class BootstrapController
         $userIdRow = $stmt->fetch();
         $userId = $userIdRow ? (int) $userIdRow['config_value'] : null;
 
-        // Store credential (simplified - real implementation would verify attestation)
+        if (!$userId) {
+            $audit->logFail('webauthn.registration.fail', ['failure_reason' => 'User not found']);
+            $response->getBody()->write(json_encode(['error' => 'User not found']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        // Extract credential data from WebAuthn response
+        $credentialId = $body['id'] ?? null;
+        $rawId = $body['rawId'] ?? null;
+        $attestationObject = $body['response']['attestationObject'] ?? null;
+        $clientDataJSON = $body['response']['clientDataJSON'] ?? null;
+
+        if (!$credentialId || !$rawId || !$attestationObject || !$clientDataJSON) {
+            $audit->logFail('webauthn.registration.fail', ['failure_reason' => 'Invalid credential data']);
+            $response->getBody()->write(json_encode(['error' => 'Invalid credential data']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        // Extract the public key from the attestation object
+        $publicKey = $this->webauthn->extractPublicKeyFromAttestation($attestationObject);
+        if (!$publicKey) {
+            $audit->logFail('webauthn.registration.fail', ['failure_reason' => 'Failed to extract public key']);
+            $response->getBody()->write(json_encode(['error' => 'Invalid attestation']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        // Store the credential with the extracted public key
         $credentialData = [
-            'credential_id' => $body['credential_id'] ?? bin2hex(random_bytes(32)),
-            'public_key' => $body['public_key'] ?? 'PLACEHOLDER',
+            'credential_id' => $credentialId,
+            'public_key' => $publicKey,
             'sign_counter' => 0,
+            'attestation_type' => 'none',
         ];
 
-        $credentialId = $this->webauthn->storeCredential($userId, $credentialData, 'Bootstrap Key');
+        $credentialDbId = $this->webauthn->storeCredential($userId, $credentialData, 'Bootstrap Key');
 
         $audit->logSuccess('webauthn.registration.success', [
             'actor_user_id' => $userId,
-            'webauthn_credential_id' => $credentialId,
-            'webauthn_credential_public_id' => $credentialData['credential_id'],
+            'webauthn_credential_id' => $credentialDbId,
+            'webauthn_credential_public_id' => $credentialId,
         ]);
 
         // Mark bootstrap as complete

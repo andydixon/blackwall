@@ -36,10 +36,13 @@ $app->addErrorMiddleware(
     true
 );
 
-// Add global middleware
-$app->add(new CorrelationIdMiddleware());
-$app->add(new IpAddressMiddleware());
+// Add body parsing middleware for JSON requests
+$app->addBodyParsingMiddleware();
+
+// Add global middleware (last added runs first)
 $app->add(new AuditContextMiddleware(new AuditLogger()));
+$app->add(new IpAddressMiddleware());
+$app->add(new CorrelationIdMiddleware());
 
 // Template renderer
 $templates = new PhpRenderer(__DIR__ . '/../templates');

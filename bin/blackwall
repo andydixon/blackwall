@@ -1,0 +1,142 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use BlackWall\Config;
+use BlackWall\Database;
+use BlackWall\Repository\ProjectRepository;
+use BlackWall\Repository\UserRepository;
+use BlackWall\Repository\PrivilegeLevelRepository;
+use BlackWall\Repository\UserProjectRoleRepository;
+use Ramsey\Uuid\Uuid;
+
+Config::load(__DIR__ . '/..');
+
+echo "===========================================\n";
+echo "  BlackWall OAuth 2.1 + OIDC Bootstrap\n";
+echo "===========================================\n\n";
+
+try {
+    $db = Database::getInstance();
+    
+    // Check if already bootstrapped
+    $stmt = $db->query("SELECT config_value FROM system_config WHERE config_key = 'bootstrap_complete'");
+    $row = $stmt->fetch();
+    
+    if ($row && $row['config_value'] === '1') {
+        echo "❌ BlackWall is already bootstrapped.\n";
+        echo "   If you need to re-bootstrap, manually delete the 'bootstrap_complete' entry\n";
+        echo "   from the system_config table.\n\n";
+        exit(1);
+    }
+
+    echo "Step 1: Creating BlackWall Admin project...\n";
+    
+    $projectRepo = new ProjectRepository();
+    $adminProject = $projectRepo->findByName('BlackWall Admin');
+    
+    if (!$adminProject) {
+        $adminProjectUuid = Uuid::uuid4()->toString();
+        $adminProject = $projectRepo->create(
+            $adminProjectUuid,
+            'BlackWall Admin',
+            null,
+            'active'
+        );
+        echo "✓ Created BlackWall Admin project (UUID: {$adminProjectUuid})\n\n";
+    } else {
+        echo "✓ BlackWall Admin project already exists\n\n";
+    }
+
+    echo "Step 2: Creating default privilege levels...\n";
+    
+    $privilegeRepo = new PrivilegeLevelRepository();
+    
+    $adminLevel = $privilegeRepo->findByProjectAndLevel($adminProject->id, 1);
+    if (!$adminLevel) {
+        $privilegeRepo->create($adminProject->id, 1, 'Admin', 'Full system administrator');
+        echo "✓ Created privilege level: Admin (1)\n";
+    }
+    
+    $userLevel = $privilegeRepo->findByProjectAndLevel($adminProject->id, 2);
+    if (!$userLevel) {
+        $privilegeRepo->create($adminProject->id, 2, 'User', 'Regular user');
+        echo "✓ Created privilege level: User (2)\n";
+    }
+    
+    echo "\n";
+
+    echo "Step 3: Creating initial admin user...\n";
+    
+    $userRepo = new UserRepository();
+    
+    if ($userRepo->count() === 0) {
+        echo "Enter admin user display label (e.g., email): ";
+        $displayLabel = trim(fgets(STDIN));
+        
+        if (empty($displayLabel)) {
+            echo "❌ Display label cannot be empty.\n";
+            exit(1);
+        }
+
+        $adminUserUuid = Uuid::uuid4()->toString();
+        $adminUser = $userRepo->create($adminUserUuid, $displayLabel, 'active');
+        
+        echo "✓ Created admin user (UUID: {$adminUserUuid})\n";
+        echo "  Display label: {$displayLabel}\n\n";
+
+        echo "Step 4: Assigning admin user to BlackWall Admin project...\n";
+        
+        $roleRepo = new UserProjectRoleRepository();
+        $roleRepo->create($adminUser->id, $adminProject->id, 1);
+        
+        echo "✓ Assigned user to BlackWall Admin with privilege level 1 (Admin)\n\n";
+
+        echo "Step 5: WebAuthn credential enrollment...\n";
+        echo "\n";
+        echo "⚠️  WebAuthn enrollment must be done via web browser.\n";
+        echo "    A bootstrap URL has been generated for you.\n\n";
+        
+        $bootstrapToken = bin2hex(random_bytes(32));
+        $bootstrapExpiry = (new DateTimeImmutable())->modify('+30 minutes');
+        
+        $stmt = $db->prepare(
+            "INSERT INTO system_config (config_key, config_value) VALUES ('bootstrap_token', ?), ('bootstrap_expiry', ?)"
+        );
+        $stmt->execute([$bootstrapToken, $bootstrapExpiry->format('Y-m-d H:i:s')]);
+        
+        $stmt = $db->prepare(
+            "INSERT INTO system_config (config_key, config_value) VALUES ('bootstrap_user_id', ?)"
+        );
+        $stmt->execute([$adminUser->id]);
+        
+        echo "Bootstrap URL (valid for 30 minutes):\n";
+        echo Config::get('APP_URL') . "/bootstrap?token={$bootstrapToken}\n\n";
+        
+        echo "👉 Open this URL in your browser to complete WebAuthn enrollment.\n";
+        echo "   After enrollment, you can log in to the admin panel.\n\n";
+        
+    } else {
+        echo "✓ Users already exist, skipping user creation\n\n";
+        
+        $stmt = $db->prepare(
+            "INSERT INTO system_config (config_key, config_value) VALUES ('bootstrap_complete', '1') 
+            ON DUPLICATE KEY UPDATE config_value = '1'"
+        );
+        $stmt->execute();
+        
+        echo "✓ Bootstrap marked as complete\n\n";
+    }
+
+    echo "===========================================\n";
+    echo "  Bootstrap process initiated!\n";
+    echo "===========================================\n";
+
+} catch (Exception $e) {
+    echo "❌ Bootstrap failed: " . $e->getMessage() . "\n";
+    echo "   " . $e->getFile() . ":" . $e->getLine() . "\n\n";
+    exit(1);
+}

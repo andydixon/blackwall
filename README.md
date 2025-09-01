@@ -1,6 +1,437 @@
-# BlackWall OAuth 2.1 + OpenID Connect Authorization Server
+# BlackWall OAuth 2.1 + OpenID Connect Authorisation Server
 
-**A production-ready, WebAuthn-only, multi-tenant OAuth 2.1 + OIDC authorization server**
+**A production-ready, WebAuthn-only, multi-tenant OAuth 2.1 + OIDC authorisation server**
+
+## Features
+
+- ✅ OAuth 2.1 with PKCE (required for all clients)
+- ✅ OpenID Connect (OIDC) with discovery, JWKS, ID tokens
+- ✅ WebAuthn-only authentication (no passwords!)
+- ✅ Multi-tenant by project with UUID-based project_id
+- ✅ Flexible token formats: JWT or opaque
+- ✅ Named privilege levels per project
+- ✅ Comprehensive audit logging with searchable UI
+- ✅ Token introspection (RFC 7662) and revocation (RFC 7009)
+- ✅ Rate limiting
+- ✅ User portal for managing projects and security keys
+- ✅ Bootstrap 5 dark UI with charcoal theme
+- ✅ PSR-12 compliant PHP 8.2+
+
+## Requirements
+
+- PHP 8.2 or higher
+- MySQL 5.7+ or MariaDB 10.3+
+- Apache with mod_rewrite
+- Composer
+- HTTPS (required for WebAuthn)
+
+## Installation
+
+### 1. Clone and Install Dependencies
+
+```bash
+cd /home/andy/domains/blackwall.dixon.cx
+composer install
+```
+
+### 2. Configure Environment
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+**Required settings:**
+
+```ini
+DB_HOST=localhost
+DB_NAME=blackwall
+DB_USER=blackwall
+DB_PASS=YOUR_SECURE_PASSWORD
+
+APP_URL=https://blackwall.dixon.cx
+WEBAUTHN_RP_ID=blackwall.dixon.cx
+WEBAUTHN_RP_NAME="BlackWall OAuth"
+
+# Generate with: openssl rand -base64 32
+JWT_SIGNING_KEY=GENERATE_RANDOM_KEY
+CSRF_SECRET=GENERATE_RANDOM_KEY
+```
+
+**⚠️ SECURITY: Rotate the provided password and never commit .env to version control!**
+
+### 3. Create Database
+
+```bash
+mysql -u root -p
+```
+
+```sql
+CREATE DATABASE blackwall CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'blackwall'@'localhost' IDENTIFIED BY 'YOUR_SECURE_PASSWORD';
+GRANT ALL PRIVILEGES ON blackwall.* TO 'blackwall'@'localhost';
+FLUSH PRIVILEGES;
+```
+
+### 4. Run Migrations
+
+```bash
+make migrate
+# Or manually:
+mysql -u blackwall -p blackwall < migrations/001_initial_schema.sql
+```
+
+### 5. Bootstrap the System
+
+```bash
+make bootstrap
+# Or:
+php bin/blackwall
+```
+
+Follow the prompts to:
+1. Create the "BlackWall Admin" project
+2. Create the initial admin user
+3. Get a bootstrap URL to enrol your WebAuthn credential
+
+**Open the bootstrap URL in your browser and register your security key or platform authenticator.**
+
+### 6. Verify Installation
+
+```bash
+make health
+```
+
+Visit:
+- Homepage: https://blackwall.dixon.cx/
+- User portal: https://blackwall.dixon.cx/portal
+- Admin panel: https://blackwall.dixon.cx/admin/login
+- OIDC discovery: https://blackwall.dixon.cx/.well-known/openid-configuration
+
+## Architecture
+
+```
+blackwall.dixon.cx/
+├── bin/               # CLI tools (bootstrap)
+├── config/            # Application bootstrap and routes
+├── migrations/        # Database schema
+├── public_html/       # Web root (DocumentRoot)
+│   ├── .htaccess
+│   ├── index.php
+│   └── assets/        # CSS/JS
+├── src/
+│   ├── Controller/    # HTTP controllers
+│   ├── Service/       # Business logic
+│   ├── Repository/    # Database access
+│   ├── Model/         # Domain models
+│   ├── Security/      # JWT, PKCE, hashing, rate limiting
+│   ├── Middleware/    # Correlation ID, IP extraction, audit context
+│   └── Domain/        # Value objects
+├── templates/         # PHP templates (Bootstrap 5)
+├── vendor/            # Composer dependencies
+├── .env               # Environment config (NEVER commit)
+└── composer.json
+```
+
+## Usage
+
+### User Portal
+
+Users can access their portal at `https://blackwall.dixon.cx/portal` to:
+- View all projects they have access to
+- See their privilege levels in each project
+- Add new WebAuthn credentials (security keys)
+- Remove unused security keys
+- View account information
+
+### Administrator Functions
+
+### Create a Project
+
+1. Log in to https://blackwall.dixon.cx/admin
+2. Navigate to **Projects** → **Create Project**
+3. Enter project name (e.g., "My Application")
+4. Note the **project UUID** - clients will need this
+
+### Assign Users to Projects
+
+1. **Projects** → [Your Project] → **User Assignments**
+2. Add users and select their privilege level (1-10)
+
+### Create an OAuth Client
+
+1. **Projects** → [Your Project] → **OAuth Clients** → **Create**
+2. Configure:
+   - **Client Name**: "My App"
+   - **Redirect URIs**: `https://myapp.example.com/callback`
+   - **Scopes**: `openid profile email offline_access`
+
+3. Save the **client_id** and **client_secret** (if confidential)
+
+## OAuth 2.1 Flow
+
+### Authorisation Code + PKCE
+
+```
+1. Client generates code_verifier and code_challenge (SHA256)
+
+2. Redirect user to:
+   GET /oauth/authorize?
+       client_id=CLIENT_ID&
+       response_type=code&
+       redirect_uri=https://myapp.example.com/callback&
+       scope=openid%20profile%20email%20offline_access&
+       code_challenge=BASE64URL(SHA256(code_verifier))&
+       code_challenge_method=S256&
+       state=RANDOM_STATE&
+       nonce=RANDOM_NONCE
+
+3. User authenticates (WebAuthn) and approves
+
+4. Redirect back to client:
+   https://myapp.example.com/callback?code=AUTH_CODE&state=STATE
+
+5. Exchange code for tokens:
+   POST /oauth/token
+   Content-Type: application/x-www-form-urlencoded
+
+   grant_type=authorization_code&
+   code=AUTH_CODE&
+   redirect_uri=https://myapp.example.com/callback&
+   client_id=CLIENT_ID&
+   client_secret=CLIENT_SECRET&  # if confidential
+   code_verifier=CODE_VERIFIER
+
+6. Response:
+   {
+     "access_token": "...",
+     "token_type": "Bearer",
+     "expires_in": 3600,
+     "refresh_token": "...",      # if offline_access requested
+     "id_token": "...",           # if OIDC (openid scope)
+     "scope": "openid profile email offline_access"
+   }
+```
+
+## Token Claims
+
+### Access Token (JWT format)
+
+```json
+{
+  "iss": "https://blackwall.dixon.cx",
+  "aud": "client_id",
+  "sub": "user-uuid",
+  "iat": 1234567890,
+  "exp": 1234571490,
+  "scope": "openid profile email",
+  "project_id": "project-uuid",
+  "privilege_level": 1
+}
+```
+
+### ID Token (OIDC)
+
+```json
+{
+  "iss": "https://blackwall.dixon.cx",
+  "aud": "client_id",
+  "sub": "user-uuid",
+  "iat": 1234567890,
+  "exp": 1234571490,
+  "nonce": "client-nonce",
+  "email": "user@example.com",  # if email scope
+  "name": "User Name"            # if profile scope
+}
+```
+
+### Opaque Token Introspection
+
+```
+POST /oauth/introspect
+Content-Type: application/x-www-form-urlencoded
+
+token=OPAQUE_TOKEN&
+client_id=CLIENT_ID&
+client_secret=CLIENT_SECRET
+```
+
+Response:
+```json
+{
+  "active": true,
+  "scope": "openid profile email",
+  "client_id": "client_id",
+  "sub": "user-uuid",
+  "exp": 1234571490,
+  "iss": "https://blackwall.dixon.cx",
+  "aud": "client_id",
+  "project_id": "project-uuid",
+  "privilege_level": 1
+}
+```
+
+## Client Integration
+
+See `IMPLEMENTATION_PROMPT.md` for comprehensive integration guide.
+
+## Audit Logging
+
+All security and auth events are logged to the `audit_log` table.
+
+### Search Audit Logs
+
+Admin UI: **Audit Log** → Filter by:
+- Date range
+- Project UUID
+- User UUID
+- IP address
+- Event type (e.g., `oauth.token.issue`, `webauthn.authentication.fail`)
+- Outcome (success/fail/info)
+- Correlation ID
+
+### Event Types Logged
+
+- **WebAuthn**: `webauthn.registration.*`, `webauthn.authentication.*`
+- **Admin**: `admin.login.*`, `admin.user.*`, `admin.project.*`, `admin.oauth_client.*`
+- **Portal**: `portal.login.*`, `portal.key.*`
+- **OAuth**: `oauth.authorize.*`, `oauth.token.*`, `oauth.revoke`, `oauth.introspect`
+- **OIDC**: `oidc.discovery`, `oidc.userinfo`, `jwks.fetch`
+- **Security**: `security.ratelimit.hit`, `security.csrf.fail`
+
+Each log entry includes:
+- Correlation ID (for request tracing)
+- IP address
+- User agent
+- Actor (user performing action)
+- Project and OAuth client (if applicable)
+- WebAuthn credential (if applicable)
+- Metadata JSON (scopes, errors, privilege info, etc.)
+
+**Never logs**: raw tokens, raw auth codes, WebAuthn challenges, or private keys.
+
+## Security
+
+### WebAuthn Implementation
+
+BlackWall uses **full COSE cryptographic signature verification**:
+- ✅ Challenge validation (prevents replay attacks)
+- ✅ Origin validation (prevents phishing)
+- ✅ Cryptographic signature verification with COSE
+- ✅ Sign counter tracking (detects cloned authenticators)
+- ✅ Support for ES256 (ECDSA) and RS256 (RSA)
+
+### Key Rotation
+
+**JWT Signing Keys**: Generate new keys and mark old ones inactive:
+
+```sql
+INSERT INTO jwt_signing_keys (kid, private_key, public_key, algorithm, is_active)
+VALUES ('new-kid', '...', '...', 'RS256', 1);
+
+UPDATE jwt_signing_keys SET is_active = 0 WHERE kid = 'old-kid';
+```
+
+Clients will automatically fetch the new key from `/oauth/jwks`.
+
+### Rate Limiting
+
+Configured in `.env`:
+```ini
+RATE_LIMIT_ENABLED=true
+```
+
+Default limits:
+- `/oauth/token`: 60 requests per minute per IP
+- `/oauth/authorize`: 30 per minute
+- WebAuthn endpoints: 10 per minute
+
+## Troubleshooting
+
+### Bootstrap Token Expired
+
+Manually reset:
+```sql
+DELETE FROM system_config WHERE config_key IN ('bootstrap_complete', 'bootstrap_token', 'bootstrap_expiry');
+```
+
+Then run `make bootstrap` again.
+
+### WebAuthn Not Working
+
+- Ensure HTTPS is active (`https://` not `http://`)
+- Verify `WEBAUTHN_RP_ID` matches your domain exactly
+- Check browser console for WebAuthn errors
+- Security keys must support resident keys/discoverable credentials
+
+### "Missing required environment variables"
+
+Run `make health` to diagnose. Ensure `.env` exists and is readable.
+
+### Database Connection Failed
+
+- Verify credentials in `.env`
+- Check MySQL is running: `systemctl status mysql`
+- Test connection: `mysql -u blackwall -p blackwall`
+
+## Testing
+
+```bash
+# Run PHP CodeSniffer
+make cs
+
+# Run tests (when implemented)
+make test
+```
+
+## Runbook
+
+### Daily Operations
+
+- **Monitor audit logs**: Check for failed authentications, rate limit hits
+- **Review OAuth client usage**: Ensure no unexpected clients
+- **Rotate credentials**: JWT signing keys every 90 days
+
+### Incident Response
+
+1. **Suspicious activity detected**:
+   - Search audit logs by IP/correlation ID
+   - Disable affected OAuth client or user
+   - Check for unauthorised privilege escalations
+
+2. **Token compromise suspected**:
+   - Revoke tokens via `/oauth/revoke`
+   - Rotate JWT signing keys
+   - Force re-authentication for affected project
+
+### Backup
+
+```bash
+# Database
+mysqldump -u blackwall -p blackwall > blackwall_backup_$(date +%F).sql
+
+# Environment config
+cp .env .env.backup
+```
+
+### Restore
+
+```bash
+mysql -u blackwall -p blackwall < blackwall_backup_2026-02-04.sql
+```
+
+## Licence
+
+Proprietary - BlackWall OAuth 2.1 + OIDC Server
+
+## Support
+
+For issues or questions, contact your system administrator.
+
+---
+
+**BlackWall** - Secure, modern, WebAuthn-only OAuth 2.1 + OpenID Connect
+
 
 ## Features
 

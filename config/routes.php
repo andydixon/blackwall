@@ -5,11 +5,28 @@ declare(strict_types=1);
 use BlackWall\Controller\AdminController;
 use BlackWall\Controller\OAuthController;
 use BlackWall\Controller\BootstrapController;
+use BlackWall\Controller\PortalController;
 use Slim\Routing\RouteCollectorProxy;
 
 // Bootstrap route (only if not complete)
 $app->get('/bootstrap', [BootstrapController::class, 'showBootstrapForm']);
 $app->post('/bootstrap/enroll', [BootstrapController::class, 'enrollWebAuthn']);
+
+// Portal routes
+$app->get('/portal/login', [PortalController::class, 'loginForm']);
+$app->post('/portal/login/challenge', [PortalController::class, 'loginChallenge']);
+$app->post('/portal/login/verify', [PortalController::class, 'loginVerify']);
+$app->get('/portal', [PortalController::class, 'dashboard']);
+$app->post('/portal/keys/add/init', [PortalController::class, 'addKeyInit']);
+$app->post('/portal/keys/add/complete', [PortalController::class, 'addKeyComplete']);
+$app->post('/portal/keys/{id}/delete', [PortalController::class, 'deleteKey']);
+$app->post('/portal/logout', [PortalController::class, 'logout']);
+
+// Home page
+$app->get('/', function ($request, $response) {
+    $renderer = new \Slim\Views\PhpRenderer(__DIR__ . '/../templates');
+    return $renderer->render($response, 'home.php');
+});
 
 // OAuth 2.1 / OIDC Discovery
 $app->get('/.well-known/openid-configuration', [OAuthController::class, 'discovery']);
