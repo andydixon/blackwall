@@ -14,7 +14,10 @@ $app->post('/bootstrap/enroll', [BootstrapController::class, 'enrollWebAuthn']);
 
 // Portal routes
 $app->get('/portal/login', [PortalController::class, 'loginForm']);
+$app->post('/portal/login', [PortalController::class, 'loginChallenge']);
+$app->get('/portal/login/challenge', [PortalController::class, 'loginChallenge']);
 $app->post('/portal/login/challenge', [PortalController::class, 'loginChallenge']);
+$app->get('/portal/login/verify', [PortalController::class, 'loginVerify']);
 $app->post('/portal/login/verify', [PortalController::class, 'loginVerify']);
 $app->get('/portal', [PortalController::class, 'dashboard']);
 $app->post('/portal/keys/add/init', [PortalController::class, 'addKeyInit']);
@@ -44,6 +47,7 @@ $app->get('/oauth/userinfo', [OAuthController::class, 'userinfo']);
 $app->group('/admin', function (RouteCollectorProxy $group) {
     // Auth
     $group->get('/login', [AdminController::class, 'loginForm']);
+    $group->get('/login/challenge', [AdminController::class, 'loginChallenge']);
     $group->post('/login/challenge', [AdminController::class, 'loginChallenge']);
     $group->post('/login/verify', [AdminController::class, 'loginVerify']);
     $group->post('/logout', [AdminController::class, 'logout']);
