@@ -35,12 +35,6 @@ class JWTManager
 
     private function generateSigningKey(): void
     {
-        $config = Configuration::forAsymmetricSigner(
-            new Sha256(),
-            InMemory::plainText(''),
-            InMemory::plainText('')
-        );
-
         $privateKey = openssl_pkey_new([
             'private_key_bits' => 2048,
             'private_key_type' => OPENSSL_KEYTYPE_RSA,

@@ -1,18 +1,19 @@
-# BlackWall OAuth 2.1 + OpenID Connect Authorisation Server
+# BlackWall OAuth 2.1 + OpenID Connect Authorization Server
 
-**A production-ready, WebAuthn-only, multi-tenant OAuth 2.1 + OIDC authorisation server**
+**A production-ready, WebAuthn-only, multi-tenant OAuth 2.1 + OIDC authorization server**
 
 ## Features
 
 - ✅ OAuth 2.1 with PKCE (required for all clients)
 - ✅ OpenID Connect (OIDC) with discovery, JWKS, ID tokens
 - ✅ WebAuthn-only authentication (no passwords!)
-- ✅ Multi-tenant by project with UUID-based project_id
+- ✅ Multi-tenant by project
 - ✅ Flexible token formats: JWT or opaque
 - ✅ Named privilege levels per project
 - ✅ Comprehensive audit logging with searchable UI
 - ✅ Token introspection (RFC 7662) and revocation (RFC 7009)
 - ✅ Rate limiting
+- ✅ Dedicated OAuth login (separate from portal/admin)
 - ✅ User portal for managing projects and security keys
 - ✅ Bootstrap 5 dark UI with charcoal theme
 - ✅ PSR-12 compliant PHP 8.2+
@@ -163,14 +164,16 @@ Users can access their portal at `https://blackwall.dixon.cx/portal` to:
 1. **Projects** → [Your Project] → **OAuth Clients** → **Create**
 2. Configure:
    - **Client Name**: "My App"
-   - **Redirect URIs**: `https://myapp.example.com/callback`
-   - **Scopes**: `openid profile email offline_access`
+   - **Redirect URIs**: `https://myapp.example.com/callback` (one per line)
+   - **Confidential Client**: Check if server-side app, uncheck for SPA/mobile (uses PKCE)
 
-3. Save the **client_id** and **client_secret** (if confidential)
+3. Save the **client_id** (and **client_secret** if confidential - shown only once!)
+
+**Important**: The client_id associates the client with the project automatically.
 
 ## OAuth 2.1 Flow
 
-### Authorisation Code + PKCE
+### Authorization Code + PKCE
 
 ```
 1. Client generates code_verifier and code_challenge (SHA256)
@@ -180,13 +183,18 @@ Users can access their portal at `https://blackwall.dixon.cx/portal` to:
        client_id=CLIENT_ID&
        response_type=code&
        redirect_uri=https://myapp.example.com/callback&
-       scope=openid%20profile%20email%20offline_access&
+       scope=openid%20profile%20email&
        code_challenge=BASE64URL(SHA256(code_verifier))&
        code_challenge_method=S256&
-       state=RANDOM_STATE&
-       nonce=RANDOM_NONCE
+       state=RANDOM_STATE
 
-3. User authenticates (WebAuthn) and approves
+   Note: project_id is NOT required - it's derived from client_id
+
+3. User sees dedicated OAuth login page (not portal/admin)
+   - Shows application name
+   - Authenticates with WebAuthn
+   - Sees consent screen
+   - Approves access
 
 4. Redirect back to client:
    https://myapp.example.com/callback?code=AUTH_CODE&state=STATE
@@ -209,7 +217,7 @@ Users can access their portal at `https://blackwall.dixon.cx/portal` to:
      "expires_in": 3600,
      "refresh_token": "...",      # if offline_access requested
      "id_token": "...",           # if OIDC (openid scope)
-     "scope": "openid profile email offline_access"
+     "scope": "openid profile email"
    }
 ```
 

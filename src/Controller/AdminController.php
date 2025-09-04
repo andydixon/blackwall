@@ -468,10 +468,129 @@ class AdminController
         $referer = $request->getHeaderLine('Referer') ?: '/admin/projects';
         return $response->withHeader('Location', $referer)->withStatus(302);
     }
-    public function clientsList(Request $request, Response $response, array $args): Response { return $response; }
-    public function clientCreate(Request $request, Response $response, array $args): Response { return $response; }
-    public function clientStore(Request $request, Response $response, array $args): Response { return $response; }
-    public function clientDetail(Request $request, Response $response, array $args): Response { return $response; }
+    public function clientsList(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        $projectId = (int) $args['id'];
+        $project = $this->projectRepo->findById($projectId);
+
+        if (!$project) {
+            return $response->withStatus(404);
+        }
+
+        // Get all OAuth clients for this project
+        $db = \BlackWall\Database::getInstance();
+        $stmt = $db->prepare(
+            'SELECT * FROM oauth_clients WHERE project_id = ? ORDER BY created_at DESC'
+        );
+        $stmt->execute([$projectId]);
+        $clients = $stmt->fetchAll();
+
+        return $this->renderWithLayout($response, 'admin/clients/list.php', [
+            'title' => 'OAuth Clients - ' . $project->name,
+            'project' => $project,
+            'clients' => $clients,
+            'csrfToken' => CSRFProtection::generateToken(),
+        ]);
+    }
+    public function clientCreate(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        $projectId = (int) $args['projectId'];
+        $project = $this->projectRepo->findById($projectId);
+
+        if (!$project) {
+            return $response->withStatus(404);
+        }
+
+        return $this->renderWithLayout($response, 'admin/clients/create.php', [
+            'title' => 'Create OAuth Client',
+            'project' => $project,
+            'csrfToken' => CSRFProtection::generateToken(),
+        ]);
+    }
+
+    public function clientStore(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        $projectId = (int) $args['projectId'];
+        $body = $request->getParsedBody();
+
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            return $response->withHeader('Location', "/admin/projects/{$projectId}/clients")->withStatus(302);
+        }
+
+        $clientId = \Ramsey\Uuid\Uuid::uuid4()->toString();
+        $clientSecret = isset($body['is_confidential']) ? bin2hex(random_bytes(32)) : null;
+        $isConfidential = isset($body['is_confidential']);
+
+        $redirectUris = array_filter(array_map('trim', explode("\n", $body['redirect_uris'])));
+
+        $db = \BlackWall\Database::getInstance();
+        $stmt = $db->prepare(
+            'INSERT INTO oauth_clients (project_id, client_id, client_secret_hash, name, redirect_uris, grants, pkce_required, status) 
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        );
+        $stmt->execute([
+            $projectId,
+            $clientId,
+            $clientSecret ? $this->hasher->hash($clientSecret) : null,
+            $body['name'],
+            json_encode($redirectUris),
+            json_encode(['authorization_code', 'refresh_token']),
+            $isConfidential ? 0 : 1, // PKCE required for public clients
+            'active'
+        ]);
+
+        $newClientId = $db->lastInsertId();
+
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $userId = SessionManager::get('user_id');
+        $audit->logSuccess('admin.client.create', [
+            'actor_user_id' => $userId,
+            'oauth_client_id' => $newClientId,
+        ]);
+
+        return $response->withHeader('Location', "/admin/clients/{$newClientId}?secret=" . urlencode($clientSecret ?: ''))->withStatus(302);
+    }
+
+    public function clientDetail(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        $clientId = (int) $args['id'];
+        $db = \BlackWall\Database::getInstance();
+        $stmt = $db->prepare('SELECT * FROM oauth_clients WHERE id = ?');
+        $stmt->execute([$clientId]);
+        $client = $stmt->fetch();
+
+        if (!$client) {
+            return $response->withStatus(404);
+        }
+
+        $project = $this->projectRepo->findById($client['project_id']);
+
+        $secret = $request->getQueryParams()['secret'] ?? null;
+
+        return $this->renderWithLayout($response, 'admin/clients/detail.php', [
+            'title' => 'OAuth Client',
+            'client' => $client,
+            'project' => $project,
+            'secret' => $secret,
+        ]);
+    }
     public function clientUpdate(Request $request, Response $response, array $args): Response { return $response; }
     public function auditExport(Request $request, Response $response): Response { return $response; }
 

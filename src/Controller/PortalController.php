@@ -135,7 +135,11 @@ class PortalController
             'webauthn_credential_public_id' => $credentialId,
         ]);
 
-        $response->getBody()->write(json_encode(['success' => true, 'redirect' => '/portal']));
+        // Check for OAuth return URL
+        $returnTo = SessionManager::get('oauth_return_to') ?: '/portal';
+        SessionManager::remove('oauth_return_to');
+
+        $response->getBody()->write(json_encode(['success' => true, 'redirect' => $returnTo]));
         return $response->withHeader('Content-Type', 'application/json');
     }
 

@@ -38,6 +38,8 @@ $app->get('/oauth/jwks', [OAuthController::class, 'jwks']);
 // OAuth endpoints
 $app->get('/oauth/authorize', [OAuthController::class, 'authorize']);
 $app->post('/oauth/authorize', [OAuthController::class, 'authorizePost']);
+$app->post('/oauth/login/challenge', [OAuthController::class, 'loginChallenge']);
+$app->post('/oauth/login/verify', [OAuthController::class, 'loginVerify']);
 $app->post('/oauth/token', [OAuthController::class, 'token']);
 $app->post('/oauth/revoke', [OAuthController::class, 'revoke']);
 $app->post('/oauth/introspect', [OAuthController::class, 'introspect']);

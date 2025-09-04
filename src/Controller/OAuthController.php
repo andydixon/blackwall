@@ -94,7 +94,7 @@ class OAuthController
         $audit = $request->getAttribute('audit_logger');
 
         // Validate required parameters
-        $requiredParams = ['client_id', 'redirect_uri', 'response_type', 'code_challenge', 'project_id'];
+        $requiredParams = ['client_id', 'redirect_uri', 'response_type', 'code_challenge'];
         foreach ($requiredParams as $param) {
             if (empty($params[$param])) {
                 $audit->logFail('oauth.authorize.fail', [
@@ -136,16 +136,16 @@ class OAuthController
             return $this->errorResponse($response, 'invalid_request', 'Invalid redirect_uri');
         }
 
-        // Validate project
-        $project = $this->projectRepo->findByUuid($params['project_id']);
+        // Get project from client
+        $project = $this->projectRepo->findById($client->projectId);
         if (!$project || !$project->isActive()) {
             $audit->logFail('oauth.authorize.fail', [
-                'message' => 'Invalid project_id',
+                'message' => 'Client project not found or inactive',
                 'error_code' => 'invalid_project',
-                'project_uuid' => $params['project_id'],
+                'project_id' => $client->projectId,
                 'oauth_client_id' => $client->id,
             ]);
-            return $this->redirectError($response, $params['redirect_uri'], 'invalid_request', 'Invalid project_id', $params['state'] ?? null);
+            return $this->redirectError($response, $params['redirect_uri'], 'invalid_request', 'Client project invalid', $params['state'] ?? null);
         }
 
         // Verify client belongs to project
@@ -186,11 +186,12 @@ class OAuthController
         // Check if user is logged in
         $userId = SessionManager::get('user_id');
         if (!$userId) {
-            // Store auth request and redirect to login
+            // Store auth request and show OAuth login page
             SessionManager::set('oauth_auth_request', $params);
-            return $response
-                ->withHeader('Location', '/admin/login?return_to=/oauth/authorize')
-                ->withStatus(302);
+            return $this->renderer->render($response, 'oauth/login.php', [
+                'clientName' => $client->name,
+                'returnUrl' => $params['redirect_uri'],
+            ]);
         }
 
         // Check if user has access to project
@@ -255,7 +256,7 @@ class OAuthController
         }
 
         $client = $this->clientRepo->findByClientId($params['client_id']);
-        $project = $this->projectRepo->findByUuid($params['project_id']);
+        $project = $this->projectRepo->findById($client->projectId);
 
         if (isset($body['deny'])) {
             $audit->logInfo('oauth.authorize.deny', [
@@ -508,5 +509,55 @@ class OAuthController
         }
 
         return $response->withHeader('Location', $url)->withStatus(302);
+    }
+
+    public function loginChallenge(Request $request, Response $response): Response
+    {
+        SessionManager::start();
+        $challenge = base64_encode(random_bytes(32));
+        SessionManager::set('oauth_webauthn_challenge', $challenge);
+        
+        $response->getBody()->write(json_encode(['challenge' => $challenge]));
+        return $response->withHeader('Content-Type', 'application/json');
+    }
+
+    public function loginVerify(Request $request, Response $response): Response
+    {
+        SessionManager::start();
+        $body = $request->getParsedBody();
+        
+        $webauthn = new \BlackWall\Service\WebAuthnService();
+        $expectedChallenge = SessionManager::get('oauth_webauthn_challenge');
+        
+        if (!$expectedChallenge) {
+            $response->getBody()->write(json_encode(['error' => 'Session expired']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+        
+        $verified = $webauthn->verifyAssertion(
+            $body['id'],
+            $body['response']['clientDataJSON'],
+            $body['response']['authenticatorData'],
+            $body['response']['signature'],
+            $expectedChallenge
+        );
+        
+        if (!$verified) {
+            $response->getBody()->write(json_encode(['error' => 'Invalid credential']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+        
+        SessionManager::remove('oauth_webauthn_challenge');
+        
+        $credential = $webauthn->getCredentialById($body['id']);
+        $userId = (int) $credential['user_id'];
+        SessionManager::set('user_id', $userId);
+        SessionManager::regenerateId();
+        
+        $authRequest = SessionManager::get('oauth_auth_request');
+        $returnUrl = '/oauth/authorize?' . http_build_query($authRequest);
+        
+        $response->getBody()->write(json_encode(['success' => true, 'redirect' => $returnUrl]));
+        return $response->withHeader('Content-Type', 'application/json');
     }
 }
