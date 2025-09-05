@@ -175,4 +175,134 @@ class BootstrapController
         $response->getBody()->write(json_encode(['success' => true, 'redirect' => '/admin/login']));
         return $response->withHeader('Content-Type', 'application/json');
     }
+
+    public function showEnrollmentForm(Request $request, Response $response): Response
+    {
+        $db = Database::getInstance();
+        
+        $params = $request->getQueryParams();
+        $token = $params['token'] ?? null;
+
+        if (!$token) {
+            $response->getBody()->write('Invalid enrollment link');
+            return $response->withStatus(400);
+        }
+
+        // Look up user_id from token
+        $stmt = $db->prepare("SELECT config_value FROM system_config WHERE config_key = ?");
+        $stmt->execute(['enrollment_token_' . $token]);
+        $userIdRow = $stmt->fetch();
+
+        if (!$userIdRow) {
+            $response->getBody()->write('Invalid or expired enrollment token');
+            return $response->withStatus(400);
+        }
+
+        $userId = (int) $userIdRow['config_value'];
+
+        // Check expiry
+        $stmt = $db->prepare("SELECT config_value FROM system_config WHERE config_key = ?");
+        $stmt->execute(['enrollment_expiry_' . $token]);
+        $expiry = $stmt->fetch();
+
+        if ($expiry && new \DateTimeImmutable($expiry['config_value']) < new \DateTimeImmutable()) {
+            $response->getBody()->write('Enrollment token expired');
+            return $response->withStatus(400);
+        }
+
+        // Get user info
+        $stmt = $db->prepare("SELECT uuid, display_label FROM users WHERE id = ?");
+        $stmt->execute([$userId]);
+        $user = $stmt->fetch();
+
+        if (!$user) {
+            $response->getBody()->write('User not found');
+            return $response->withStatus(400);
+        }
+
+        // Generate WebAuthn registration options
+        $options = $this->webauthn->generateRegistrationOptions($user['uuid'], $user['display_label'] ?? 'User');
+
+        return $this->renderer->render($response, 'enroll.php', [
+            'token' => $token,
+            'options' => $options,
+            'user' => $user,
+        ]);
+    }
+
+    public function enrollKey(Request $request, Response $response): Response
+    {
+        $db = Database::getInstance();
+        $body = $request->getParsedBody();
+
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+
+        // Get token
+        $token = $body['token'] ?? null;
+        
+        if (!$token) {
+            $audit->logFail('webauthn.registration.fail', ['failure_reason' => 'Missing token']);
+            $response->getBody()->write(json_encode(['error' => 'Invalid token']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        // Look up user_id from token
+        $stmt = $db->prepare("SELECT config_value FROM system_config WHERE config_key = ?");
+        $stmt->execute(['enrollment_token_' . $token]);
+        $userIdRow = $stmt->fetch();
+
+        if (!$userIdRow) {
+            $audit->logFail('webauthn.registration.fail', ['failure_reason' => 'Invalid token']);
+            $response->getBody()->write(json_encode(['error' => 'Invalid token']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        $userId = (int) $userIdRow['config_value'];
+
+        // Extract credential data from WebAuthn response
+        $credentialId = $body['id'] ?? null;
+        $rawId = $body['rawId'] ?? null;
+        $attestationObject = $body['response']['attestationObject'] ?? null;
+        $clientDataJSON = $body['response']['clientDataJSON'] ?? null;
+
+        if (!$credentialId || !$rawId || !$attestationObject || !$clientDataJSON) {
+            $audit->logFail('webauthn.registration.fail', ['failure_reason' => 'Invalid credential data']);
+            $response->getBody()->write(json_encode(['error' => 'Invalid credential data']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        // Extract the public key from the attestation object
+        $publicKey = $this->webauthn->extractPublicKeyFromAttestation($attestationObject);
+        if (!$publicKey) {
+            $audit->logFail('webauthn.registration.fail', ['failure_reason' => 'Failed to extract public key']);
+            $response->getBody()->write(json_encode(['error' => 'Invalid attestation']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        // Store the credential with the extracted public key
+        $credentialData = [
+            'credential_id' => $credentialId,
+            'public_key' => $publicKey,
+            'sign_counter' => 0,
+            'attestation_type' => 'none',
+        ];
+
+        $credentialDbId = $this->webauthn->storeCredential($userId, $credentialData, 'Enrolled Key');
+
+        $audit->logSuccess('webauthn.registration.success', [
+            'actor_user_id' => $userId,
+            'webauthn_credential_id' => $credentialDbId,
+            'webauthn_credential_public_id' => $credentialId,
+        ]);
+
+        // Delete enrollment tokens
+        $db->exec("DELETE FROM system_config WHERE config_key IN ('enrollment_token_{$token}', 'enrollment_expiry_{$token}')");
+
+        // Determine redirect based on whether this was admin enrollment or portal
+        $redirectUrl = '/portal/login';
+
+        $response->getBody()->write(json_encode(['success' => true, 'redirect' => $redirectUrl]));
+        return $response->withHeader('Content-Type', 'application/json');
+    }
 }

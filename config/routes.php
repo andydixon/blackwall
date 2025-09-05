@@ -12,6 +12,10 @@ use Slim\Routing\RouteCollectorProxy;
 $app->get('/bootstrap', [BootstrapController::class, 'showBootstrapForm']);
 $app->post('/bootstrap/enroll', [BootstrapController::class, 'enrollWebAuthn']);
 
+// User enrollment routes
+$app->get('/enroll', [BootstrapController::class, 'showEnrollmentForm']);
+$app->post('/enroll/complete', [BootstrapController::class, 'enrollKey']);
+
 // Portal routes
 $app->get('/portal/login', [PortalController::class, 'loginForm']);
 $app->post('/portal/login', [PortalController::class, 'loginChallenge']);
@@ -64,6 +68,8 @@ $app->group('/admin', function (RouteCollectorProxy $group) {
     $group->post('/users/create', [AdminController::class, 'userStore']);
     $group->get('/users/{id}', [AdminController::class, 'userDetail']);
     $group->post('/users/{id}/update', [AdminController::class, 'userUpdate']);
+    $group->post('/users/{id}/enrollment-link', [AdminController::class, 'generateEnrollmentLink']);
+    $group->post('/users/{id}/credentials/{credentialId}/delete', [AdminController::class, 'deleteCredential']);
 
     // Projects
     $group->get('/projects', [AdminController::class, 'projectsList']);

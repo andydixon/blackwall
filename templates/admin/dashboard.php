@@ -82,6 +82,7 @@
                                             <th>Event</th>
                                             <th>Outcome</th>
                                             <th>User</th>
+                                            <th>IP Address</th>
                                             <th>Time</th>
                                         </tr>
                                     </thead>
@@ -96,6 +97,12 @@
                                                     <span class="badge <?= $badge ?>"><?= htmlspecialchars($log['outcome']) ?></span>
                                                 </td>
                                                 <td><?= htmlspecialchars($log['actor_user_uuid'] ?? '-') ?></td>
+                                                <td>
+                                                    <a href="/admin/audit?ip_address=<?= urlencode($log['ip_address']) ?>" 
+                                                       class="text-decoration-none">
+                                                        <code class="small"><?= htmlspecialchars($log['ip_address'] ?? '-') ?></code>
+                                                    </a>
+                                                </td>
                                                 <td class="text-muted"><?= date('M j, H:i', strtotime($log['created_at'])) ?></td>
                                             </tr>
                                         <?php endforeach; ?>

@@ -356,17 +356,79 @@ class AdminController
         ]);
     }
 
-    // Placeholder methods for other admin functions
     public function userDetail(Request $request, Response $response, array $args): Response
     {
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
-        $response->getBody()->write('User detail page');
-        return $response;
+
+        $userId = (int) $args['id'];
+        $user = $this->userRepo->findById($userId);
+        
+        if (!$user) {
+            return $response->withStatus(404);
+        }
+
+        // Get WebAuthn credentials
+        $credentials = $this->webauthn->getUserCredentials($userId);
+
+        // Get project assignments
+        $db = \BlackWall\Database::getInstance();
+        $stmt = $db->prepare(
+            'SELECT upr.*, p.name as project_name 
+             FROM user_project_roles upr
+             JOIN projects p ON upr.project_id = p.id
+             WHERE upr.user_id = ?
+             ORDER BY upr.created_at DESC'
+        );
+        $stmt->execute([$userId]);
+        $assignments = $stmt->fetchAll();
+
+        // Check if there's a new enrollment link in query params
+        $enrollmentLink = $request->getQueryParams()['enrollment_link'] ?? null;
+
+        return $this->renderWithLayout($response, 'admin/users/detail.php', [
+            'title' => 'User Details',
+            'user' => $user,
+            'credentials' => $credentials,
+            'assignments' => $assignments,
+            'csrfToken' => CSRFProtection::generateToken(),
+            'enrollmentLink' => $enrollmentLink,
+        ]);
     }
 
-    public function userUpdate(Request $request, Response $response, array $args): Response { return $response; }
+    public function userUpdate(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        $userId = (int) $args['id'];
+        $body = $request->getParsedBody();
+
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $actorUserId = SessionManager::get('user_id');
+
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
+            return $response->withHeader('Location', '/admin/users/' . $userId)->withStatus(302);
+        }
+
+        $displayLabel = $body['display_label'] ?? null;
+        $status = $body['status'] ?? 'active';
+
+        $this->userRepo->update($userId, $displayLabel, $status);
+
+        $audit->logSuccess('admin.user.update', [
+            'actor_user_id' => $actorUserId,
+            'target_type' => 'user',
+            'target_id' => (string) $userId,
+            'changes' => ['status' => $status],
+        ]);
+
+        return $response->withHeader('Location', '/admin/users/' . $userId)->withStatus(302);
+    }
     public function projectUpdate(Request $request, Response $response, array $args): Response { return $response; }
     public function privilegeLevels(Request $request, Response $response, array $args): Response { return $response; }
     public function privilegeLevelCreate(Request $request, Response $response, array $args): Response { return $response; }
@@ -593,6 +655,92 @@ class AdminController
     }
     public function clientUpdate(Request $request, Response $response, array $args): Response { return $response; }
     public function auditExport(Request $request, Response $response): Response { return $response; }
+
+    public function generateEnrollmentLink(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        $userId = (int) $args['id'];
+        $body = $request->getParsedBody();
+
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $actorUserId = SessionManager::get('user_id');
+
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
+            return $response->withHeader('Location', '/admin/users/' . $userId)->withStatus(302);
+        }
+
+        $user = $this->userRepo->findById($userId);
+        if (!$user) {
+            return $response->withStatus(404);
+        }
+
+        // Generate a secure enrollment token
+        $token = bin2hex(random_bytes(32));
+        $expiry = (new \DateTime())->add(new \DateInterval('P1D'))->format('Y-m-d H:i:s');
+
+        $db = \BlackWall\Database::getInstance();
+        
+        // Store token in system_config with user_id embedded in the key
+        $stmt = $db->prepare(
+            "INSERT INTO system_config (config_key, config_value) VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE config_value = ?"
+        );
+        $stmt->execute(['enrollment_token_' . $token, (string) $userId, (string) $userId]);
+        $stmt->execute(['enrollment_expiry_' . $token, $expiry, $expiry]);
+
+        $audit->logSuccess('admin.user.enrollment_link', [
+            'actor_user_id' => $actorUserId,
+            'target_type' => 'user',
+            'target_id' => (string) $userId,
+        ]);
+
+        // Generate the enrollment URL
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $host = $_SERVER['HTTP_HOST'] ?? 'blackwall.dixon.cx';
+        $baseUrl = $scheme . '://' . $host;
+        $enrollmentLink = $baseUrl . '/enroll?token=' . urlencode($token);
+
+        return $response->withHeader(
+            'Location',
+            '/admin/users/' . $userId . '?enrollment_link=' . urlencode($enrollmentLink)
+        )->withStatus(302);
+    }
+
+    public function deleteCredential(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        $userId = (int) $args['id'];
+        $credentialId = (int) $args['credentialId'];
+        $body = $request->getParsedBody();
+
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $actorUserId = SessionManager::get('user_id');
+
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
+            return $response->withHeader('Location', '/admin/users/' . $userId)->withStatus(302);
+        }
+
+        $this->webauthn->deleteCredential($credentialId);
+
+        $audit->logSuccess('admin.user.credential.delete', [
+            'actor_user_id' => $actorUserId,
+            'target_type' => 'user',
+            'target_id' => (string) $userId,
+            'webauthn_credential_id' => $credentialId,
+        ]);
+
+        return $response->withHeader('Location', '/admin/users/' . $userId)->withStatus(302);
+    }
 
     private function checkAuth(): bool
     {

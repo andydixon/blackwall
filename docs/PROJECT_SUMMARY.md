@@ -1,8 +1,8 @@
 # BlackWall OAuth 2.1 + OIDC Server - Project Summary
 
 **Status**: ✅ Complete and Deployed
-**Version**: 1.0
-**Date**: 2026-02-04
+**Version**: 1.1
+**Date**: 2026-02-06
 **Domain**: https://blackwall.dixon.cx
 
 ---
@@ -205,6 +205,7 @@ Admin panel includes a powerful audit log search:
 - Free text search over messages and metadata
 - Paginated results with 50 per page
 - CSV export (rate-limited, admin-only)
+- **Clickable IP addresses** on dashboard link directly to filtered audit logs
 
 ### Indexes
 
@@ -253,11 +254,19 @@ Then re-run `php bin/blackwall`.
 
 ### Users Management
 
-- Create users (UUID auto-generated)
+- **Create users** (UUID auto-generated)
 - Set display label (optional, NOT used for auth)
 - Enable/disable users
-- View user details
-- Enroll WebAuthn credentials per user
+- **View user details** with comprehensive information:
+  - All enrolled WebAuthn credentials with metadata
+  - Project assignments and privilege levels
+  - Account status and timestamps
+- **Generate enrollment links** for WebAuthn key enrollment:
+  - Secure token-based links (no user ID in URL)
+  - 24-hour expiration
+  - One-click copy functionality
+- **Delete credentials** directly from user detail page
+- Full audit trail of all user management actions
 
 ### Projects Management
 

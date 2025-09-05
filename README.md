@@ -147,6 +147,34 @@ Users can access their portal at `https://blackwall.dixon.cx/portal` to:
 
 ### Administrator Functions
 
+### Create Users
+
+1. Log in to https://blackwall.dixon.cx/admin
+2. Navigate to **Users** → **Create User**
+3. Enter display label (e.g., email address or name)
+4. User is created without credentials
+5. Click on the user to view their detail page
+6. Click **Generate Enrollment Link** to create a secure enrollment URL
+7. Send the link to the user (expires in 24 hours)
+8. User visits the link and enrolls their WebAuthn security key
+
+**Note**: Enrollment links contain only a secure token - no user ID is exposed in the URL.
+
+### View User Details
+
+1. Navigate to **Users** → [Select User]
+2. View user information including:
+   - UUID and display label
+   - Account status (active/disabled)
+   - All enrolled WebAuthn credentials
+   - Project assignments and privilege levels
+   - Timestamp information
+3. Actions available:
+   - Generate enrollment links for new security keys
+   - Delete specific credentials
+   - Enable/disable user account
+   - View audit logs for the user
+
 ### Create a Project
 
 1. Log in to https://blackwall.dixon.cx/admin
@@ -293,10 +321,12 @@ Admin UI: **Audit Log** → Filter by:
 - Date range
 - Project UUID
 - User UUID
-- IP address
+- IP address (clickable from dashboard)
 - Event type (e.g., `oauth.token.issue`, `webauthn.authentication.fail`)
 - Outcome (success/fail/info)
 - Correlation ID
+**Dashboard Recent Activity**: Click any IP address to filter audit logs by that IP.
+
 
 ### Event Types Logged
 
@@ -798,6 +828,8 @@ Admin UI: **Audit Log** → Filter by:
 - User UUID
 - IP address
 - Event type (e.g., `oauth.token.issue`, `webauthn.authentication.fail`)
+**Dashboard Recent Activity**: Click any IP address to filter audit logs by that IP.
+
 - Outcome (success/fail/info)
 - Correlation ID
 
