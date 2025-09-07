@@ -38,7 +38,17 @@ class OAuthClient
 
     public function hasRedirectUri(string $uri): bool
     {
-        return in_array($uri, $this->redirectUris, true);
+        // Normalize URIs to avoid trivial mismatches (e.g., trailing slash)
+        $normalize = function (string $u): string {
+            return rtrim($u, '/');
+        };
+        $needle = $normalize($uri);
+        foreach ($this->redirectUris as $allowed) {
+            if ($needle === $normalize($allowed)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public function supportsGrant(string $grant): bool

@@ -185,9 +185,10 @@ class OAuthController
         
         // Check if user is logged in
         $userId = SessionManager::get('user_id');
+        // Always store the authorization request for later use
+        SessionManager::set('oauth_auth_request', $params);
         if (!$userId) {
-            // Store auth request and show OAuth login page
-            SessionManager::set('oauth_auth_request', $params);
+            // Show OAuth login page
             return $this->renderer->render($response, 'oauth/login.php', [
                 'clientName' => $client->name,
                 'returnUrl' => $params['redirect_uri'],
@@ -549,12 +550,19 @@ class OAuthController
         
         SessionManager::remove('oauth_webauthn_challenge');
         
+        // Preserve auth request across session ID regeneration
+        $authRequest = SessionManager::get('oauth_auth_request');
+
         $credential = $webauthn->getCredentialById($body['id']);
         $userId = (int) $credential['user_id'];
         SessionManager::set('user_id', $userId);
         SessionManager::regenerateId();
-        
-        $authRequest = SessionManager::get('oauth_auth_request');
+
+        // Restore auth request if it existed
+        if ($authRequest) {
+            SessionManager::set('oauth_auth_request', $authRequest);
+        }
+
         $returnUrl = '/oauth/authorize?' . http_build_query($authRequest);
         
         $response->getBody()->write(json_encode(['success' => true, 'redirect' => $returnUrl]));
