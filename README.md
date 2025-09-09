@@ -32,7 +32,7 @@
 ### 1. Clone and Install Dependencies
 
 ```bash
-cd /home/andy/domains/blackwall.dixon.cx
+cd /home/andy/domains/blackwall.cx
 composer install
 ```
 
@@ -51,8 +51,8 @@ DB_NAME=blackwall
 DB_USER=blackwall
 DB_PASS=YOUR_SECURE_PASSWORD
 
-APP_URL=https://blackwall.dixon.cx
-WEBAUTHN_RP_ID=blackwall.dixon.cx
+APP_URL=https://blackwall.cx
+WEBAUTHN_RP_ID=blackwall.cx
 WEBAUTHN_RP_NAME="BlackWall OAuth"
 
 # Generate with: openssl rand -base64 32
@@ -109,18 +109,18 @@ make health
 ```
 
 Visit:
-- Homepage: https://blackwall.dixon.cx/
-- Cryptbin: https://blackwall.dixon.cx/cryptbin
-- User portal: https://blackwall.dixon.cx/portal
-- Admin panel: https://blackwall.dixon.cx/admin/login
-- OIDC discovery: https://blackwall.dixon.cx/.well-known/openid-configuration
+- Homepage: https://blackwall.cx/
+- Cryptbin: https://blackwall.cx/cryptbin
+- User portal: https://blackwall.cx/portal
+- Admin panel: https://blackwall.cx/admin/login
+- OIDC discovery: https://blackwall.cx/.well-known/openid-configuration
 
 Cryptbin design and deployment notes: `docs/CRYPTBIN.md`
 
 ## Architecture
 
 ```
-blackwall.dixon.cx/
+blackwall.cx/
 ├── bin/               # CLI tools (bootstrap)
 ├── config/            # Application bootstrap and routes
 ├── migrations/        # Database schema
@@ -146,7 +146,7 @@ blackwall.dixon.cx/
 
 ### User Portal
 
-Users can access their portal at `https://blackwall.dixon.cx/portal` to:
+Users can access their portal at `https://blackwall.cx/portal` to:
 - View all projects they have access to
 - See their privilege levels in each project
 - Add new WebAuthn credentials (security keys)
@@ -157,7 +157,7 @@ Users can access their portal at `https://blackwall.dixon.cx/portal` to:
 
 ### Create Users
 
-1. Log in to https://blackwall.dixon.cx/admin
+1. Log in to https://blackwall.cx/admin
 2. Navigate to **Users** → **Create User**
 3. Enter display label (e.g., email address or name)
 4. User is created without credentials
@@ -185,7 +185,7 @@ Users can access their portal at `https://blackwall.dixon.cx/portal` to:
 
 ### Create a Project
 
-1. Log in to https://blackwall.dixon.cx/admin
+1. Log in to https://blackwall.cx/admin
 2. Navigate to **Projects** → **Create Project**
 3. Enter project name (e.g., "My Application")
 4. Note the **project UUID** - clients will need this
@@ -263,7 +263,7 @@ Users can access their portal at `https://blackwall.dixon.cx/portal` to:
 
 ```json
 {
-  "iss": "https://blackwall.dixon.cx",
+  "iss": "https://blackwall.cx",
   "aud": "client_id",
   "sub": "user-uuid",
   "iat": 1234567890,
@@ -278,7 +278,7 @@ Users can access their portal at `https://blackwall.dixon.cx/portal` to:
 
 ```json
 {
-  "iss": "https://blackwall.dixon.cx",
+  "iss": "https://blackwall.cx",
   "aud": "client_id",
   "sub": "user-uuid",
   "iat": 1234567890,
@@ -308,7 +308,7 @@ Response:
   "client_id": "client_id",
   "sub": "user-uuid",
   "exp": 1234571490,
-  "iss": "https://blackwall.dixon.cx",
+  "iss": "https://blackwall.cx",
   "aud": "client_id",
   "project_id": "project-uuid",
   "privilege_level": 1
@@ -506,7 +506,7 @@ For issues or questions, contact your system administrator.
 ### 1. Clone and Install Dependencies
 
 ```bash
-cd /home/andy/domains/blackwall.dixon.cx
+cd /home/andy/domains/blackwall.cx
 composer install
 ```
 
@@ -525,8 +525,8 @@ DB_NAME=blackwall
 DB_USER=blackwall
 DB_PASS=YOUR_SECURE_PASSWORD
 
-APP_URL=https://blackwall.dixon.cx
-WEBAUTHN_RP_ID=blackwall.dixon.cx
+APP_URL=https://blackwall.cx
+WEBAUTHN_RP_ID=blackwall.cx
 WEBAUTHN_RP_NAME="BlackWall OAuth"
 
 # Generate with: openssl rand -base64 32
@@ -579,13 +579,13 @@ make health
 ```
 
 Visit:
-- Admin panel: https://blackwall.dixon.cx/admin/login
-- OIDC discovery: https://blackwall.dixon.cx/.well-known/openid-configuration
+- Admin panel: https://blackwall.cx/admin/login
+- OIDC discovery: https://blackwall.cx/.well-known/openid-configuration
 
 ## Architecture
 
 ```
-blackwall.dixon.cx/
+blackwall.cx/
 ├── bin/               # CLI tools (bootstrap)
 ├── config/            # Application bootstrap and routes
 ├── migrations/        # Database schema
@@ -611,7 +611,7 @@ blackwall.dixon.cx/
 
 ### Create a Project
 
-1. Log in to https://blackwall.dixon.cx/admin
+1. Log in to https://blackwall.cx/admin
 2. Navigate to **Projects** → **Create Project**
 3. Enter project name (e.g., "My Application")
 4. Note the **project UUID** - clients will need this
@@ -693,7 +693,7 @@ blackwall.dixon.cx/
 
 ```json
 {
-  "iss": "https://blackwall.dixon.cx",
+  "iss": "https://blackwall.cx",
   "aud": "client_id",
   "sub": "user-uuid",
   "iat": 1234567890,
@@ -709,7 +709,7 @@ blackwall.dixon.cx/
 
 ```json
 {
-  "iss": "https://blackwall.dixon.cx",
+  "iss": "https://blackwall.cx",
   "aud": "client_id",
   "sub": "user-uuid",
   "iat": 1234567890,
@@ -739,7 +739,7 @@ Response:
   "client_id": "client_id",
   "sub": "user-uuid",
   "exp": 1234571490,
-  "iss": "https://blackwall.dixon.cx",
+  "iss": "https://blackwall.cx",
   "aud": "client_id",
   "project_id": "project-uuid",
   "privilege_level": 1,
@@ -753,7 +753,7 @@ Response:
 
 ```php
 // 1. Download JWKS
-$jwks = file_get_contents('https://blackwall.dixon.cx/oauth/jwks');
+$jwks = file_get_contents('https://blackwall.cx/oauth/jwks');
 
 // 2. Parse and verify JWT
 use Lcobucci\JWT\Configuration;
@@ -770,7 +770,7 @@ $token = $config->parser()->parse($jwtString);
 
 // 3. Validate
 $constraints = [
-    new \Lcobucci\JWT\Validation\Constraint\IssuedBy('https://blackwall.dixon.cx'),
+    new \Lcobucci\JWT\Validation\Constraint\IssuedBy('https://blackwall.cx'),
     new \Lcobucci\JWT\Validation\Constraint\PermittedFor('your-client-id'),
     new \Lcobucci\JWT\Validation\Constraint\ValidAt(new SystemClock(new DateTimeZone('UTC'))),
 ];
@@ -917,18 +917,18 @@ Header set Content-Security-Policy "default-src 'self'; style-src 'self' https:/
 
 ## Apache Configuration
 
-Example vhost for `blackwall.dixon.cx`:
+Example vhost for `blackwall.cx`:
 
 ```apache
 <VirtualHost *:443>
-    ServerName blackwall.dixon.cx
-    DocumentRoot /home/andy/domains/blackwall.dixon.cx/public_html
+    ServerName blackwall.cx
+    DocumentRoot /home/andy/domains/blackwall.cx/public_html
 
     SSLEngine on
     SSLCertificateFile /path/to/fullchain.pem
     SSLCertificateKeyFile /path/to/privkey.pem
 
-    <Directory /home/andy/domains/blackwall.dixon.cx/public_html>
+    <Directory /home/andy/domains/blackwall.cx/public_html>
         AllowOverride All
         Require all granted
     </Directory>
@@ -936,8 +936,8 @@ Example vhost for `blackwall.dixon.cx`:
     # Pass environment variables (if using .env in shell)
     # SetEnv APP_ENV production
 
-    ErrorLog /home/andy/domains/blackwall.dixon.cx/logs/error.log
-    CustomLog /home/andy/domains/blackwall.dixon.cx/logs/access.log combined
+    ErrorLog /home/andy/domains/blackwall.cx/logs/error.log
+    CustomLog /home/andy/domains/blackwall.cx/logs/access.log combined
 </VirtualHost>
 ```
 

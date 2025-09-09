@@ -122,7 +122,12 @@
             } catch (error) {
                 console.error(error);
                 statusEl.classList.add('d-none');
-                errorEl.textContent = error.message || 'WebAuthn registration failed';
+                if (error && error.name === 'SecurityError') {
+                    const rp = (options.rp && options.rp.id) ? options.rp.id : 'unknown';
+                    errorEl.textContent = `WebAuthn domain mismatch: page host is ${window.location.hostname}, but rpId is ${rp}.`;
+                } else {
+                    errorEl.textContent = error.message || 'WebAuthn registration failed';
+                }
                 errorEl.classList.remove('d-none');
             }
         });

@@ -4,13 +4,13 @@ Date: 2026-02-04T13:19:12.411Z
 
 This guide explains how to authenticate users against a specific project using the built-in OAuth provider backed by hardware smart key authentication at /ai.
 
-Provider endpoints (hosted on https://blackwall.dixon.cx):
+Provider endpoints (hosted on https://blackwall.cx):
 - Authorization: GET /oauth/authorize
 - Token: POST /oauth/token
 - UserInfo: GET /oauth/userinfo
 
 Configuration (config/config.php or environment variables):
-- BW_OAUTH_ISSUER: e.g., https://blackwall.dixon.cx
+- BW_OAUTH_ISSUER: e.g., https://blackwall.cx
 - BW_OAUTH_JWT_SECRET: strong secret for HMAC (HS256)
 - BW_OAUTH_CLIENT_ID: project ID (string)
 - BW_OAUTH_CLIENT_SECRET: client secret for the project
@@ -64,7 +64,7 @@ Security notes
 
 Examples
 Authorization request:
-GET https://blackwall.dixon.cx/oauth/authorize?response_type=code&client_id=project-123&redirect_uri=https%3A%2F%2Fapp.example.com%2Foauth%2Fcallback&scope=openid%20email%20profile&state=xyz
+GET https://blackwall.cx/oauth/authorize?response_type=code&client_id=project-123&redirect_uri=https%3A%2F%2Fapp.example.com%2Foauth%2Fcallback&scope=openid%20email%20profile&state=xyz
 
 Token exchange (form-encoded):
 grant_type=authorization_code&code={CODE}&client_id=project-123&client_secret={SECRET}&redirect_uri=https%3A%2F%2Fapp.example.com%2Foauth%2Fcallback

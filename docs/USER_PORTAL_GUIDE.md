@@ -6,7 +6,7 @@ The BlackWall User Portal provides a self-service interface for users to manage 
 
 ## Accessing the Portal
 
-Visit: **https://blackwall.dixon.cx/portal**
+Visit: **https://blackwall.cx/portal**
 
 You will be prompted to authenticate using your WebAuthn security key or platform authenticator (e.g., YubiKey, Touch ID, Windows Hello).
 
@@ -148,7 +148,7 @@ Common issues:
 1. **Browser not supported**: Use a modern browser (Chrome, Edge, Firefox, Safari)
 2. **Not HTTPS**: WebAuthn requires a secure connection
 3. **Key not registered**: Make sure you completed the bootstrap or registration process
-4. **Wrong domain**: Keys are domain-specific; you must use https://blackwall.dixon.cx
+4. **Wrong domain**: Keys are domain-specific; you must use https://blackwall.cx
 
 ### How do I log out?
 

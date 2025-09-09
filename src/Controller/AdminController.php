@@ -701,7 +701,7 @@ class AdminController
 
         // Generate the enrollment URL
         $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-        $host = $_SERVER['HTTP_HOST'] ?? 'blackwall.dixon.cx';
+        $host = $_SERVER['HTTP_HOST'] ?? 'blackwall.cx';
         $baseUrl = $scheme . '://' . $host;
         $enrollmentLink = $baseUrl . '/enroll?token=' . urlencode($token);
 

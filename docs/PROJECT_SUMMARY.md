@@ -3,7 +3,7 @@
 **Status**: ✅ Complete and Deployed
 **Version**: 1.1
 **Date**: 2026-02-06
-**Domain**: https://blackwall.dixon.cx
+**Domain**: https://blackwall.cx
 
 ---
 
@@ -234,7 +234,7 @@ php bin/blackwall
 
 ### Web Enrollment
 
-1. Open bootstrap URL: `https://blackwall.dixon.cx/bootstrap?token=...`
+1. Open bootstrap URL: `https://blackwall.cx/bootstrap?token=...`
 2. Click "Register Security Key"
 3. WebAuthn ceremony (browser prompts for authenticator)
 4. Credential stored, bootstrap marked complete
@@ -363,7 +363,7 @@ Response:
 
 ```json
 {
-  "iss": "https://blackwall.dixon.cx",
+  "iss": "https://blackwall.cx",
   "aud": "client_id",
   "sub": "user-uuid",
   "exp": 1234567890,
@@ -517,9 +517,9 @@ Clients **must** validate `project_id` matches their registered project and enfo
 
 ## Support
 
-- **Repository**: /home/andy/domains/blackwall.dixon.cx
-- **Admin URL**: https://blackwall.dixon.cx/admin
-- **Discovery**: https://blackwall.dixon.cx/.well-known/openid-configuration
+- **Repository**: /home/andy/domains/blackwall.cx
+- **Admin URL**: https://blackwall.cx/admin
+- **Discovery**: https://blackwall.cx/.well-known/openid-configuration
 - **Documentation**: See `docs/` directory
 
 ---

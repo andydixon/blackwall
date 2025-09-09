@@ -55,7 +55,7 @@ $codeChallenge = rtrim(strtr(base64_encode(
 ### Step 2: Redirect User to Authorization Endpoint
 
 ```php
-$authUrl = 'https://blackwall.dixon.cx/oauth/authorize?' . http_build_query([
+$authUrl = 'https://blackwall.cx/oauth/authorize?' . http_build_query([
     'client_id' => 'YOUR_CLIENT_ID',
     'response_type' => 'code',
     'redirect_uri' => 'https://yourapp.com/callback',
@@ -87,7 +87,7 @@ $code = $_GET['code'];
 $codeVerifier = $_SESSION['oauth_code_verifier'];
 
 // Exchange code for tokens
-$tokenResponse = file_get_contents('https://blackwall.dixon.cx/oauth/token', false, stream_context_create([
+$tokenResponse = file_get_contents('https://blackwall.cx/oauth/token', false, stream_context_create([
     'http' => [
         'method' => 'POST',
         'header' => 'Content-Type: application/x-www-form-urlencoded',
@@ -124,7 +124,7 @@ use Lcobucci\JWT\Validation\Constraint\ValidAt;
 use Lcobucci\Clock\SystemClock;
 
 // Download and cache JWKS
-$jwks = json_decode(file_get_contents('https://blackwall.dixon.cx/oauth/jwks'), true);
+$jwks = json_decode(file_get_contents('https://blackwall.cx/oauth/jwks'), true);
 
 // Extract public key for the token's kid
 $publicKeyPem = $this->getPublicKeyFromJWKS($jwks, $kid);
@@ -140,7 +140,7 @@ $token = $config->parser()->parse($_SESSION['access_token']);
 
 // Validate
 $constraints = [
-    new IssuedBy('https://blackwall.dixon.cx'),
+    new IssuedBy('https://blackwall.cx'),
     new PermittedFor('YOUR_CLIENT_ID'),
     new ValidAt(new SystemClock(new \DateTimeZone('UTC'))),
 ];
@@ -196,7 +196,7 @@ private function base64UrlDecode(string $data): string
 ## Validating Opaque Access Tokens
 
 ```php
-$introspectionResponse = file_get_contents('https://blackwall.dixon.cx/oauth/introspect', false, stream_context_create([
+$introspectionResponse = file_get_contents('https://blackwall.cx/oauth/introspect', false, stream_context_create([
     'http' => [
         'method' => 'POST',
         'header' => 'Content-Type: application/x-www-form-urlencoded',
@@ -343,7 +343,7 @@ $app->group('/public', function ($group) {
 
 ```php
 if (isTokenExpired($_SESSION['access_token'])) {
-    $refreshResponse = file_get_contents('https://blackwall.dixon.cx/oauth/token', false, stream_context_create([
+    $refreshResponse = file_get_contents('https://blackwall.cx/oauth/token', false, stream_context_create([
         'http' => [
             'method' => 'POST',
             'header' => 'Content-Type: application/x-www-form-urlencoded',
@@ -366,7 +366,7 @@ if (isTokenExpired($_SESSION['access_token'])) {
 
 ```php
 // Revoke tokens
-file_get_contents('https://blackwall.dixon.cx/oauth/revoke', false, stream_context_create([
+file_get_contents('https://blackwall.cx/oauth/revoke', false, stream_context_create([
     'http' => [
         'method' => 'POST',
         'header' => 'Content-Type: application/x-www-form-urlencoded',
@@ -386,7 +386,7 @@ header('Location: /');
 ## OIDC UserInfo Endpoint
 
 ```php
-$userInfo = file_get_contents('https://blackwall.dixon.cx/oauth/userinfo', false, stream_context_create([
+$userInfo = file_get_contents('https://blackwall.cx/oauth/userinfo', false, stream_context_create([
     'http' => [
         'header' => 'Authorization: Bearer ' . $_SESSION['access_token'],
     ],
@@ -464,7 +464,7 @@ $app->run();
 ### JWT validation fails
 
 - Ensure JWKS is fresh (re-download on validation error)
-- Check `iss` matches `https://blackwall.dixon.cx` exactly
+- Check `iss` matches `https://blackwall.cx` exactly
 - Verify `aud` matches your `client_id`
 - Check system clock is synchronized (JWT exp/iat validation)
 

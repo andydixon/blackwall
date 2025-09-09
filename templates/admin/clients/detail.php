@@ -85,7 +85,7 @@
             <div class="card-header bg-primary text-white fw-bold">Usage Example</div>
             <div class="card-body">
                 <p class="small mb-2">Authorization URL:</p>
-                <pre class="bg-black text-light p-2 small mb-0" style="overflow-x: auto; font-size: 10px;">https://blackwall.dixon.cx/oauth/authorize?response_type=code&client_id=<?= htmlspecialchars($client['client_id']) ?>&redirect_uri=YOUR_REDIRECT_URI&scope=openid+profile+email&code_challenge=YOUR_CODE_CHALLENGE&code_challenge_method=S256&state=YOUR_STATE</pre>
+                <pre class="bg-black text-light p-2 small mb-0" style="overflow-x: auto; font-size: 10px;">https://blackwall.cx/oauth/authorize?response_type=code&client_id=<?= htmlspecialchars($client['client_id']) ?>&redirect_uri=YOUR_REDIRECT_URI&scope=openid+profile+email&code_challenge=YOUR_CODE_CHALLENGE&code_challenge_method=S256&state=YOUR_STATE</pre>
             </div>
         </div>
     </div>

@@ -68,6 +68,7 @@
         document.getElementById('webauthn-login').addEventListener('click', async () => {
             const errorEl = document.getElementById('error-message');
             const statusEl = document.getElementById('status-message');
+            let requestedRpId = null;
             
             errorEl.classList.add('d-none');
             statusEl.classList.remove('d-none');
@@ -82,6 +83,7 @@
                 });
 
                 const challengeData = await challengeResp.json();
+                requestedRpId = challengeData.rpId || null;
                 
                 statusEl.querySelector('span').textContent = 'Touch your security key...';
 
@@ -131,7 +133,12 @@
 
             } catch (error) {
                 console.error(error);
-                errorEl.textContent = error.message || 'Authentication failed. Please try again.';
+                if (error && error.name === 'SecurityError') {
+                    const rp = requestedRpId || 'unknown';
+                    errorEl.textContent = `WebAuthn domain mismatch: page host is ${window.location.hostname}, but rpId is ${rp}.`;
+                } else {
+                    errorEl.textContent = error.message || 'Authentication failed. Please try again.';
+                }
                 errorEl.classList.remove('d-none');
                 statusEl.classList.add('d-none');
             }

@@ -14,8 +14,8 @@
                 <div class="card shadow-lg bg-dark">
                     <div class="card-body p-4">
                         <div class="text-center mb-4">
-                            <h1 class="h4 mb-2">🔒 Authorization Request</h1>
-                            <p class="text-muted">BlackWall OAuth 2.1 + OIDC</p>
+                            <h1 class="h4 mb-2">Authorisation Request</h1>
+                            <p class="text-muted">//BlackWall</p>
                         </div>
 
                         <div class="alert alert-info">

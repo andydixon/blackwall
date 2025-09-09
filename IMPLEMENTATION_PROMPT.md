@@ -16,17 +16,17 @@ BlackWall is an OAuth 2.1 / OIDC server that provides:
 
 ## Server Information
 
-**Base URL**: `https://blackwall.dixon.cx`
+**Base URL**: `https://blackwall.cx`
 
-**Discovery Endpoint**: `https://blackwall.dixon.cx/.well-known/openid-configuration`
+**Discovery Endpoint**: `https://blackwall.cx/.well-known/openid-configuration`
 
 **Key Endpoints**:
-- Authorisation: `https://blackwall.dixon.cx/oauth/authorize`
-- Token: `https://blackwall.dixon.cx/oauth/token`
-- UserInfo: `https://blackwall.dixon.cx/oauth/userinfo`
-- JWKS: `https://blackwall.dixon.cx/oauth/jwks`
-- Token Revocation: `https://blackwall.dixon.cx/oauth/revoke`
-- Token Introspection: `https://blackwall.dixon.cx/oauth/introspect`
+- Authorisation: `https://blackwall.cx/oauth/authorize`
+- Token: `https://blackwall.cx/oauth/token`
+- UserInfo: `https://blackwall.cx/oauth/userinfo`
+- JWKS: `https://blackwall.cx/oauth/jwks`
+- Token Revocation: `https://blackwall.cx/oauth/revoke`
+- Token Introspection: `https://blackwall.cx/oauth/introspect`
 
 ## Supported Features
 
@@ -161,7 +161,7 @@ const codeChallenge = base64UrlEncode(
 #### Step 2: Redirect to Authorisation Endpoint
 
 ```
-https://blackwall.dixon.cx/oauth/authorize?
+https://blackwall.cx/oauth/authorize?
   response_type=code
   &client_id=YOUR_CLIENT_ID
   &redirect_uri=https://yourapp.com/callback
@@ -187,7 +187,7 @@ if (state !== sessionState) {
 #### Step 4: Exchange Code for Tokens
 
 ```javascript
-const response = await fetch('https://blackwall.dixon.cx/oauth/token', {
+const response = await fetch('https://blackwall.cx/oauth/token', {
   method: 'POST',
   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   body: new URLSearchParams({
@@ -214,7 +214,7 @@ const tokens = await response.json();
 #### Step 5: Fetch User Information
 
 ```javascript
-const userInfoResponse = await fetch('https://blackwall.dixon.cx/oauth/userinfo', {
+const userInfoResponse = await fetch('https://blackwall.cx/oauth/userinfo', {
   headers: {
     'Authorisation': `Bearer ${tokens.access_token}`
   }
@@ -235,7 +235,7 @@ const userInfo = await userInfoResponse.json();
 #### Option 1: Introspection (Recommended)
 
 ```javascript
-const response = await fetch('https://blackwall.dixon.cx/oauth/introspect', {
+const response = await fetch('https://blackwall.cx/oauth/introspect', {
   method: 'POST',
   headers: { 
     'Content-Type': 'application/x-www-form-urlencoded',
@@ -259,7 +259,7 @@ if (introspection.active) {
 
 ```javascript
 // Let BlackWall validate the token
-const response = await fetch('https://blackwall.dixon.cx/oauth/userinfo', {
+const response = await fetch('https://blackwall.cx/oauth/userinfo', {
   headers: { 'Authorisation': `Bearer ${accessToken}` }
 });
 
@@ -274,7 +274,7 @@ if (response.ok) {
 ### Refresh Token Flow
 
 ```javascript
-const response = await fetch('https://blackwall.dixon.cx/oauth/token', {
+const response = await fetch('https://blackwall.cx/oauth/token', {
   method: 'POST',
   headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
   body: new URLSearchParams({
@@ -292,7 +292,7 @@ const tokens = await response.json();
 ### Token Revocation
 
 ```javascript
-await fetch('https://blackwall.dixon.cx/oauth/revoke', {
+await fetch('https://blackwall.cx/oauth/revoke', {
   method: 'POST',
   headers: { 
     'Content-Type': 'application/x-www-form-urlencoded',
@@ -323,7 +323,7 @@ await fetch('https://blackwall.dixon.cx/oauth/revoke', {
 
 ```json
 {
-  "iss": "https://blackwall.dixon.cx",
+  "iss": "https://blackwall.cx",
   "sub": "550e8400-e29b-41d4-a716-446655440000",
   "aud": "your-client-id",
   "exp": 1234567890,
@@ -347,7 +347,7 @@ await fetch('https://blackwall.dixon.cx/oauth/revoke', {
   "iat": 1234564290,
   "sub": "550e8400-e29b-41d4-a716-446655440000",
   "aud": "your-client-id",
-  "iss": "https://blackwall.dixon.cx"
+  "iss": "https://blackwall.cx"
 }
 ```
 
@@ -564,9 +564,9 @@ Implement exponential backoff if you receive 429 responses.
 
 ## Support and Documentation
 
-- **Admin Panel**: https://blackwall.dixon.cx/admin
-- **API Base URL**: https://blackwall.dixon.cx
-- **Discovery Document**: https://blackwall.dixon.cx/.well-known/openid-configuration
+- **Admin Panel**: https://blackwall.cx/admin
+- **API Base URL**: https://blackwall.cx
+- **Discovery Document**: https://blackwall.cx/.well-known/openid-configuration
 
 ## Sample Integration Prompt for AI Assistants
 
@@ -575,8 +575,8 @@ When asking an AI to help integrate BlackWall, provide this context:
 ```
 I need to integrate OAuth 2.1 / OpenID Connect authentication with BlackWall.
 
-Server: https://blackwall.dixon.cx
-Discovery: https://blackwall.dixon.cx/.well-known/openid-configuration
+Server: https://blackwall.cx
+Discovery: https://blackwall.cx/.well-known/openid-configuration
 
 My application:
 - Type: [web/mobile/API/service]

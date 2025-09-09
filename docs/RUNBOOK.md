@@ -6,21 +6,21 @@
 
 ```bash
 # Check application health
-curl https://blackwall.dixon.cx/health
+curl https://blackwall.cx/health
 
 # Check database connectivity
 mysql -u blackwall -p blackwall -e "SELECT COUNT(*) FROM users;"
 
 # Check disk space
-df -h /home/andy/domains/blackwall.dixon.cx
+df -h /home/andy/domains/blackwall.cx
 
 # Check logs for errors
-tail -100 /home/andy/domains/blackwall.dixon.cx/logs/*.log | grep -i error
+tail -100 /home/andy/domains/blackwall.cx/logs/*.log | grep -i error
 ```
 
 ### Review Audit Logs
 
-Access admin panel: https://blackwall.dixon.cx/admin/audit
+Access admin panel: https://blackwall.cx/admin/audit
 
 **Look for:**
 - Multiple failed authentication attempts from same IP
@@ -48,7 +48,7 @@ mkdir -p $BACKUP_DIR
 mysqldump -u blackwall -p***REMOVED*** blackwall | gzip > $BACKUP_DIR/blackwall_db_$DATE.sql.gz
 
 # Environment config
-cp /home/andy/domains/blackwall.dixon.cx/.env $BACKUP_DIR/env_$DATE
+cp /home/andy/domains/blackwall.cx/.env $BACKUP_DIR/env_$DATE
 
 # Rotate old backups (keep 30 days)
 find $BACKUP_DIR -name "*.sql.gz" -mtime +30 -delete
@@ -314,13 +314,13 @@ sudo systemctl stop apache2
 gunzip < /home/andy/backups/blackwall/blackwall_db_20260204.sql.gz | mysql -u blackwall -p blackwall
 
 # Restore .env
-cp /home/andy/backups/blackwall/env_20260204 /home/andy/domains/blackwall.dixon.cx/.env
+cp /home/andy/backups/blackwall/env_20260204 /home/andy/domains/blackwall.cx/.env
 
 # Start web server
 sudo systemctl start apache2
 
 # Verify
-curl https://blackwall.dixon.cx/health
+curl https://blackwall.cx/health
 ```
 
 ### Reset Admin Password (WebAuthn Credential Lost)
@@ -332,7 +332,7 @@ DELETE FROM system_config WHERE config_key = 'bootstrap_complete';
 EOF
 
 # 2. Run bootstrap again
-php /home/andy/domains/blackwall.dixon.cx/bin/blackwall
+php /home/andy/domains/blackwall.cx/bin/blackwall
 
 # 3. Follow prompts to enroll new key
 ```
@@ -375,7 +375,7 @@ SHOW INDEX FROM audit_log;
 Clients should cache JWKS for 24 hours. Monitor `/oauth/jwks` access:
 
 ```bash
-grep "GET /oauth/jwks" /home/andy/domains/blackwall.dixon.cx/logs/apache_access.log | wc -l
+grep "GET /oauth/jwks" /home/andy/domains/blackwall.cx/logs/apache_access.log | wc -l
 ```
 
 If excessive (>1000/day), advise clients to implement caching.
@@ -401,7 +401,7 @@ DELETE FROM rate_limits WHERE identifier = 'IP_ADDRESS' AND action = 'oauth.toke
 3. **Failed authorizations**: `oauth.authorize.fail` count
 4. **Rate limit hits**: `security.ratelimit.hit` count
 5. **Database query time**: Monitor slow_query_log
-6. **Disk usage**: /home/andy/domains/blackwall.dixon.cx
+6. **Disk usage**: /home/andy/domains/blackwall.cx
 7. **SSL certificate expiry**: Check monthly
 
 ### Recommended Alerts

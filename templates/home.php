@@ -12,8 +12,8 @@
         <div class="row justify-content-center align-items-center min-vh-100">
             <div class="col-md-8 col-lg-6">
                 <div class="text-center mb-5">
-                    <h1 class="display-4 fw-bold mb-3">🔒 BlackWall</h1>
-                    <p class="lead text-muted">WebAuthn-Secured OAuth 2.1 / OpenID Connect Provider</p>
+                    <h1 class="display-4 fw-bold mb-3">//BlackWall</h1>
+                    <p class="lead text-muted">WebAuthn-Secured OAuth 2.1 / OpenID Connect Provider / Data Security</p>
                 </div>
 
                 <div class="row g-4 mb-4">
@@ -83,7 +83,7 @@
                             OpenID Discovery Document
                         </a>
                     </p>
-                    <small class="text-muted">BlackWall v1.0 • Enterprise OAuth/OIDC</small>
+                    <small class="text-muted">BlackWall v1.1.0 - &copy;2019-2026 <a href="https://dixon.cx/">Andy Dixon</a></small>
                 </div>
             </div>
         </div>

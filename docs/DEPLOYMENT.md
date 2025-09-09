@@ -3,7 +3,7 @@
 ## Project Structure
 
 ```
-blackwall.dixon.cx/
+blackwall.cx/
 ├── bin/
 │   └── blackwall                    # Bootstrap CLI command (executable)
 │
@@ -303,21 +303,21 @@ mysql -u blackwall -p blackwall < migrations/001_initial_schema.sql
 php bin/blackwall
 
 # Open bootstrap URL in browser to enroll WebAuthn key
-# Then login at https://blackwall.dixon.cx/admin/login
+# Then login at https://blackwall.cx/admin/login
 ```
 
 ## Testing OAuth Flow
 
 ```bash
 # Check OIDC discovery
-curl https://blackwall.dixon.cx/.well-known/openid-configuration | jq
+curl https://blackwall.cx/.well-known/openid-configuration | jq
 
 # Check JWKS
-curl https://blackwall.dixon.cx/oauth/jwks | jq
+curl https://blackwall.cx/oauth/jwks | jq
 
 # Create a project and OAuth client in admin panel
 # Then test authorization:
-open "https://blackwall.dixon.cx/oauth/authorize?client_id=YOUR_CLIENT&response_type=code&redirect_uri=https://example.com/callback&scope=openid+profile+email&code_challenge=CHALLENGE&code_challenge_method=S256&project_id=PROJECT_UUID&state=STATE"
+open "https://blackwall.cx/oauth/authorize?client_id=YOUR_CLIENT&response_type=code&redirect_uri=https://example.com/callback&scope=openid+profile+email&code_challenge=CHALLENGE&code_challenge_method=S256&project_id=PROJECT_UUID&state=STATE"
 ```
 
 ## Production Hardening

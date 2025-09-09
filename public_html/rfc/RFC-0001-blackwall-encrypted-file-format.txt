@@ -1,0 +1,315 @@
+RFC 0001
+Blackwall Encrypted File Format (BEFF)
+Version 1
+
+Status: Draft
+Author: Blackwall Project
+Date: 2026-02-12
+
+====================================================================
+1. Abstract
+====================================================================
+
+This document defines the Blackwall Encrypted File Format (BEFF) v1.
+BEFF is an offline-first, hardware-backed, chunked encryption format
+designed for secure file and stream encryption using external FIDO2
+hardware keys.
+
+The format prioritises:
+- Offline operation (airgapped systems)
+- Hardware-enforced access control
+- Minimal metadata leakage
+- Streaming operation for large files
+- Explicit, auditable cryptographic choices
+- Strict defaults with explicit insecure overrides
+
+====================================================================
+2. Design Goals
+====================================================================
+
+- Require external hardware security keys by default.
+- Never rely on OS-provided or platform authenticators.
+- Never allow passphrase-only encryption.
+- Support multiple recipients (backup keys).
+- Allow envelope rewrapping without re-encryption.
+- Support chunked encryption for arbitrarily large inputs.
+- Be portable across machines without local state.
+- Fail closed by default; no silent downgrades.
+
+====================================================================
+3. Cryptographic Primitives
+====================================================================
+
+Cipher suite:
+- ID: 0x00
+- Algorithm: XChaCha20-Poly1305
+- Mode: Chunked streaming AEAD
+
+Key material:
+- DEK: 32 bytes random per file
+- KEK: Derived from hardware key output using HKDF
+
+KDF:
+- HKDF-SHA256
+
+Passphrase KDF (in insecure-hardware compatibility mode only):
+- Argon2id
+- High memory and time cost (implementation-defined, painful by default)
+
+====================================================================
+4. File Structure Overview
+====================================================================
+
+A BEFF file consists of:
+
+[ FixedHeader ][ HeaderTLV ][ CiphertextStream ]
+
+No delimiters are used. All lengths are explicit.
+
+All multi-byte integers are little-endian.
+
+====================================================================
+5. Fixed Header
+====================================================================
+
+Size: 14 bytes
+
+Fields:
+
+- MAGIC (8 bytes)
+  Value: 0F 00 DE AD BE EF 00 01
+
+- VERSION (u16)
+  Value: 0x0001
+
+- HEADER_LEN (u32)
+  Length in bytes of the following HeaderTLV block.
+
+====================================================================
+6. HeaderTLV Block
+====================================================================
+
+The HeaderTLV block is a sequence of TLV entries.
+
+TLV format:
+- TYPE (u8)
+- LEN  (u32)
+- VALUE (LEN bytes)
+
+The entire FixedHeader + HeaderTLV block is authenticated as AEAD AAD.
+
+--------------------------------------------------------------------
+6.1 Required TLVs
+--------------------------------------------------------------------
+
+TLV 0x01: Cipher Suite
+- VALUE: u8
+- Must be 0x00
+- Any other value MUST cause failure.
+
+TLV 0x02: Chunk Size
+- VALUE: u32
+- Minimum: 64 KiB
+- Maximum: 16 MiB
+- Default: 4 MiB
+
+TLV 0x03: File Salt
+- VALUE: 32 bytes random
+- Used for KEK derivation and nonce derivation.
+
+TLV 0x04: Recipient Table
+
+VALUE format:
+- recipient_count (u16)
+- recipient entries (repeat recipient_count times)
+
+Recipient entry:
+- wrap_scheme_id (u8)
+- flags (u8) [informational only]
+- credential_id_len (u16)
+- credential_id (bytes)
+- wrapped_dek_len (u16)
+- wrapped_dek (bytes)
+
+Recipient count MUST be capped (implementation-defined, recommended ≤32).
+
+TLV 0x05: AAD Mode
+- VALUE: u8
+- Value 0x01:
+  FixedHeader + HeaderTLV are used as AAD for every chunk.
+
+--------------------------------------------------------------------
+6.2 Optional TLVs
+--------------------------------------------------------------------
+
+No optional TLVs are defined in v1.
+Unknown TLVs MUST be ignored if length is well-formed.
+
+====================================================================
+7. Recipient Wrap Schemes
+====================================================================
+
+wrap_scheme_id values:
+
+- 0x01: FIDO2_HMAC_SECRET
+- 0x81: FIDO2_PLUS_PASSPHRASE (explicit insecure-hardware override)
+
+Any other value MUST cause failure.
+
+--------------------------------------------------------------------
+7.1 FIDO2_HMAC_SECRET (Default)
+--------------------------------------------------------------------
+
+- Requires an external FIDO2 hardware key.
+- Platform authenticators MUST NOT be accepted.
+- Touch is required by default.
+- User Verification (PIN/UV) is preferred but not required.
+- If touch or UV cannot be enforced, a warning MUST be emitted.
+
+KEK derivation:
+- token_secret = FIDO2 hmac-secret output using:
+  - credential_id
+  - salt = file_salt
+- KEK = HKDF(
+    ikm = token_secret,
+    info = "blackwall:v1:kek" || file_salt || cipher_suite_id || chunk_size,
+    length = 32
+  )
+
+DEK wrapping:
+- wrapped_dek = XChaCha20-Poly1305 encrypt
+  - key = KEK
+  - nonce = HKDF(file_salt, "blackwall:v1:wrapnonce", 24)
+  - aad = FixedHeader || HeaderTLV
+  - plaintext = DEK
+
+--------------------------------------------------------------------
+7.2 FIDO2_PLUS_PASSPHRASE (Explicit Override)
+--------------------------------------------------------------------
+
+This mode is only permitted when explicitly enabled by user flag or
+configuration.
+
+- Hardware key is still required.
+- A passphrase is added as a second factor.
+
+KEK derivation:
+- P = Argon2id(passphrase, salt = file_salt || "bw:p")
+- KEK = HKDF(token_secret || P, same info as above)
+
+This mode MUST emit prominent warnings on every operation.
+
+====================================================================
+8. Ciphertext Stream
+====================================================================
+
+Ciphertext is written as sequential chunks.
+
+Per chunk:
+
+- chunk_index (u64)
+- plaintext_len (u32)
+- ciphertext (plaintext_len bytes)
+- tag (16 bytes)
+
+Nonce derivation:
+- nonce_i = HKDF(
+    ikm = file_salt,
+    info = "blackwall:v1:nonce" || chunk_index,
+    length = 24
+  )
+
+AAD per chunk:
+- FixedHeader || HeaderTLV || chunk_index || plaintext_len
+
+Any authentication failure MUST abort decryption.
+
+====================================================================
+9. Inner Encrypted Metadata
+====================================================================
+
+Human-readable metadata MUST NOT appear in the clear header.
+
+If metadata is present, it is stored inside the encrypted payload,
+typically as the first plaintext chunk:
+
+- meta_len (u16)
+- meta_json (UTF-8 JSON)
+- followed by actual file or stream content
+
+Typical fields:
+- filename
+- mime
+- mode (file/text)
+
+====================================================================
+10. Operations
+====================================================================
+
+Encrypt:
+- Generate DEK
+- Encrypt input stream chunk-by-chunk
+- Wrap DEK for one or more recipients
+- Write file atomically
+
+Decrypt:
+- Attempt recipient entries until one unwrap succeeds
+- Prompt user:
+  "When your required security key is flashing, press its button"
+- Warn on touch-only enforcement
+- Stream output to stdout unless -o specified
+
+Rewrap:
+- Requires successful DEK recovery
+- Rewrites header only
+- Ciphertext is copied unchanged
+- No re-encryption occurs
+
+====================================================================
+11. Backup Keys
+====================================================================
+
+Backup recipients are supported by adding additional recipient entries.
+
+If no backup is present, a warning MUST be emitted at encryption time.
+
+====================================================================
+12. Secure Deletion (Best Effort)
+====================================================================
+
+An optional --shred operation MAY be provided.
+
+Behaviour:
+- Overwrite file contents with zeroes or random data
+- fsync
+- truncate
+- unlink
+
+Limitations:
+- This is best-effort only.
+- It is not reliable on SSDs, CoW filesystems, journalling filesystems,
+  or systems with snapshots.
+
+Documentation MUST clearly state these limitations.
+
+====================================================================
+13. Security Considerations
+====================================================================
+
+- Loss of all enrolled hardware keys results in permanent data loss.
+- Touch-only enforcement does not prevent malware-triggered requests.
+- Platform authenticators are explicitly excluded.
+- Header integrity is enforced via AEAD AAD binding.
+- No brute-force oracle is provided by the format.
+
+====================================================================
+14. Versioning and Future Work
+====================================================================
+
+- Future cipher suites may be assigned new IDs.
+- Re-encryption is intentionally out of scope for v1.
+- Backward compatibility is not guaranteed across major versions.
+
+====================================================================
+End of RFC 0001
+====================================================================

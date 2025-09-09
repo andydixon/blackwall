@@ -3,10 +3,10 @@
 ## 5-Minute Integration
 
 ### Server Details
-- **Base URL**: `https://blackwall.dixon.cx`
-- **Authorization**: `https://blackwall.dixon.cx/oauth/authorize`
-- **Token**: `https://blackwall.dixon.cx/oauth/token`
-- **UserInfo**: `https://blackwall.dixon.cx/oauth/userinfo`
+- **Base URL**: `https://blackwall.cx`
+- **Authorization**: `https://blackwall.cx/oauth/authorize`
+- **Token**: `https://blackwall.cx/oauth/token`
+- **UserInfo**: `https://blackwall.cx/oauth/userinfo`
 
 ### Step 1: Register Your Client
 1. Go to BlackWall admin panel
@@ -40,7 +40,7 @@ $params = [
     'code_challenge_method' => 'S256',
 ];
 
-$authUrl = 'https://blackwall.dixon.cx/oauth/authorize?' . http_build_query($params);
+$authUrl = 'https://blackwall.cx/oauth/authorize?' . http_build_query($params);
 header("Location: $authUrl");
 exit;
 ```
@@ -69,7 +69,7 @@ $tokenData = [
     'code_verifier' => $_SESSION['oauth_code_verifier'],
 ];
 
-$ch = curl_init('https://blackwall.dixon.cx/oauth/token');
+$ch = curl_init('https://blackwall.cx/oauth/token');
 curl_setopt($ch, CURLOPT_POST, true);
 curl_setopt($ch, CURLOPT_POSTFIELDS, http_build_query($tokenData));
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -80,7 +80,7 @@ $tokens = json_decode($response, true);
 curl_close($ch);
 
 // Get user info
-$ch = curl_init('https://blackwall.dixon.cx/oauth/userinfo');
+$ch = curl_init('https://blackwall.cx/oauth/userinfo');
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
 curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Bearer ' . $tokens['access_token']]);
 
