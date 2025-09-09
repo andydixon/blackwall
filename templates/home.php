@@ -17,12 +17,27 @@
                 </div>
 
                 <div class="row g-4 mb-4">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
+                        <a href="/cryptbin" class="text-decoration-none">
+                            <div class="card stat-card h-100" style="border-left-color: #f59e0b">
+                                <div class="card-body text-center p-4">
+                                    <div class="fs-1 mb-3">🗄️</div>
+                                    <h5 class="mb-2">Cryptbin</h5>
+                                    <p class="text-muted small mb-3">
+                                        Encrypted pastebin for text and file payloads
+                                    </p>
+                                    <button class="btn btn-warning btn-sm">Open Cryptbin →</button>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+
+                    <div class="col-md-4">
                         <a href="/portal" class="text-decoration-none">
                             <div class="card stat-card h-100" style="border-left-color: #3b82f6">
                                 <div class="card-body text-center p-4">
                                     <div class="fs-1 mb-3">👤</div>
-                                    <h5 class="mb-2">User Portal</h5>
+                                    <h5 class="mb-2">Portal</h5>
                                     <p class="text-muted small mb-3">
                                         View your projects and manage security keys
                                     </p>
@@ -32,12 +47,12 @@
                         </a>
                     </div>
 
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <a href="/admin" class="text-decoration-none">
                             <div class="card stat-card h-100" style="border-left-color: #10b981">
                                 <div class="card-body text-center p-4">
                                     <div class="fs-1 mb-3">⚙️</div>
-                                    <h5 class="mb-2">Admin Panel</h5>
+                                    <h5 class="mb-2">Admin</h5>
                                     <p class="text-muted small mb-3">
                                         Manage users, projects, and OAuth clients
                                     </p>

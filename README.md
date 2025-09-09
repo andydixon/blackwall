@@ -15,6 +15,7 @@
 - ✅ Rate limiting
 - ✅ Dedicated OAuth login (separate from portal/admin)
 - ✅ User portal for managing projects and security keys
+- ✅ Cryptbin encrypted pastebin (filesystem-backed, no accounts)
 - ✅ Bootstrap 5 dark UI with charcoal theme
 - ✅ PSR-12 compliant PHP 8.2+
 
@@ -57,6 +58,10 @@ WEBAUTHN_RP_NAME="BlackWall OAuth"
 # Generate with: openssl rand -base64 32
 JWT_SIGNING_KEY=GENERATE_RANDOM_KEY
 CSRF_SECRET=GENERATE_RANDOM_KEY
+CRYPTBIN_KEK_BASE64=GENERATE_RANDOM_KEY
+
+# Cryptbin storage (outside public_html)
+CRYPTBIN_STORAGE_PATH=/var/lib/blackwall/cryptbin
 ```
 
 **⚠️ SECURITY: Rotate the provided password and never commit .env to version control!**
@@ -105,9 +110,12 @@ make health
 
 Visit:
 - Homepage: https://blackwall.dixon.cx/
+- Cryptbin: https://blackwall.dixon.cx/cryptbin
 - User portal: https://blackwall.dixon.cx/portal
 - Admin panel: https://blackwall.dixon.cx/admin/login
 - OIDC discovery: https://blackwall.dixon.cx/.well-known/openid-configuration
+
+Cryptbin design and deployment notes: `docs/CRYPTBIN.md`
 
 ## Architecture
 

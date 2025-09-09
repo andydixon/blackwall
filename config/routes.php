@@ -6,6 +6,7 @@ use BlackWall\Controller\AdminController;
 use BlackWall\Controller\OAuthController;
 use BlackWall\Controller\BootstrapController;
 use BlackWall\Controller\PortalController;
+use BlackWall\Controller\CryptbinController;
 use Slim\Routing\RouteCollectorProxy;
 
 // Bootstrap route (only if not complete)
@@ -28,6 +29,19 @@ $app->post('/portal/keys/add/init', [PortalController::class, 'addKeyInit']);
 $app->post('/portal/keys/add/complete', [PortalController::class, 'addKeyComplete']);
 $app->post('/portal/keys/{id}/delete', [PortalController::class, 'deleteKey']);
 $app->post('/portal/logout', [PortalController::class, 'logout']);
+
+// Cryptbin routes
+$app->get('/cryptbin', [CryptbinController::class, 'createForm']);
+$app->post('/cryptbin/create', [CryptbinController::class, 'create']);
+$app->get('/cryptbin/{id}', [CryptbinController::class, 'view']);
+$app->get('/cryptbin/{id}/share', [CryptbinController::class, 'share']);
+$app->get('/cryptbin/{id}/meta', [CryptbinController::class, 'metadata']);
+$app->get('/cryptbin/{id}/ciphertext', [CryptbinController::class, 'ciphertext']);
+$app->post('/cryptbin/{id}/webauthn/challenge', [CryptbinController::class, 'webauthnChallenge']);
+$app->post('/cryptbin/{id}/wrap', [CryptbinController::class, 'wrap']);
+$app->post('/cryptbin/{id}/unwrap', [CryptbinController::class, 'unwrap']);
+$app->post('/cryptbin/{id}/update', [CryptbinController::class, 'update']);
+$app->post('/cryptbin/{id}/delete', [CryptbinController::class, 'delete']);
 
 // Home page
 $app->get('/', function ($request, $response) {

@@ -333,6 +333,39 @@ open "https://blackwall.dixon.cx/oauth/authorize?client_id=YOUR_CLIENT&response_
 9. **Implement log rotation** for Apache and application logs
 10. **Set up SSL certificate auto-renewal** (Let's Encrypt)
 
+## Cryptbin Deployment Addendum
+
+Cryptbin introduces filesystem-backed encrypted blob storage and KEK-wrapped DEKs.
+
+Required environment:
+
+- `CRYPTBIN_KEK_BASE64` (base64-encoded 32-byte key)
+
+Recommended environment:
+
+- `CRYPTBIN_STORAGE_PATH` (outside `public_html`)
+- `CRYPTBIN_MAX_UPLOAD_BYTES`
+- `CRYPTBIN_MAX_TEXT_BYTES`
+- `CRYPTBIN_ALLOWED_MIME`
+- `CRYPTBIN_DEFAULT_RETENTION_DAYS`
+- `CRYPTBIN_KEK_VERSION`
+
+Storage setup example:
+
+```bash
+sudo mkdir -p /var/lib/blackwall/cryptbin
+sudo chown www-data:www-data /var/lib/blackwall/cryptbin
+sudo chmod 700 /var/lib/blackwall/cryptbin
+```
+
+Generate KEK:
+
+```bash
+openssl rand -base64 32
+```
+
+See `docs/CRYPTBIN.md` for threat model and full crypto design details.
+
 ---
 
 **BlackWall v1.0 - Complete and Ready for Production**

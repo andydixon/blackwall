@@ -24,6 +24,7 @@ Config::required([
     'APP_URL',
     'WEBAUTHN_RP_ID',
     'WEBAUTHN_RP_NAME',
+    'CRYPTBIN_KEK_BASE64',
 ]);
 
 // Create Slim app
