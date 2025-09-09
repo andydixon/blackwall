@@ -175,7 +175,6 @@ class OAuthService
             'expires_in' => $accessTokenLifetime,
             'scope' => implode(' ', $scopes),
         ];
-
         if ($tokenType === 'jwt') {
             $accessToken = $this->getJWTManager()->createAccessToken([
                 'sub' => $user['uuid'],
@@ -208,7 +207,6 @@ class OAuthService
                 $privilegeLevel,
                 $expiresAt->format('Y-m-d H:i:s'),
             ]);
-
             $response['access_token'] = $accessToken;
         }
 

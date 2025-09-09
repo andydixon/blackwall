@@ -9,6 +9,10 @@ use Lcobucci\JWT\Configuration;
 use Lcobucci\JWT\Signer\Key\InMemory;
 use Lcobucci\JWT\Signer\Rsa\Sha256;
 use Lcobucci\JWT\Token\Plain;
+use Lcobucci\JWT\Validation\Constraint\IssuedBy;
+use Lcobucci\JWT\Validation\Constraint\SignedWith;
+use Lcobucci\JWT\Validation\Constraint\StrictValidAt;
+use Lcobucci\Clock\SystemClock;
 use PDO;
 
 class JWTManager
@@ -56,10 +60,17 @@ class JWTManager
     {
         $key = $this->getActiveSigningKey();
         
-        $this->config = Configuration::forAsymmetricSigner(
-            new Sha256(),
-            InMemory::plainText($key['private_key']),
-            InMemory::plainText($key['public_key'])
+        $signer = new Sha256();
+        $signingKey = InMemory::plainText($key['private_key']);
+        $verificationKey = InMemory::plainText($key['public_key']);
+        
+        $this->config = Configuration::forAsymmetricSigner($signer, $signingKey, $verificationKey);
+        
+        // Set validation constraints
+        $this->config->setValidationConstraints(
+            new SignedWith($signer, $verificationKey),
+            new IssuedBy($this->issuer),
+            new StrictValidAt(SystemClock::fromSystemTimezone())
         );
     }
 
@@ -85,6 +96,7 @@ class JWTManager
         $builder = $this->config->builder()
             ->issuedBy($this->issuer)
             ->issuedAt($now)
+            ->canOnlyBeUsedAfter($now)
             ->expiresAt($now->modify('+' . $claims['expires_in'] . ' seconds'))
             ->withHeader('kid', $key['kid'])
             ->relatedTo($claims['sub'])
@@ -98,10 +110,6 @@ class JWTManager
             $builder->withClaim('nonce', $claims['nonce']);
         }
 
-        if (isset($claims['nbf'])) {
-            $builder->canOnlyBeUsedAfter($now);
-        }
-
         return $builder->getToken($this->config->signer(), $this->config->signingKey())->toString();
     }
 
@@ -113,6 +121,7 @@ class JWTManager
         $builder = $this->config->builder()
             ->issuedBy($this->issuer)
             ->issuedAt($now)
+            ->canOnlyBeUsedAfter($now)
             ->expiresAt($now->modify('+3600 seconds'))
             ->withHeader('kid', $key['kid'])
             ->relatedTo($claims['sub'])
@@ -165,7 +174,11 @@ class JWTManager
 
     public function validate(Plain $token): bool
     {
-        $constraints = $this->config->validationConstraints();
-        return $this->config->validator()->validate($token, ...$constraints);
+        try {
+            $constraints = $this->config->validationConstraints();
+            return $this->config->validator()->validate($token, ...$constraints);
+        } catch (\Exception $e) {
+            return false;
+        }
     }
 }

@@ -16,6 +16,7 @@ use BlackWall\Security\CSRFProtection;
 use BlackWall\Security\JWTManager;
 use BlackWall\Security\RateLimiter;
 use BlackWall\Security\TokenHasher;
+use BlackWall\Database;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Views\PhpRenderer;
@@ -435,7 +436,61 @@ class OAuthController
 
         $accessToken = $matches[1];
 
-        // Validate the access token
+        // Try to parse as JWT first
+        $jwtToken = $this->jwtManager->parse($accessToken);
+        error_log("JWT parse result: " . ($jwtToken ? "success" : "null"));
+        if ($jwtToken) {
+            $isValid = $this->jwtManager->validate($jwtToken);
+            error_log("JWT validation result: " . ($isValid ? "valid" : "invalid"));
+        }
+        if ($jwtToken && $this->jwtManager->validate($jwtToken)) {
+            // JWT token - extract claims
+            $claims = $jwtToken->claims();
+            $userUuid = $claims->get('sub');
+            $scopeString = $claims->get('scope', '');
+            $scopes = !empty($scopeString) ? explode(' ', $scopeString) : [];
+            
+            // Get user details from database
+            $db = Database::getInstance();
+            $stmt = $db->prepare('SELECT id, uuid, display_label FROM users WHERE uuid = ?');
+            $stmt->execute([$userUuid]);
+            $user = $stmt->fetch();
+            
+            if (!$user) {
+                $audit->logFail('oidc.userinfo.fail', ['failure_reason' => 'User not found for JWT token', 'user_uuid' => $userUuid]);
+                $response->getBody()->write(json_encode([
+                    'error' => 'invalid_token',
+                    'error_description' => 'Token user not found'
+                ]));
+                return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+            }
+            
+            // Build userinfo response from JWT claims
+            $userinfo = ['sub' => $userUuid];
+            
+            if (in_array('profile', $scopes)) {
+                $userinfo['name'] = $user['display_label'];
+                $userinfo['preferred_username'] = $user['display_label'];
+            }
+            
+            if (in_array('email', $scopes) && !empty($user['display_label'])) {
+                if (filter_var($user['display_label'], FILTER_VALIDATE_EMAIL)) {
+                    $userinfo['email'] = $user['display_label'];
+                    $userinfo['email_verified'] = true;
+                }
+            }
+            
+            $audit->logSuccess('oidc.userinfo.success', [
+                'actor_user_id' => $user['id'],
+                'actor_user_uuid' => $userUuid,
+                'project_uuid' => $claims->get('project_id'),
+            ]);
+            
+            $response->getBody()->write(json_encode($userinfo));
+            return $response->withHeader('Content-Type', 'application/json');
+        }
+
+        // Not a JWT or invalid JWT - try opaque token lookup
         $db = Database::getInstance();
         $stmt = $db->prepare(
             'SELECT t.*, u.uuid as user_uuid, u.display_label, p.uuid as project_uuid, p.name as project_name
