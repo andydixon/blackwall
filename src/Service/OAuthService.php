@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace BlackWall\Service;
 
 use BlackWall\Database;
+use BlackWall\Domain\PrivilegeLabelResolver;
 use BlackWall\Repository\OAuthClientRepository;
 use BlackWall\Repository\UserProjectRoleRepository;
 use BlackWall\Repository\PrivilegeLevelRepository;
@@ -136,7 +137,10 @@ class OAuthService
             projectId: (int) $authCode['project_id'],
             scopes: $scopes,
             privilegeLevel: $role->privilegeLevel,
-            privilegeName: $privilegeLevel ? $privilegeLevel->name : 'Unknown',
+            privilegeName: PrivilegeLabelResolver::resolve(
+                $role->privilegeLevel,
+                $privilegeLevel?->name
+            ),
             tokenType: $authCode['access_token_type'],
             accessTokenLifetime: (int) $authCode['access_token_lifetime'],
             refreshTokenLifetime: (int) $authCode['refresh_token_lifetime'],
@@ -292,7 +296,10 @@ class OAuthService
             'iss' => \BlackWall\Config::get('APP_URL'),
             'project_id' => $tokenData['project_uuid'],
             'privilege_level' => (int) $tokenData['privilege_level'],
-            'privilege_name' => $tokenData['privilege_name'] ?? 'Unknown',
+            'privilege_name' => PrivilegeLabelResolver::resolve(
+                (int) $tokenData['privilege_level'],
+                $tokenData['privilege_name'] ?? null
+            ),
         ];
     }
 

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace BlackWall\Controller;
 
 use BlackWall\Database;
+use BlackWall\Domain\PrivilegeLabelResolver;
 use BlackWall\Service\WebAuthnService;
 use BlackWall\Service\AuditLogger;
 use BlackWall\Security\SessionManager;
@@ -160,14 +161,24 @@ class PortalController
 
         // Get user's projects with privilege levels
         $stmt = $db->prepare(
-            'SELECT p.*, upr.privilege_level, upr.id as assignment_id
+            'SELECT p.*, upr.privilege_level, upr.id as assignment_id, ppl.name AS privilege_name
              FROM projects p
              JOIN user_project_roles upr ON p.id = upr.project_id
+             LEFT JOIN project_privilege_levels ppl
+                ON ppl.project_id = upr.project_id
+               AND ppl.level = upr.privilege_level
              WHERE upr.user_id = ?
              ORDER BY p.name'
         );
         $stmt->execute([$userId]);
         $projects = $stmt->fetchAll();
+        foreach ($projects as &$project) {
+            $project['privilege_label'] = PrivilegeLabelResolver::resolve(
+                (int) $project['privilege_level'],
+                $project['privilege_name'] ?? null
+            );
+        }
+        unset($project);
 
         // Get user's WebAuthn credentials
         $stmt = $db->prepare(
@@ -263,29 +274,35 @@ class PortalController
         $audit = $request->getAttribute('audit_logger');
         $userId = SessionManager::get('user_id');
         $loginCredentialId = SessionManager::get('login_credential_id');
-        $credentialId = (int) $args['id'];
-
-        // Prevent deleting the credential used to log in
-        if ($credentialId === $loginCredentialId) {
-            return $response->withHeader('Location', '/portal?error=cannot_delete_current_key')->withStatus(302);
+        $credentialPublicId = (string) ($args['credentialPublicId'] ?? '');
+        if ($credentialPublicId === '') {
+            return $response->withHeader('Location', '/portal?error=invalid_key')->withStatus(302);
         }
 
-        // Verify the credential belongs to this user
+        // Prevent deleting the credential used to log in
+        // Verify the credential belongs to this user and fetch DB id for FK-safe checks.
         $db = Database::getInstance();
-        $stmt = $db->prepare('SELECT user_id FROM webauthn_credentials WHERE id = ?');
-        $stmt->execute([$credentialId]);
+        $stmt = $db->prepare('SELECT id, user_id FROM webauthn_credentials WHERE credential_id = ?');
+        $stmt->execute([$credentialPublicId]);
         $credential = $stmt->fetch();
 
-        if (!$credential || (int)$credential['user_id'] !== $userId) {
+        if (!$credential || (int) $credential['user_id'] !== (int) $userId) {
             return $response->withHeader('Location', '/portal?error=unauthorized')->withStatus(302);
         }
 
-        $this->webauthn->deleteCredential($credentialId);
+        $credentialId = (int) $credential['id'];
+
+        if ($credentialId === (int) $loginCredentialId) {
+            return $response->withHeader('Location', '/portal?error=cannot_delete_current_key')->withStatus(302);
+        }
 
         $audit->logSuccess('portal.key.delete', [
             'actor_user_id' => $userId,
             'webauthn_credential_id' => $credentialId,
+            'webauthn_credential_public_id' => $credentialPublicId,
         ]);
+
+        $this->webauthn->deleteCredential($credentialId);
 
         return $response->withHeader('Location', '/portal?success=key_deleted')->withStatus(302);
     }

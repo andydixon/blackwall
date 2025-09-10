@@ -30,17 +30,15 @@
                             </div>
                         </div>
 
-                        <?php if ($privilegeLevel): ?>
                         <div class="card bg-secondary mb-3">
                             <div class="card-body">
                                 <h6>Your Access Level</h6>
                                 <p class="mb-0">
-                                    <span class="badge bg-primary"><?= htmlspecialchars($privilegeLevel->name) ?></span>
-                                    <small class="text-muted d-block mt-1">Level <?= $privilegeLevel->level ?></small>
+                                    <span class="badge bg-primary"><?= htmlspecialchars($privilegeLabel) ?></span>
+                                    <small class="text-muted d-block mt-1">Level <?= (int) $privilegeLevelNumber ?></small>
                                 </p>
                             </div>
                         </div>
-                        <?php endif; ?>
 
                         <?php if (!empty($scopes)): ?>
                         <div class="card bg-secondary mb-4">

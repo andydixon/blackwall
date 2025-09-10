@@ -37,7 +37,7 @@
                                         </td>
                                         <td><?= $user->createdAt->format('Y-m-d H:i') ?></td>
                                         <td>
-                                            <a href="/admin/users/<?= $user->id ?>" class="btn btn-sm btn-outline-light">View</a>
+                                            <a href="/admin/users/<?= $user->uuid ?>" class="btn btn-sm btn-outline-light">View</a>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>

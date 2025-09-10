@@ -43,6 +43,15 @@ class AuditLogger
 
     private function log(string $eventType, string $outcome, array $context): void
     {
+        if (isset($context['webauthn_credential_id']) && $context['webauthn_credential_id'] !== null) {
+            $credentialId = (int) $context['webauthn_credential_id'];
+            $checkStmt = $this->db->prepare('SELECT 1 FROM webauthn_credentials WHERE id = ?');
+            $checkStmt->execute([$credentialId]);
+            if (!$checkStmt->fetchColumn()) {
+                $context['webauthn_credential_id'] = null;
+            }
+        }
+
         $stmt = $this->db->prepare(
             'INSERT INTO audit_log (
                 created_at, event_type, outcome, message, correlation_id, ip_address, user_agent,

@@ -10,6 +10,7 @@ use BlackWall\Middleware\CorrelationIdMiddleware;
 use BlackWall\Middleware\IpAddressMiddleware;
 use BlackWall\Middleware\AuditContextMiddleware;
 use Slim\Factory\AppFactory;
+use Slim\Exception\HttpException;
 use Slim\Views\PhpRenderer;
 
 // Load environment configuration
@@ -30,11 +31,62 @@ Config::required([
 // Create Slim app
 $app = AppFactory::create();
 
+// Template renderer
+$templates = new PhpRenderer(__DIR__ . '/../templates');
+
 // Add error middleware
-$app->addErrorMiddleware(
+$errorMiddleware = $app->addErrorMiddleware(
     Config::getBool('APP_DEBUG', false),
     true,
     true
+);
+
+$errorMiddleware->setDefaultErrorHandler(
+    function (
+        $request,
+        \Throwable $exception,
+        bool $displayErrorDetails,
+        bool $logErrors,
+        bool $logErrorDetails
+    ) use ($app, $templates) {
+        $statusCode = 500;
+        if ($exception instanceof HttpException) {
+            $statusCode = method_exists($exception, 'getStatusCode')
+                ? (int) $exception->getStatusCode()
+                : (int) $exception->getCode();
+        }
+        if ($statusCode < 400 || $statusCode > 599) {
+            $statusCode = 500;
+        }
+
+        $headline = match ($statusCode) {
+            404 => 'Page Not Found',
+            403 => 'Access Forbidden',
+            401 => 'Unauthorized',
+            default => 'Application Error',
+        };
+
+        $detail = match ($statusCode) {
+            404 => 'The page you requested does not exist or has moved.',
+            403 => 'You do not have permission to access this resource.',
+            401 => 'Authentication is required to access this resource.',
+            default => 'An unexpected error occurred while processing your request.',
+        };
+
+        $tracePayload = null;
+        if ($displayErrorDetails) {
+            $tracePayload = base64_encode((string) $exception);
+        }
+
+        $response = $app->getResponseFactory()->createResponse($statusCode);
+        return $templates->render($response, 'error.php', [
+            'title' => "Error {$statusCode}",
+            'statusCode' => $statusCode,
+            'headline' => $headline,
+            'detail' => $detail,
+            'tracePayload' => $tracePayload,
+        ]);
+    }
 );
 
 // Add body parsing middleware for JSON requests
@@ -44,9 +96,6 @@ $app->addBodyParsingMiddleware();
 $app->add(new AuditContextMiddleware(new AuditLogger()));
 $app->add(new IpAddressMiddleware());
 $app->add(new CorrelationIdMiddleware());
-
-// Template renderer
-$templates = new PhpRenderer(__DIR__ . '/../templates');
 
 // Health check
 $app->get('/health', function ($request, $response) {

@@ -66,6 +66,12 @@ try {
         $privilegeRepo->create($adminProject->id, 2, 'User', 'Regular user');
         echo "✓ Created privilege level: User (2)\n";
     }
+
+    $restrictedLevel = $privilegeRepo->findByProjectAndLevel($adminProject->id, 3);
+    if (!$restrictedLevel) {
+        $privilegeRepo->create($adminProject->id, 3, 'Restricted User', 'Restricted project user');
+        echo "✓ Created privilege level: Restricted User (3)\n";
+    }
     
     echo "\n";
 

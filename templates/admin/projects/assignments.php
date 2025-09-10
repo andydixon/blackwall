@@ -7,7 +7,7 @@
                     <p class="text-muted mb-0">Project: <strong><?= htmlspecialchars($project->name) ?></strong></p>
                 </div>
                 <div>
-                    <a href="/admin/projects/<?= $project->id ?>" class="btn btn-outline-light btn-sm me-2">← Back to Project</a>
+                    <a href="/admin/projects/<?= $project->uuid ?>" class="btn btn-outline-light btn-sm me-2">← Back to Project</a>
                     <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addAssignmentModal">
                         + Add Assignment
                     </button>
@@ -49,10 +49,7 @@
                                         </td>
                                         <td>
                                             <span class="badge bg-primary">
-                                                Level <?= $assignment['privilege_level'] ?>
-                                                <?php if (!empty($assignment['privilege_name'])): ?>
-                                                    - <?= htmlspecialchars($assignment['privilege_name']) ?>
-                                                <?php endif; ?>
+                                                <?= htmlspecialchars($assignment['privilege_label']) ?>
                                             </span>
                                         </td>
                                         <td class="text-muted">
@@ -82,7 +79,7 @@
                 <h5 class="modal-title">Add User Assignment</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <form method="POST" action="/admin/projects/<?= $project->id ?>/assignments/create">
+            <form method="POST" action="/admin/projects/<?= $project->uuid ?>/assignments/create">
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">User</label>

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace BlackWall\Controller;
 
 use BlackWall\Config;
+use BlackWall\Domain\PrivilegeLabelResolver;
 use BlackWall\Repository\OAuthClientRepository;
 use BlackWall\Repository\ProjectRepository;
 use BlackWall\Repository\UserProjectRoleRepository;
@@ -210,6 +211,7 @@ class OAuthController
         }
 
         $privilegeLevel = $this->privilegeRepo->findByProjectAndLevel($project->id, $role->privilegeLevel);
+        $privilegeLabel = PrivilegeLabelResolver::resolve($role->privilegeLevel, $privilegeLevel?->name);
 
         $audit->logInfo('oauth.authorize.begin', [
             'actor_user_id' => $userId,
@@ -227,6 +229,8 @@ class OAuthController
             'project' => $project,
             'scopes' => $requestedScopes,
             'privilegeLevel' => $privilegeLevel,
+            'privilegeLabel' => $privilegeLabel,
+            'privilegeLevelNumber' => $role->privilegeLevel,
             'csrfToken' => CSRFProtection::generateToken(),
             'params' => $params,
         ]);
@@ -297,7 +301,10 @@ class OAuthController
             'oauth_client_public_id' => $client->clientId,
             'requested_scopes' => $requestedScopes,
             'privilege_level' => $role->privilegeLevel,
-            'privilege_name' => $privilegeLevel ? $privilegeLevel->name : 'Unknown',
+            'privilege_name' => PrivilegeLabelResolver::resolve(
+                $role->privilegeLevel,
+                $privilegeLevel?->name
+            ),
         ]);
 
         SessionManager::remove('oauth_auth_request');

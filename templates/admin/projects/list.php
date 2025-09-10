@@ -37,7 +37,7 @@
                                         </td>
                                         <td><?= $project->createdAt->format('Y-m-d H:i') ?></td>
                                         <td>
-                                            <a href="/admin/projects/<?= $project->id ?>" class="btn btn-sm btn-outline-light">View</a>
+                                            <a href="/admin/projects/<?= $project->uuid ?>" class="btn btn-sm btn-outline-light">View</a>
                                         </td>
                                     </tr>
                                 <?php endforeach; ?>

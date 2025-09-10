@@ -4,13 +4,13 @@
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb">
                 <li class="breadcrumb-item"><a href="/admin/projects">Projects</a></li>
-                <li class="breadcrumb-item"><a href="/admin/projects/<?= $project->id ?>"><?= htmlspecialchars($project->name) ?></a></li>
+                <li class="breadcrumb-item"><a href="/admin/projects/<?= $project->uuid ?>"><?= htmlspecialchars($project->name) ?></a></li>
                 <li class="breadcrumb-item active">OAuth Clients</li>
             </ol>
         </nav>
     </div>
     <div class="col-auto">
-        <a href="/admin/projects/<?= $project->id ?>/clients/create" class="btn btn-primary">
+        <a href="/admin/projects/<?= $project->uuid ?>/clients/create" class="btn btn-primary">
             <i class="bi bi-plus-circle"></i> Create New Client
         </a>
     </div>
@@ -19,7 +19,7 @@
 <?php if (empty($clients)): ?>
     <div class="alert alert-info">
         <i class="bi bi-info-circle"></i> No OAuth clients configured for this project yet.
-        <a href="/admin/projects/<?= $project->id ?>/clients/create" class="alert-link">Create your first client</a>.
+        <a href="/admin/projects/<?= $project->uuid ?>/clients/create" class="alert-link">Create your first client</a>.
     </div>
 <?php else: ?>
     <div class="card bg-dark border-secondary">
@@ -55,7 +55,7 @@
                                 </td>
                                 <td><?= htmlspecialchars($client['created_at']) ?></td>
                                 <td class="text-end">
-                                    <a href="/admin/clients/<?= $client['id'] ?>" class="btn btn-sm btn-outline-light">
+                                    <a href="/admin/clients/<?= urlencode($client['client_id']) ?>" class="btn btn-sm btn-outline-light">
                                         View Details
                                     </a>
                                 </td>

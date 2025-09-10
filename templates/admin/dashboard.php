@@ -67,6 +67,156 @@
             </div>
         </div>
 
+        <div class="row g-4 mb-4">
+            <div class="col-lg-6">
+                <div class="card stat-card h-100" style="border-left-color: #10b981;">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0">✅ Success Activity</h5>
+                            <a href="/admin/audit?outcome=success" class="btn btn-sm btn-outline-light">View</a>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-4">
+                                <div class="p-3 rounded-3 text-center" style="background: rgba(16, 185, 129, 0.12);">
+                                    <div class="small text-muted text-uppercase">Today</div>
+                                    <div class="fs-3 fw-bold" style="color: #10b981;"><?= (int) ($outcomeStats['success']['today'] ?? 0) ?></div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 rounded-3 text-center" style="background: rgba(16, 185, 129, 0.12);">
+                                    <div class="small text-muted text-uppercase">Week</div>
+                                    <div class="fs-3 fw-bold" style="color: #10b981;"><?= (int) ($outcomeStats['success']['week'] ?? 0) ?></div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 rounded-3 text-center" style="background: rgba(16, 185, 129, 0.12);">
+                                    <div class="small text-muted text-uppercase">Month</div>
+                                    <div class="fs-3 fw-bold" style="color: #10b981;"><?= (int) ($outcomeStats['success']['month'] ?? 0) ?></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card stat-card h-100" style="border-left-color: #ef4444;">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <h5 class="mb-0">❌ Failed Activity</h5>
+                            <a href="/admin/audit?outcome=fail" class="btn btn-sm btn-outline-light">View</a>
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-4">
+                                <div class="p-3 rounded-3 text-center" style="background: rgba(239, 68, 68, 0.12);">
+                                    <div class="small text-muted text-uppercase">Today</div>
+                                    <div class="fs-3 fw-bold" style="color: #ef4444;"><?= (int) ($outcomeStats['fail']['today'] ?? 0) ?></div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 rounded-3 text-center" style="background: rgba(239, 68, 68, 0.12);">
+                                    <div class="small text-muted text-uppercase">Week</div>
+                                    <div class="fs-3 fw-bold" style="color: #ef4444;"><?= (int) ($outcomeStats['fail']['week'] ?? 0) ?></div>
+                                </div>
+                            </div>
+                            <div class="col-4">
+                                <div class="p-3 rounded-3 text-center" style="background: rgba(239, 68, 68, 0.12);">
+                                    <div class="small text-muted text-uppercase">Month</div>
+                                    <div class="fs-3 fw-bold" style="color: #ef4444;"><?= (int) ($outcomeStats['fail']['month'] ?? 0) ?></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">✅ Success Breakdown</h5>
+                        <small class="text-muted">Top 12 (30 days)</small>
+                    </div>
+                    <div class="card-body">
+                        <?php if (!empty($successBreakdown)): ?>
+                            <div class="table-responsive">
+                                <table class="table table-dark table-hover mb-0 align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Event</th>
+                                            <th class="text-end">Today</th>
+                                            <th class="text-end">Week</th>
+                                            <th class="text-end">Month</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($successBreakdown as $row): ?>
+                                            <?php $successAuditUrl = '/admin/audit?outcome=success&event_type=' . urlencode((string) $row['event_type']); ?>
+                                            <tr style="cursor: pointer;" onclick="window.location.href='<?= htmlspecialchars($successAuditUrl, ENT_QUOTES) ?>'">
+                                                <td>
+                                                    <a href="<?= htmlspecialchars($successAuditUrl) ?>" class="text-decoration-none">
+                                                        <code><?= htmlspecialchars($row['event_type']) ?></code>
+                                                    </a>
+                                                </td>
+                                                <td class="text-end fw-semibold"><?= (int) $row['today_count'] ?></td>
+                                                <td class="text-end fw-semibold"><?= (int) $row['week_count'] ?></td>
+                                                <td class="text-end fw-semibold text-success"><?= (int) $row['month_count'] ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php else: ?>
+                            <p class="text-muted mb-0">No successful events in the last 30 days.</p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">❌ Failure Breakdown</h5>
+                        <small class="text-muted">Top 12 (30 days)</small>
+                    </div>
+                    <div class="card-body">
+                        <?php if (!empty($failBreakdown)): ?>
+                            <div class="table-responsive">
+                                <table class="table table-dark table-hover mb-0 align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>Event</th>
+                                            <th class="text-end">Today</th>
+                                            <th class="text-end">Week</th>
+                                            <th class="text-end">Month</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($failBreakdown as $row): ?>
+                                            <?php $failAuditUrl = '/admin/audit?outcome=fail&event_type=' . urlencode((string) $row['event_type']); ?>
+                                            <tr style="cursor: pointer;" onclick="window.location.href='<?= htmlspecialchars($failAuditUrl, ENT_QUOTES) ?>'">
+                                                <td>
+                                                    <a href="<?= htmlspecialchars($failAuditUrl) ?>" class="text-decoration-none">
+                                                        <code><?= htmlspecialchars($row['event_type']) ?></code>
+                                                    </a>
+                                                </td>
+                                                <td class="text-end fw-semibold"><?= (int) $row['today_count'] ?></td>
+                                                <td class="text-end fw-semibold"><?= (int) $row['week_count'] ?></td>
+                                                <td class="text-end fw-semibold text-danger"><?= (int) $row['month_count'] ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php else: ?>
+                            <p class="text-muted mb-0">No failed events in the last 30 days.</p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="row g-4">
             <div class="col-lg-8">
                 <div class="card">

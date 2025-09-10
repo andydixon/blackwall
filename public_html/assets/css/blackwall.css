@@ -198,3 +198,52 @@ code {
 ::-webkit-scrollbar-thumb:hover {
     background: #3d424d;
 }
+
+.error-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.error-wrap {
+    max-width: 960px;
+    width: 100%;
+}
+
+.error-code {
+    font-size: clamp(6rem, 16vw, 14rem);
+    line-height: 0.9;
+    font-weight: 900;
+    letter-spacing: -0.04em;
+    color: #e5e7eb;
+}
+
+.error-headline {
+    margin-top: 1rem;
+    font-size: clamp(1.75rem, 4vw, 3rem);
+    font-weight: 700;
+}
+
+.error-detail {
+    margin-top: 0.75rem;
+    font-size: clamp(1rem, 2.2vw, 1.5rem);
+    font-weight: 500;
+}
+
+.trace-wrap {
+    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 0.75rem;
+    padding: 1rem;
+}
+
+.error-trace {
+    max-height: 300px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    color: #d1d5db;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+}

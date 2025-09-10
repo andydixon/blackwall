@@ -4,8 +4,8 @@
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb">
                 <li class="breadcrumb-item"><a href="/admin/projects">Projects</a></li>
-                <li class="breadcrumb-item"><a href="/admin/projects/<?= $project->id ?>"><?= htmlspecialchars($project->name) ?></a></li>
-                <li class="breadcrumb-item"><a href="/admin/projects/<?= $project->id ?>/clients">OAuth Clients</a></li>
+                <li class="breadcrumb-item"><a href="/admin/projects/<?= $project->uuid ?>"><?= htmlspecialchars($project->name) ?></a></li>
+                <li class="breadcrumb-item"><a href="/admin/projects/<?= $project->uuid ?>/clients">OAuth Clients</a></li>
                 <li class="breadcrumb-item active"><?= htmlspecialchars($client['name']) ?></li>
             </ol>
         </nav>

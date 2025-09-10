@@ -27,7 +27,7 @@ $app->post('/portal/login/verify', [PortalController::class, 'loginVerify']);
 $app->get('/portal', [PortalController::class, 'dashboard']);
 $app->post('/portal/keys/add/init', [PortalController::class, 'addKeyInit']);
 $app->post('/portal/keys/add/complete', [PortalController::class, 'addKeyComplete']);
-$app->post('/portal/keys/{id}/delete', [PortalController::class, 'deleteKey']);
+$app->post('/portal/keys/{credentialPublicId}/delete', [PortalController::class, 'deleteKey']);
 $app->post('/portal/logout', [PortalController::class, 'logout']);
 
 // Cryptbin routes
@@ -80,36 +80,36 @@ $app->group('/admin', function (RouteCollectorProxy $group) {
     $group->get('/users', [AdminController::class, 'usersList']);
     $group->get('/users/create', [AdminController::class, 'userCreate']);
     $group->post('/users/create', [AdminController::class, 'userStore']);
-    $group->get('/users/{id}', [AdminController::class, 'userDetail']);
-    $group->post('/users/{id}/update', [AdminController::class, 'userUpdate']);
-    $group->post('/users/{id}/enrollment-link', [AdminController::class, 'generateEnrollmentLink']);
-    $group->post('/users/{id}/credentials/{credentialId}/delete', [AdminController::class, 'deleteCredential']);
+    $group->get('/users/{userUuid}', [AdminController::class, 'userDetail']);
+    $group->post('/users/{userUuid}/update', [AdminController::class, 'userUpdate']);
+    $group->post('/users/{userUuid}/enrollment-link', [AdminController::class, 'generateEnrollmentLink']);
+    $group->post('/users/{userUuid}/credentials/{credentialPublicId}/delete', [AdminController::class, 'deleteCredential']);
 
     // Projects
     $group->get('/projects', [AdminController::class, 'projectsList']);
     $group->get('/projects/create', [AdminController::class, 'projectCreate']);
     $group->post('/projects/create', [AdminController::class, 'projectStore']);
-    $group->get('/projects/{id}', [AdminController::class, 'projectDetail']);
-    $group->post('/projects/{id}/update', [AdminController::class, 'projectUpdate']);
+    $group->get('/projects/{projectUuid}', [AdminController::class, 'projectDetail']);
+    $group->post('/projects/{projectUuid}/update', [AdminController::class, 'projectUpdate']);
 
     // Privilege levels
-    $group->get('/projects/{id}/privileges', [AdminController::class, 'privilegeLevels']);
-    $group->post('/projects/{id}/privileges/create', [AdminController::class, 'privilegeLevelCreate']);
+    $group->get('/projects/{projectUuid}/privileges', [AdminController::class, 'privilegeLevels']);
+    $group->post('/projects/{projectUuid}/privileges/create', [AdminController::class, 'privilegeLevelCreate']);
     $group->post('/privileges/{id}/update', [AdminController::class, 'privilegeLevelUpdate']);
     $group->post('/privileges/{id}/delete', [AdminController::class, 'privilegeLevelDelete']);
 
     // User assignments
-    $group->get('/projects/{id}/assignments', [AdminController::class, 'projectAssignments']);
-    $group->post('/projects/{id}/assignments/create', [AdminController::class, 'assignmentCreate']);
+    $group->get('/projects/{projectUuid}/assignments', [AdminController::class, 'projectAssignments']);
+    $group->post('/projects/{projectUuid}/assignments/create', [AdminController::class, 'assignmentCreate']);
     $group->post('/assignments/{id}/update', [AdminController::class, 'assignmentUpdate']);
     $group->post('/assignments/{id}/delete', [AdminController::class, 'assignmentDelete']);
 
     // OAuth clients
-    $group->get('/projects/{id}/clients', [AdminController::class, 'clientsList']);
-    $group->get('/projects/{projectId}/clients/create', [AdminController::class, 'clientCreate']);
-    $group->post('/projects/{projectId}/clients/create', [AdminController::class, 'clientStore']);
-    $group->get('/clients/{id}', [AdminController::class, 'clientDetail']);
-    $group->post('/clients/{id}/update', [AdminController::class, 'clientUpdate']);
+    $group->get('/projects/{projectUuid}/clients', [AdminController::class, 'clientsList']);
+    $group->get('/projects/{projectUuid}/clients/create', [AdminController::class, 'clientCreate']);
+    $group->post('/projects/{projectUuid}/clients/create', [AdminController::class, 'clientStore']);
+    $group->get('/clients/{clientPublicId}', [AdminController::class, 'clientDetail']);
+    $group->post('/clients/{clientPublicId}/update', [AdminController::class, 'clientUpdate']);
 
     // Audit logs
     $group->get('/audit', [AdminController::class, 'auditLog']);

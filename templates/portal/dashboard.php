@@ -29,6 +29,8 @@
                     ✗ You cannot delete the key you're currently logged in with
                 <?php elseif ($_GET['error'] === 'unauthorized'): ?>
                     ✗ Unauthorized action
+                <?php elseif ($_GET['error'] === 'invalid_key'): ?>
+                    ✗ Invalid key reference
                 <?php endif; ?>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
@@ -62,9 +64,7 @@
                                             </div>
                                         </div>
                                         <div class="d-flex align-items-center justify-content-between">
-                                            <span class="badge bg-primary">
-                                                Privilege Level <?= $project['privilege_level'] ?>
-                                            </span>
+                                            <span class="badge bg-primary"><?= htmlspecialchars($project['privilege_label']) ?></span>
                                             <span class="badge <?= $project['status'] === 'active' ? 'bg-success' : 'bg-secondary' ?>">
                                                 <?= htmlspecialchars($project['status']) ?>
                                             </span>
@@ -128,7 +128,7 @@
                                             <?php if ((int)$cred['id'] === $loginCredentialId): ?>
                                                 <span class="text-muted small">Cannot delete current key</span>
                                             <?php else: ?>
-                                                <form method="POST" action="/portal/keys/<?= $cred['id'] ?>/delete" class="d-inline" 
+                                                <form method="POST" action="/portal/keys/<?= urlencode($cred['credential_id']) ?>/delete" class="d-inline" 
                                                       onsubmit="return confirm('Are you sure you want to delete this security key? This action cannot be undone.')">
                                                     <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
                                                 </form>

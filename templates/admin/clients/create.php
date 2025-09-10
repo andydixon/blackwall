@@ -4,8 +4,8 @@
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb">
                 <li class="breadcrumb-item"><a href="/admin/projects">Projects</a></li>
-                <li class="breadcrumb-item"><a href="/admin/projects/<?= $project->id ?>"><?= htmlspecialchars($project->name) ?></a></li>
-                <li class="breadcrumb-item"><a href="/admin/projects/<?= $project->id ?>/clients">OAuth Clients</a></li>
+                <li class="breadcrumb-item"><a href="/admin/projects/<?= $project->uuid ?>"><?= htmlspecialchars($project->name) ?></a></li>
+                <li class="breadcrumb-item"><a href="/admin/projects/<?= $project->uuid ?>/clients">OAuth Clients</a></li>
                 <li class="breadcrumb-item active">Create</li>
             </ol>
         </nav>
@@ -16,7 +16,7 @@
     <div class="col-lg-8">
         <div class="card bg-dark border-secondary">
             <div class="card-body">
-                <form method="POST" action="/admin/projects/<?= $project->id ?>/clients/create">
+                <form method="POST" action="/admin/projects/<?= $project->uuid ?>/clients/create">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
                     
                     <div class="mb-4">
@@ -49,7 +49,7 @@
                     
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">Create Client</button>
-                        <a href="/admin/projects/<?= $project->id ?>/clients" class="btn btn-secondary">Cancel</a>
+                        <a href="/admin/projects/<?= $project->uuid ?>/clients" class="btn btn-secondary">Cancel</a>
                     </div>
                 </form>
             </div>

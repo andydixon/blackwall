@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace BlackWall\Controller;
 
+use BlackWall\Domain\PrivilegeLabelResolver;
 use BlackWall\Repository\UserRepository;
 use BlackWall\Repository\ProjectRepository;
 use BlackWall\Repository\OAuthClientRepository;
@@ -180,10 +181,74 @@ class AdminController
         $stmt = $db->query("SELECT * FROM audit_log ORDER BY created_at DESC LIMIT 10");
         $recent_logs = $stmt->fetchAll();
 
+        // Outcome analytics (success/fail) for today/week/month
+        $stmt = $db->query(
+            "SELECT
+                outcome,
+                SUM(created_at >= CURDATE()) AS today_count,
+                SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS week_count,
+                SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS month_count
+             FROM audit_log
+             WHERE outcome IN ('success', 'fail')
+             GROUP BY outcome"
+        );
+        $outcomeRows = $stmt->fetchAll();
+
+        $outcomeStats = [
+            'success' => ['today' => 0, 'week' => 0, 'month' => 0],
+            'fail' => ['today' => 0, 'week' => 0, 'month' => 0],
+        ];
+
+        foreach ($outcomeRows as $row) {
+            $outcome = (string) $row['outcome'];
+            if (!isset($outcomeStats[$outcome])) {
+                continue;
+            }
+
+            $outcomeStats[$outcome] = [
+                'today' => (int) $row['today_count'],
+                'week' => (int) $row['week_count'],
+                'month' => (int) $row['month_count'],
+            ];
+        }
+
+        $breakdownSuccessStmt = $db->query(
+            "SELECT
+                event_type,
+                SUM(created_at >= CURDATE()) AS today_count,
+                SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS week_count,
+                SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS month_count
+             FROM audit_log
+             WHERE outcome = 'success'
+               AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+             GROUP BY event_type
+             ORDER BY month_count DESC, week_count DESC, today_count DESC, event_type ASC
+             LIMIT 12"
+        );
+        $successBreakdown = $breakdownSuccessStmt->fetchAll();
+
+        $breakdownFailStmt = $db->query(
+            "SELECT
+                event_type,
+                SUM(created_at >= CURDATE()) AS today_count,
+                SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS week_count,
+                SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS month_count
+             FROM audit_log
+             WHERE outcome = 'fail'
+               AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+             GROUP BY event_type
+             ORDER BY month_count DESC, week_count DESC, today_count DESC, event_type ASC
+             LIMIT 12"
+        );
+        $failBreakdown = $breakdownFailStmt->fetchAll();
+
         return $this->renderWithLayout($response, 'admin/dashboard.php', [
             'title' => 'Dashboard',
             'stats' => $stats,
             'recent_logs' => $recent_logs,
+            'outcomeStats' => $outcomeStats,
+            'successBreakdown' => $successBreakdown,
+            'failBreakdown' => $failBreakdown,
         ]);
     }
 
@@ -236,10 +301,10 @@ class AdminController
         $audit->logSuccess('admin.user.create', [
             'actor_user_id' => $userId,
             'target_type' => 'user',
-            'target_id' => (string) $user->id,
+            'target_id' => $user->uuid,
         ]);
 
-        return $response->withHeader('Location', '/admin/users/' . $user->id)->withStatus(302);
+        return $response->withHeader('Location', '/admin/users/' . $user->uuid)->withStatus(302);
     }
 
     public function projectsList(Request $request, Response $response): Response
@@ -290,16 +355,17 @@ class AdminController
         // Create default privilege levels
         $this->privilegeRepo->create($project->id, 1, 'Admin', 'Project administrator');
         $this->privilegeRepo->create($project->id, 2, 'User', 'Regular user');
+        $this->privilegeRepo->create($project->id, 3, 'Restricted User', 'Restricted project user');
 
         $audit->logSuccess('admin.project.create', [
             'actor_user_id' => $userId,
             'project_id' => $project->id,
             'project_uuid' => $project->uuid,
             'target_type' => 'project',
-            'target_id' => (string) $project->id,
+            'target_id' => $project->uuid,
         ]);
 
-        return $response->withHeader('Location', '/admin/projects/' . $project->id)->withStatus(302);
+        return $response->withHeader('Location', '/admin/projects/' . $project->uuid)->withStatus(302);
     }
 
     public function projectDetail(Request $request, Response $response, array $args): Response
@@ -308,7 +374,8 @@ class AdminController
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
 
-        $project = $this->projectRepo->findById((int) $args['id']);
+        $projectUuid = (string) ($args['projectUuid'] ?? '');
+        $project = $this->projectRepo->findByUuid($projectUuid);
         if (!$project) {
             return $response->withStatus(404);
         }
@@ -362,12 +429,13 @@ class AdminController
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
 
-        $userId = (int) $args['id'];
-        $user = $this->userRepo->findById($userId);
+        $userUuid = (string) ($args['userUuid'] ?? '');
+        $user = $this->userRepo->findByUuid($userUuid);
         
         if (!$user) {
             return $response->withStatus(404);
         }
+        $userId = $user->id;
 
         // Get WebAuthn credentials
         $credentials = $this->webauthn->getUserCredentials($userId);
@@ -375,14 +443,24 @@ class AdminController
         // Get project assignments
         $db = \BlackWall\Database::getInstance();
         $stmt = $db->prepare(
-            'SELECT upr.*, p.name as project_name 
+            'SELECT upr.*, p.uuid AS project_uuid, p.name as project_name, ppl.name AS privilege_name
              FROM user_project_roles upr
              JOIN projects p ON upr.project_id = p.id
+             LEFT JOIN project_privilege_levels ppl
+               ON ppl.project_id = upr.project_id
+              AND ppl.level = upr.privilege_level
              WHERE upr.user_id = ?
              ORDER BY upr.created_at DESC'
         );
         $stmt->execute([$userId]);
         $assignments = $stmt->fetchAll();
+        foreach ($assignments as &$assignment) {
+            $assignment['privilege_label'] = PrivilegeLabelResolver::resolve(
+                (int) $assignment['privilege_level'],
+                $assignment['privilege_name'] ?? null
+            );
+        }
+        unset($assignment);
 
         // Check if there's a new enrollment link in query params
         $enrollmentLink = $request->getQueryParams()['enrollment_link'] ?? null;
@@ -403,7 +481,12 @@ class AdminController
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
 
-        $userId = (int) $args['id'];
+        $userUuid = (string) ($args['userUuid'] ?? '');
+        $user = $this->userRepo->findByUuid($userUuid);
+        if (!$user) {
+            return $response->withStatus(404);
+        }
+        $userId = $user->id;
         $body = $request->getParsedBody();
 
         /** @var AuditLogger $audit */
@@ -412,7 +495,7 @@ class AdminController
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
-            return $response->withHeader('Location', '/admin/users/' . $userId)->withStatus(302);
+            return $response->withHeader('Location', '/admin/users/' . $user->uuid)->withStatus(302);
         }
 
         $displayLabel = $body['display_label'] ?? null;
@@ -423,41 +506,253 @@ class AdminController
         $audit->logSuccess('admin.user.update', [
             'actor_user_id' => $actorUserId,
             'target_type' => 'user',
-            'target_id' => (string) $userId,
+            'target_id' => $user->uuid,
             'changes' => ['status' => $status],
         ]);
 
-        return $response->withHeader('Location', '/admin/users/' . $userId)->withStatus(302);
+        return $response->withHeader('Location', '/admin/users/' . $user->uuid)->withStatus(302);
     }
     public function projectUpdate(Request $request, Response $response, array $args): Response { return $response; }
-    public function privilegeLevels(Request $request, Response $response, array $args): Response { return $response; }
-    public function privilegeLevelCreate(Request $request, Response $response, array $args): Response { return $response; }
-    public function privilegeLevelUpdate(Request $request, Response $response, array $args): Response { return $response; }
-    public function privilegeLevelDelete(Request $request, Response $response, array $args): Response { return $response; }
+
+    public function privilegeLevels(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        $projectUuid = (string) ($args['projectUuid'] ?? '');
+        $project = $this->projectRepo->findByUuid($projectUuid);
+        if (!$project) {
+            return $response->withStatus(404);
+        }
+
+        $levels = $this->privilegeRepo->findAllByProject($project->id);
+        $levelRows = [];
+        $existingLevels = [];
+
+        foreach ($levels as $level) {
+            $effectiveName = PrivilegeLabelResolver::resolve($level->level, $level->name);
+            $defaultName = PrivilegeLabelResolver::resolve($level->level, null);
+
+            $levelRows[] = [
+                'entity' => $level,
+                'effective_name' => $effectiveName,
+                'default_name' => $defaultName,
+                'is_override' => $level->name !== $defaultName,
+                'in_use' => $this->privilegeRepo->isLevelInUse($project->id, $level->level),
+            ];
+            $existingLevels[] = $level->level;
+        }
+
+        $availableLevels = [];
+        for ($i = 1; $i <= 10; $i++) {
+            if (!in_array($i, $existingLevels, true)) {
+                $availableLevels[] = [
+                    'level' => $i,
+                    'default_name' => PrivilegeLabelResolver::resolve($i, null),
+                ];
+            }
+        }
+
+        $query = $request->getQueryParams();
+
+        return $this->renderWithLayout($response, 'admin/projects/privileges.php', [
+            'title' => 'Privilege Levels - ' . $project->name,
+            'project' => $project,
+            'levelRows' => $levelRows,
+            'availableLevels' => $availableLevels,
+            'csrfToken' => CSRFProtection::generateToken(),
+            'success' => $query['success'] ?? null,
+            'error' => $query['error'] ?? null,
+        ]);
+    }
+
+    public function privilegeLevelCreate(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        $projectUuid = (string) ($args['projectUuid'] ?? '');
+        $project = $this->projectRepo->findByUuid($projectUuid);
+        if (!$project) {
+            return $response->withStatus(404);
+        }
+
+        $body = $request->getParsedBody();
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $actorUserId = SessionManager::get('user_id');
+
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/privileges?error=csrf")->withStatus(302);
+        }
+
+        $level = (int) ($body['level'] ?? 0);
+        $name = trim((string) ($body['name'] ?? ''));
+        $description = trim((string) ($body['description'] ?? ''));
+        $description = $description === '' ? null : $description;
+
+        if ($level < 1 || $level > 10) {
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/privileges?error=invalid_level")->withStatus(302);
+        }
+
+        if ($name === '') {
+            $name = PrivilegeLabelResolver::resolve($level, null);
+        }
+
+        try {
+            $this->privilegeRepo->create($project->id, $level, $name, $description);
+        } catch (\Throwable $e) {
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/privileges?error=duplicate")->withStatus(302);
+        }
+
+        $audit->logSuccess('admin.privilege.create', [
+            'actor_user_id' => $actorUserId,
+            'project_id' => $project->id,
+            'project_uuid' => $project->uuid,
+            'privilege_level' => $level,
+            'privilege_name' => $name,
+            'target_type' => 'project_privilege_level',
+        ]);
+
+        return $response->withHeader('Location', "/admin/projects/{$project->uuid}/privileges?success=created")->withStatus(302);
+    }
+
+    public function privilegeLevelUpdate(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        $levelId = (int) ($args['id'] ?? 0);
+        $level = $this->privilegeRepo->findById($levelId);
+        if (!$level) {
+            return $response->withStatus(404);
+        }
+
+        $project = $this->projectRepo->findById($level->projectId);
+        if (!$project) {
+            return $response->withStatus(404);
+        }
+
+        $body = $request->getParsedBody();
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $actorUserId = SessionManager::get('user_id');
+
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/privileges?error=csrf")->withStatus(302);
+        }
+
+        $name = trim((string) ($body['name'] ?? ''));
+        $description = trim((string) ($body['description'] ?? ''));
+        $description = $description === '' ? null : $description;
+
+        if ($name === '') {
+            $name = PrivilegeLabelResolver::resolve($level->level, null);
+        }
+
+        try {
+            $this->privilegeRepo->update($level->id, $name, $description);
+        } catch (\Throwable $e) {
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/privileges?error=duplicate")->withStatus(302);
+        }
+
+        $audit->logSuccess('admin.privilege.update', [
+            'actor_user_id' => $actorUserId,
+            'project_id' => $project->id,
+            'project_uuid' => $project->uuid,
+            'privilege_level' => $level->level,
+            'privilege_name' => $name,
+            'target_type' => 'project_privilege_level',
+            'target_id' => (string) $level->id,
+        ]);
+
+        return $response->withHeader('Location', "/admin/projects/{$project->uuid}/privileges?success=updated")->withStatus(302);
+    }
+
+    public function privilegeLevelDelete(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        $levelId = (int) ($args['id'] ?? 0);
+        $level = $this->privilegeRepo->findById($levelId);
+        if (!$level) {
+            return $response->withStatus(404);
+        }
+
+        $project = $this->projectRepo->findById($level->projectId);
+        if (!$project) {
+            return $response->withStatus(404);
+        }
+
+        $body = $request->getParsedBody();
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $actorUserId = SessionManager::get('user_id');
+
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/privileges?error=csrf")->withStatus(302);
+        }
+
+        if ($this->privilegeRepo->isLevelInUse($project->id, $level->level)) {
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/privileges?error=in_use")->withStatus(302);
+        }
+
+        $this->privilegeRepo->delete($level->id);
+
+        $audit->logSuccess('admin.privilege.delete', [
+            'actor_user_id' => $actorUserId,
+            'project_id' => $project->id,
+            'project_uuid' => $project->uuid,
+            'privilege_level' => $level->level,
+            'target_type' => 'project_privilege_level',
+            'target_id' => (string) $level->id,
+        ]);
+
+        return $response->withHeader('Location', "/admin/projects/{$project->uuid}/privileges?success=deleted")->withStatus(302);
+    }
     public function projectAssignments(Request $request, Response $response, array $args): Response
     {
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
 
-        $projectId = (int) $args['id'];
-        $project = $this->projectRepo->findById($projectId);
+        $projectUuid = (string) ($args['projectUuid'] ?? '');
+        $project = $this->projectRepo->findByUuid($projectUuid);
 
         if (!$project) {
             return $response->withStatus(404);
         }
+        $projectId = $project->id;
 
         // Get all assignments for this project with user info
         $db = \BlackWall\Database::getInstance();
         $stmt = $db->prepare(
-            'SELECT upr.*, u.uuid as user_uuid, u.display_label as user_display_label
+            'SELECT upr.*, u.uuid as user_uuid, u.display_label as user_display_label, ppl.name AS privilege_name
              FROM user_project_roles upr
              JOIN users u ON upr.user_id = u.id
+             LEFT JOIN project_privilege_levels ppl
+               ON ppl.project_id = upr.project_id
+              AND ppl.level = upr.privilege_level
              WHERE upr.project_id = ?
              ORDER BY upr.created_at DESC'
         );
         $stmt->execute([$projectId]);
         $assignments = $stmt->fetchAll();
+        foreach ($assignments as &$assignment) {
+            $assignment['privilege_label'] = PrivilegeLabelResolver::resolve(
+                (int) $assignment['privilege_level'],
+                $assignment['privilege_name'] ?? null
+            );
+        }
+        unset($assignment);
 
         // Get all users for the dropdown
         $allUsers = $this->userRepo->findAll();
@@ -465,7 +760,11 @@ class AdminController
         // Get privilege levels for this project (or create default ones)
         $privilegeLevels = [];
         for ($i = 1; $i <= 10; $i++) {
-            $privilegeLevels[] = ['level' => $i, 'name' => "Level $i"];
+            $custom = $this->privilegeRepo->findByProjectAndLevel($projectId, $i);
+            $privilegeLevels[] = [
+                'level' => $i,
+                'name' => PrivilegeLabelResolver::resolve($i, $custom?->name),
+            ];
         }
 
         return $this->renderWithLayout($response, 'admin/projects/assignments.php', [
@@ -482,13 +781,18 @@ class AdminController
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
 
-        $projectId = (int) $args['id'];
+        $projectUuid = (string) ($args['projectUuid'] ?? '');
+        $project = $this->projectRepo->findByUuid($projectUuid);
+        if (!$project) {
+            return $response->withStatus(404);
+        }
+        $projectId = $project->id;
         $body = $request->getParsedBody();
         $userId = (int) ($body['user_id'] ?? 0);
         $privilegeLevel = (int) ($body['privilege_level'] ?? 0);
 
         if (!$userId || !$privilegeLevel) {
-            return $response->withHeader('Location', "/admin/projects/{$projectId}/assignments")->withStatus(302);
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments")->withStatus(302);
         }
 
         // Check if assignment already exists
@@ -497,7 +801,7 @@ class AdminController
             $this->roleRepo->create($userId, $projectId, $privilegeLevel);
         }
 
-        return $response->withHeader('Location', "/admin/projects/{$projectId}/assignments")->withStatus(302);
+        return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments")->withStatus(302);
     }
 
     public function assignmentUpdate(Request $request, Response $response, array $args): Response
@@ -536,12 +840,13 @@ class AdminController
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
 
-        $projectId = (int) $args['id'];
-        $project = $this->projectRepo->findById($projectId);
+        $projectUuid = (string) ($args['projectUuid'] ?? '');
+        $project = $this->projectRepo->findByUuid($projectUuid);
 
         if (!$project) {
             return $response->withStatus(404);
         }
+        $projectId = $project->id;
 
         // Get all OAuth clients for this project
         $db = \BlackWall\Database::getInstance();
@@ -564,8 +869,8 @@ class AdminController
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
 
-        $projectId = (int) $args['projectId'];
-        $project = $this->projectRepo->findById($projectId);
+        $projectUuid = (string) ($args['projectUuid'] ?? '');
+        $project = $this->projectRepo->findByUuid($projectUuid);
 
         if (!$project) {
             return $response->withStatus(404);
@@ -584,11 +889,16 @@ class AdminController
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
 
-        $projectId = (int) $args['projectId'];
+        $projectUuid = (string) ($args['projectUuid'] ?? '');
+        $project = $this->projectRepo->findByUuid($projectUuid);
+        if (!$project) {
+            return $response->withStatus(404);
+        }
+        $projectId = $project->id;
         $body = $request->getParsedBody();
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
-            return $response->withHeader('Location', "/admin/projects/{$projectId}/clients")->withStatus(302);
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/clients")->withStatus(302);
         }
 
         $clientId = \Ramsey\Uuid\Uuid::uuid4()->toString();
@@ -613,17 +923,15 @@ class AdminController
             'active'
         ]);
 
-        $newClientId = $db->lastInsertId();
-
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $userId = SessionManager::get('user_id');
         $audit->logSuccess('admin.client.create', [
             'actor_user_id' => $userId,
-            'oauth_client_id' => $newClientId,
+            'oauth_client_public_id' => $clientId,
         ]);
 
-        return $response->withHeader('Location', "/admin/clients/{$newClientId}?secret=" . urlencode($clientSecret ?: ''))->withStatus(302);
+        return $response->withHeader('Location', "/admin/clients/{$clientId}?secret=" . urlencode($clientSecret ?: ''))->withStatus(302);
     }
 
     public function clientDetail(Request $request, Response $response, array $args): Response
@@ -632,17 +940,17 @@ class AdminController
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
 
-        $clientId = (int) $args['id'];
+        $clientPublicId = (string) ($args['clientPublicId'] ?? '');
         $db = \BlackWall\Database::getInstance();
-        $stmt = $db->prepare('SELECT * FROM oauth_clients WHERE id = ?');
-        $stmt->execute([$clientId]);
+        $stmt = $db->prepare('SELECT * FROM oauth_clients WHERE client_id = ?');
+        $stmt->execute([$clientPublicId]);
         $client = $stmt->fetch();
 
         if (!$client) {
             return $response->withStatus(404);
         }
 
-        $project = $this->projectRepo->findById($client['project_id']);
+        $project = $this->projectRepo->findById((int) $client['project_id']);
 
         $secret = $request->getQueryParams()['secret'] ?? null;
 
@@ -662,7 +970,7 @@ class AdminController
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
 
-        $userId = (int) $args['id'];
+        $userUuid = (string) ($args['userUuid'] ?? '');
         $body = $request->getParsedBody();
 
         /** @var AuditLogger $audit */
@@ -671,13 +979,14 @@ class AdminController
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
-            return $response->withHeader('Location', '/admin/users/' . $userId)->withStatus(302);
+            return $response->withHeader('Location', '/admin/users/' . $userUuid)->withStatus(302);
         }
 
-        $user = $this->userRepo->findById($userId);
+        $user = $this->userRepo->findByUuid($userUuid);
         if (!$user) {
             return $response->withStatus(404);
         }
+        $userId = $user->id;
 
         // Generate a secure enrollment token
         $token = bin2hex(random_bytes(32));
@@ -696,7 +1005,7 @@ class AdminController
         $audit->logSuccess('admin.user.enrollment_link', [
             'actor_user_id' => $actorUserId,
             'target_type' => 'user',
-            'target_id' => (string) $userId,
+            'target_id' => $user->uuid,
         ]);
 
         // Generate the enrollment URL
@@ -707,7 +1016,7 @@ class AdminController
 
         return $response->withHeader(
             'Location',
-            '/admin/users/' . $userId . '?enrollment_link=' . urlencode($enrollmentLink)
+            '/admin/users/' . $user->uuid . '?enrollment_link=' . urlencode($enrollmentLink)
         )->withStatus(302);
     }
 
@@ -717,8 +1026,8 @@ class AdminController
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
 
-        $userId = (int) $args['id'];
-        $credentialId = (int) $args['credentialId'];
+        $userUuid = (string) ($args['userUuid'] ?? '');
+        $credentialPublicId = (string) ($args['credentialPublicId'] ?? '');
         $body = $request->getParsedBody();
 
         /** @var AuditLogger $audit */
@@ -727,19 +1036,35 @@ class AdminController
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
-            return $response->withHeader('Location', '/admin/users/' . $userId)->withStatus(302);
+            return $response->withHeader('Location', '/admin/users/' . $userUuid)->withStatus(302);
         }
 
-        $this->webauthn->deleteCredential($credentialId);
+        $user = $this->userRepo->findByUuid($userUuid);
+        if (!$user) {
+            return $response->withStatus(404);
+        }
+        $userId = $user->id;
+
+        $db = \BlackWall\Database::getInstance();
+        $stmt = $db->prepare('SELECT id, user_id FROM webauthn_credentials WHERE credential_id = ?');
+        $stmt->execute([$credentialPublicId]);
+        $credential = $stmt->fetch();
+        if (!$credential || (int) $credential['user_id'] !== $userId) {
+            return $response->withHeader('Location', '/admin/users/' . $user->uuid)->withStatus(302);
+        }
+        $credentialId = (int) $credential['id'];
 
         $audit->logSuccess('admin.user.credential.delete', [
             'actor_user_id' => $actorUserId,
             'target_type' => 'user',
-            'target_id' => (string) $userId,
+            'target_id' => $user->uuid,
             'webauthn_credential_id' => $credentialId,
+            'webauthn_credential_public_id' => $credentialPublicId,
         ]);
 
-        return $response->withHeader('Location', '/admin/users/' . $userId)->withStatus(302);
+        $this->webauthn->deleteCredential($credentialId);
+
+        return $response->withHeader('Location', '/admin/users/' . $user->uuid)->withStatus(302);
     }
 
     private function checkAuth(): bool

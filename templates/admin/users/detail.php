@@ -70,7 +70,7 @@
             <div class="card-header d-flex justify-content-between align-items-center fw-bold">
                 <span>WebAuthn Credentials (<?= count($credentials) ?>)</span>
                 <?php if (empty($credentials)): ?>
-                    <form method="POST" action="/admin/users/<?= $user->id ?>/enrollment-link" class="d-inline">
+                    <form method="POST" action="/admin/users/<?= $user->uuid ?>/enrollment-link" class="d-inline">
                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
                         <button type="submit" class="btn btn-sm btn-success">
                             <i class="bi bi-key"></i> Generate Enrollment Link
@@ -104,7 +104,7 @@
                                         <td><?= htmlspecialchars($cred['created_at']) ?></td>
                                         <td><?= htmlspecialchars($cred['last_used_at'] ?? 'Never') ?></td>
                                         <td>
-                                            <form method="POST" action="/admin/users/<?= $user->id ?>/credentials/<?= $cred['id'] ?>/delete" 
+                                            <form method="POST" action="/admin/users/<?= $user->uuid ?>/credentials/<?= urlencode($cred['credential_id']) ?>/delete" 
                                                   class="d-inline" onsubmit="return confirm('Are you sure you want to delete this credential?');">
                                                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
                                                 <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
@@ -116,7 +116,7 @@
                         </table>
                     </div>
                     <div class="mt-3">
-                        <form method="POST" action="/admin/users/<?= $user->id ?>/enrollment-link" class="d-inline">
+                        <form method="POST" action="/admin/users/<?= $user->uuid ?>/enrollment-link" class="d-inline">
                             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
                             <button type="submit" class="btn btn-sm btn-outline-primary">
                                 Add Another Key (Generate Enrollment Link)
@@ -146,11 +146,11 @@
                                 <?php foreach ($assignments as $assignment): ?>
                                     <tr>
                                         <td>
-                                            <a href="/admin/projects/<?= $assignment['project_id'] ?>" class="text-decoration-none">
+                                            <a href="/admin/projects/<?= $assignment['project_uuid'] ?>" class="text-decoration-none">
                                                 <?= htmlspecialchars($assignment['project_name']) ?>
                                             </a>
                                         </td>
-                                        <td><span class="badge bg-info">Level <?= $assignment['privilege_level'] ?></span></td>
+                                        <td><span class="badge bg-info"><?= htmlspecialchars($assignment['privilege_label']) ?></span></td>
                                         <td><?= htmlspecialchars($assignment['created_at']) ?></td>
                                     </tr>
                                 <?php endforeach; ?>
@@ -167,10 +167,10 @@
             <div class="card-header bg-primary text-white fw-bold">Quick Actions</div>
             <div class="card-body">
                 <div class="d-grid gap-2">
-                    <a href="/admin/audit?user_id=<?= $user->id ?>" class="btn btn-outline-light">
+                    <a href="/admin/audit?actor_user_uuid=<?= urlencode($user->uuid) ?>" class="btn btn-outline-light">
                         View Audit Logs
                     </a>
-                    <form method="POST" action="/admin/users/<?= $user->id ?>/update" class="d-inline">
+                    <form method="POST" action="/admin/users/<?= $user->uuid ?>/update" class="d-inline">
                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
                         <input type="hidden" name="display_label" value="<?= htmlspecialchars($user->displayLabel ?? '') ?>">
                         <?php if ($user->status === 'active'): ?>
