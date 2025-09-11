@@ -1,0 +1,52 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use BlackWall\Config;
+use BlackWall\Service\MaintenanceService;
+
+Config::load(__DIR__ . '/..');
+
+$command = $argv[1] ?? null;
+if ($command === null) {
+    fwrite(STDERR, "Usage: php bin/maintenance <cleanup:tokens|cleanup:audit|cleanup:all|status> [--audit-retention-days=N]\n");
+    exit(1);
+}
+
+$auditRetentionDays = null;
+foreach (array_slice($argv, 2) as $arg) {
+    if (str_starts_with($arg, '--audit-retention-days=')) {
+        $auditRetentionDays = (int) substr($arg, strlen('--audit-retention-days='));
+    }
+}
+
+$service = new MaintenanceService();
+
+switch ($command) {
+    case 'cleanup:tokens':
+        $result = $service->cleanupTokens();
+        echo json_encode($result, JSON_PRETTY_PRINT) . PHP_EOL;
+        break;
+
+    case 'cleanup:audit':
+        $result = $service->cleanupAudit($auditRetentionDays);
+        echo json_encode($result, JSON_PRETTY_PRINT) . PHP_EOL;
+        break;
+
+    case 'cleanup:all':
+        $result = $service->cleanupAll($auditRetentionDays);
+        echo json_encode($result, JSON_PRETTY_PRINT) . PHP_EOL;
+        break;
+
+    case 'status':
+        $result = $service->getRecentRuns(50);
+        echo json_encode($result, JSON_PRETTY_PRINT) . PHP_EOL;
+        break;
+
+    default:
+        fwrite(STDERR, "Unknown command: {$command}\n");
+        exit(1);
+}

@@ -28,6 +28,9 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/admin/audit">Audit Log</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/admin/maintenance">Maintenance</a>
+                    </li>
                 </ul>
                 <form method="POST" action="/admin/logout" class="d-flex">
                     <button class="btn btn-outline-light btn-sm" type="submit">Logout</button>

@@ -83,17 +83,11 @@ ORDER BY token_count DESC;
 ### Clean Up Expired Tokens
 
 ```sql
--- Delete expired auth codes (older than 1 day)
-DELETE FROM oauth_auth_codes WHERE created_at < NOW() - INTERVAL 1 DAY;
+-- Preferred: use built-in maintenance runner
+php /home/andy/domains/blackwall.cx/bin/maintenance cleanup:all
 
--- Delete expired access tokens (older than 7 days)
-DELETE FROM oauth_access_tokens WHERE expires_at < NOW() - INTERVAL 7 DAY;
-
--- Delete expired refresh tokens (older than 30 days)
-DELETE FROM oauth_refresh_tokens WHERE expires_at < NOW() - INTERVAL 30 DAY;
-
--- Clean up rate limit table
-DELETE FROM rate_limits WHERE window_start < NOW() - INTERVAL 1 DAY;
+-- Optional: override audit retention window for one run
+php /home/andy/domains/blackwall.cx/bin/maintenance cleanup:audit --audit-retention-days=365
 ```
 
 ### Review User Access
@@ -145,15 +139,11 @@ EOF
 ### Archive Old Audit Logs
 
 ```bash
-# Export logs older than 90 days
-mysql -u blackwall -p blackwall << 'EOF' > /home/andy/backups/blackwall/audit_archive_$(date +%Y%m%d).csv
-SELECT * FROM audit_log WHERE created_at < NOW() - INTERVAL 90 DAY;
-EOF
+# Run cleanup job with an explicit retention policy
+php /home/andy/domains/blackwall.cx/bin/maintenance cleanup:audit --audit-retention-days=90
 
-# Delete exported logs
-mysql -u blackwall -p blackwall << 'EOF'
-DELETE FROM audit_log WHERE created_at < NOW() - INTERVAL 90 DAY;
-EOF
+# Review recent maintenance runs
+php /home/andy/domains/blackwall.cx/bin/maintenance status
 ```
 
 ### Review Privilege Escalations

@@ -75,6 +75,7 @@ $app->group('/admin', function (RouteCollectorProxy $group) {
     // Dashboard
     $group->get('', [AdminController::class, 'dashboard']);
     $group->get('/dashboard', [AdminController::class, 'dashboard']);
+    $group->get('/maintenance', [AdminController::class, 'maintenance']);
 
     // Users
     $group->get('/users', [AdminController::class, 'usersList']);

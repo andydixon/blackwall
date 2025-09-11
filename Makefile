@@ -1,4 +1,4 @@
-.PHONY: help install migrate bootstrap test cs
+.PHONY: help install migrate bootstrap maintenance status test cs
 
 help:
 	@echo "BlackWall OAuth 2.1 + OIDC Server"
@@ -7,6 +7,8 @@ help:
 	@echo "  install    - Install dependencies via Composer"
 	@echo "  migrate    - Run database migrations"
 	@echo "  bootstrap  - Run bootstrap CLI"
+	@echo "  maintenance - Run maintenance cleanup jobs"
+	@echo "  status     - Show recent maintenance runs"
 	@echo "  test       - Run tests"
 	@echo "  cs         - Check code style"
 	@echo "  health     - Check environment variables"
@@ -15,10 +17,19 @@ install:
 	composer install
 
 migrate:
-	mysql -u$(DB_USER) -p$(DB_PASS) -h$(DB_HOST) $(DB_NAME) < migrations/001_initial_schema.sql
+	@for f in $$(ls migrations/*.sql | sort); do \
+		echo "Applying $$f"; \
+		mysql -u$(DB_USER) -p$(DB_PASS) -h$(DB_HOST) $(DB_NAME) < $$f; \
+	done
 
 bootstrap:
 	php bin/blackwall
+
+maintenance:
+	php bin/maintenance cleanup:all
+
+status:
+	php bin/maintenance status
 
 test:
 	vendor/bin/phpunit

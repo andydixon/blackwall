@@ -11,6 +11,7 @@ use BlackWall\Repository\OAuthClientRepository;
 use BlackWall\Repository\PrivilegeLevelRepository;
 use BlackWall\Repository\UserProjectRoleRepository;
 use BlackWall\Service\AuditLogger;
+use BlackWall\Service\MaintenanceService;
 use BlackWall\Service\WebAuthnService;
 use BlackWall\Security\SessionManager;
 use BlackWall\Security\CSRFProtection;
@@ -28,6 +29,7 @@ class AdminController
     private PrivilegeLevelRepository $privilegeRepo;
     private UserProjectRoleRepository $roleRepo;
     private WebAuthnService $webauthn;
+    private MaintenanceService $maintenance;
     private TokenHasher $hasher;
     private PhpRenderer $renderer;
 
@@ -39,6 +41,7 @@ class AdminController
         $this->privilegeRepo = new PrivilegeLevelRepository();
         $this->roleRepo = new UserProjectRoleRepository();
         $this->webauthn = new WebAuthnService();
+        $this->maintenance = new MaintenanceService();
         $this->hasher = new TokenHasher();
         $this->renderer = new PhpRenderer(__DIR__ . '/../../templates');
     }
@@ -263,6 +266,20 @@ class AdminController
         return $this->renderWithLayout($response, 'admin/users/list.php', [
             'title' => 'Users',
             'users' => $users,
+        ]);
+    }
+
+    public function maintenance(Request $request, Response $response): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        $runs = $this->maintenance->getRecentRuns(100);
+
+        return $this->renderWithLayout($response, 'admin/maintenance.php', [
+            'title' => 'Maintenance',
+            'runs' => $runs,
         ]);
     }
 
