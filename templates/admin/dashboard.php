@@ -68,6 +68,27 @@
         </div>
 
         <div class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+                        <div>
+                            <h5 class="mb-1">📈 Observability Snapshot (24h)</h5>
+                            <p class="text-muted mb-0">
+                                Success: <strong class="text-success"><?= (int) ($outcomeStats['success']['today'] ?? 0) ?></strong>
+                                · Fail: <strong class="text-danger"><?= (int) ($outcomeStats['fail']['today'] ?? 0) ?></strong>
+                                · Export JSON metrics for dashboards and alerts.
+                            </p>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <a href="/admin/maintenance" class="btn btn-sm btn-outline-light">Maintenance Status</a>
+                            <a href="/metrics" class="btn btn-sm btn-outline-info">Open Metrics JSON</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-4">
             <div class="col-lg-6">
                 <div class="card stat-card h-100" style="border-left-color: #10b981;">
                     <div class="card-body">

@@ -7,6 +7,7 @@ use BlackWall\Controller\OAuthController;
 use BlackWall\Controller\BootstrapController;
 use BlackWall\Controller\PortalController;
 use BlackWall\Controller\CryptbinController;
+use BlackWall\Controller\MetricsController;
 use Slim\Routing\RouteCollectorProxy;
 
 // Bootstrap route (only if not complete)
@@ -48,6 +49,7 @@ $app->get('/', function ($request, $response) {
     $renderer = new \Slim\Views\PhpRenderer(__DIR__ . '/../templates');
     return $renderer->render($response, 'home.php');
 });
+$app->get('/metrics', [MetricsController::class, 'index']);
 
 // OAuth 2.1 / OIDC Discovery
 $app->get('/.well-known/openid-configuration', [OAuthController::class, 'discovery']);

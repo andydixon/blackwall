@@ -8,6 +8,9 @@
 # Check application health
 curl https://blackwall.cx/health
 
+# Check JSON metrics (if METRICS_TOKEN configured)
+curl -H "Authorization: Bearer $METRICS_TOKEN" https://blackwall.cx/metrics
+
 # Check database connectivity
 mysql -u blackwall -p blackwall -e "SELECT COUNT(*) FROM users;"
 
