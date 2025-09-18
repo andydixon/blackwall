@@ -98,8 +98,17 @@ try {
         
         $roleRepo = new UserProjectRoleRepository();
         $roleRepo->create($adminUser->id, $adminProject->id, 1);
-        
+
         echo "✓ Assigned user to BlackWall Admin with privilege level 1 (Admin)\n\n";
+
+        // Grant admin panel super-admin role
+        $stmt = $db->prepare(
+            "INSERT INTO admin_roles (user_id, role, is_active)
+             VALUES (?, 'super_admin', 1)
+             ON DUPLICATE KEY UPDATE role = 'super_admin', is_active = 1"
+        );
+        $stmt->execute([$adminUser->id]);
+        echo "✓ Granted admin role: super_admin\n\n";
 
         echo "Step 5: WebAuthn credential enrollment...\n";
         echo "\n";

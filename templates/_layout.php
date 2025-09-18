@@ -29,9 +29,18 @@
                         <a class="nav-link" href="/admin/audit">Audit Log</a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="/admin/roles">Roles</a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="/admin/maintenance">Maintenance</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/admin/error-trace">Error Trace</a>
+                    </li>
                 </ul>
+                <?php if (!empty($currentAdminRole)): ?>
+                    <span class="badge bg-secondary me-3"><?= htmlspecialchars((string) $currentAdminRole) ?></span>
+                <?php endif; ?>
                 <form method="POST" action="/admin/logout" class="d-flex">
                     <button class="btn btn-outline-light btn-sm" type="submit">Logout</button>
                 </form>

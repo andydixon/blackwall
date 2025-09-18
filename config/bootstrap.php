@@ -9,6 +9,7 @@ use BlackWall\Service\AuditLogger;
 use BlackWall\Middleware\CorrelationIdMiddleware;
 use BlackWall\Middleware\IpAddressMiddleware;
 use BlackWall\Middleware\AuditContextMiddleware;
+use BlackWall\Security\ErrorTraceCodec;
 use Slim\Factory\AppFactory;
 use Slim\Exception\HttpException;
 use Slim\Views\PhpRenderer;
@@ -75,7 +76,11 @@ $errorMiddleware->setDefaultErrorHandler(
 
         $tracePayload = null;
         if ($displayErrorDetails) {
-            $tracePayload = base64_encode((string) $exception);
+            try {
+                $tracePayload = ErrorTraceCodec::encode((string) $exception);
+            } catch (\Throwable $traceError) {
+                $tracePayload = null;
+            }
         }
 
         $response = $app->getResponseFactory()->createResponse($statusCode);

@@ -78,6 +78,11 @@ $app->group('/admin', function (RouteCollectorProxy $group) {
     $group->get('', [AdminController::class, 'dashboard']);
     $group->get('/dashboard', [AdminController::class, 'dashboard']);
     $group->get('/maintenance', [AdminController::class, 'maintenance']);
+    $group->get('/error-trace', [AdminController::class, 'errorTraceDecodeForm']);
+    $group->post('/error-trace', [AdminController::class, 'errorTraceDecode']);
+    $group->get('/roles', [AdminController::class, 'adminRoles']);
+    $group->post('/roles', [AdminController::class, 'adminRoleUpsert']);
+    $group->post('/roles/{userId}/revoke', [AdminController::class, 'adminRoleRevoke']);
 
     // Users
     $group->get('/users', [AdminController::class, 'usersList']);

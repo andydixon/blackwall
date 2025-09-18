@@ -10,11 +10,13 @@ use BlackWall\Repository\ProjectRepository;
 use BlackWall\Repository\OAuthClientRepository;
 use BlackWall\Repository\PrivilegeLevelRepository;
 use BlackWall\Repository\UserProjectRoleRepository;
+use BlackWall\Service\AdminAuthorizationService;
 use BlackWall\Service\AuditLogger;
 use BlackWall\Service\MaintenanceService;
 use BlackWall\Service\WebAuthnService;
 use BlackWall\Security\SessionManager;
 use BlackWall\Security\CSRFProtection;
+use BlackWall\Security\ErrorTraceCodec;
 use BlackWall\Security\TokenHasher;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
@@ -28,6 +30,7 @@ class AdminController
     private OAuthClientRepository $clientRepo;
     private PrivilegeLevelRepository $privilegeRepo;
     private UserProjectRoleRepository $roleRepo;
+    private AdminAuthorizationService $adminAuthz;
     private WebAuthnService $webauthn;
     private MaintenanceService $maintenance;
     private TokenHasher $hasher;
@@ -40,6 +43,7 @@ class AdminController
         $this->clientRepo = new OAuthClientRepository();
         $this->privilegeRepo = new PrivilegeLevelRepository();
         $this->roleRepo = new UserProjectRoleRepository();
+        $this->adminAuthz = new AdminAuthorizationService();
         $this->webauthn = new WebAuthnService();
         $this->maintenance = new MaintenanceService();
         $this->hasher = new TokenHasher();
@@ -48,6 +52,10 @@ class AdminController
 
     private function renderWithLayout(Response $response, string $template, array $data = []): Response
     {
+        SessionManager::start();
+        $currentUserId = SessionManager::get('user_id');
+        $data['currentAdminRole'] = $currentUserId ? $this->adminAuthz->getRole((int) $currentUserId) : null;
+
         // Render the content template
         $contentRenderer = new PhpRenderer(__DIR__ . '/../../templates');
         $contentResponse = $contentRenderer->render(new \Slim\Psr7\Response(), $template, $data);
@@ -269,6 +277,104 @@ class AdminController
         ]);
     }
 
+    public function adminRoles(Request $request, Response $response): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        $actorUserId = (int) SessionManager::get('user_id');
+        if (!$this->adminAuthz->isSuperAdmin($actorUserId)) {
+            return $response->withStatus(403);
+        }
+
+        return $this->renderWithLayout($response, 'admin/roles.php', [
+            'title' => 'Admin Roles',
+            'roles' => $this->adminAuthz->listRoles(),
+            'users' => $this->userRepo->findAll(1000, 0),
+            'csrfToken' => CSRFProtection::generateToken(),
+        ]);
+    }
+
+    public function adminRoleUpsert(Request $request, Response $response): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        $actorUserId = (int) SessionManager::get('user_id');
+        if (!$this->adminAuthz->isSuperAdmin($actorUserId)) {
+            return $response->withStatus(403);
+        }
+
+        $body = $request->getParsedBody();
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
+            return $response->withHeader('Location', '/admin/roles')->withStatus(302);
+        }
+
+        $userId = (int) ($body['user_id'] ?? 0);
+        $role = (string) ($body['role'] ?? '');
+        $allowed = ['super_admin', 'operator', 'auditor'];
+        if ($userId < 1 || !in_array($role, $allowed, true)) {
+            return $response->withHeader('Location', '/admin/roles')->withStatus(302);
+        }
+
+        $this->adminAuthz->upsertRole($userId, $role);
+        $audit->logSuccess('admin.role.upsert', [
+            'actor_user_id' => $actorUserId,
+            'target_type' => 'admin_role',
+            'target_id' => (string) $userId,
+            'message' => "Set admin role to {$role}",
+        ]);
+
+        return $response->withHeader('Location', '/admin/roles')->withStatus(302);
+    }
+
+    public function adminRoleRevoke(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        $actorUserId = (int) SessionManager::get('user_id');
+        if (!$this->adminAuthz->isSuperAdmin($actorUserId)) {
+            return $response->withStatus(403);
+        }
+
+        $body = $request->getParsedBody();
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
+            return $response->withHeader('Location', '/admin/roles')->withStatus(302);
+        }
+
+        $userId = (int) ($args['userId'] ?? 0);
+        if ($userId < 1) {
+            return $response->withHeader('Location', '/admin/roles')->withStatus(302);
+        }
+
+        // Prevent removing your own role from current session.
+        if ($userId === $actorUserId) {
+            return $response->withHeader('Location', '/admin/roles')->withStatus(302);
+        }
+
+        $this->adminAuthz->revokeRole($userId);
+        $audit->logSuccess('admin.role.revoke', [
+            'actor_user_id' => $actorUserId,
+            'target_type' => 'admin_role',
+            'target_id' => (string) $userId,
+            'message' => 'Revoked admin role',
+        ]);
+
+        return $response->withHeader('Location', '/admin/roles')->withStatus(302);
+    }
+
     public function maintenance(Request $request, Response $response): Response
     {
         if (!$this->checkAuth()) {
@@ -280,6 +386,62 @@ class AdminController
         return $this->renderWithLayout($response, 'admin/maintenance.php', [
             'title' => 'Maintenance',
             'runs' => $runs,
+        ]);
+    }
+
+    public function errorTraceDecodeForm(Request $request, Response $response): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        return $this->renderWithLayout($response, 'admin/error_trace.php', [
+            'title' => 'Decode Error Trace',
+            'csrfToken' => CSRFProtection::generateToken(),
+            'inputPayload' => '',
+            'decodedTrace' => null,
+            'decodeError' => null,
+        ]);
+    }
+
+    public function errorTraceDecode(Request $request, Response $response): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+
+        $body = $request->getParsedBody();
+        $payload = trim((string) ($body['payload'] ?? ''));
+
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $actorUserId = SessionManager::get('user_id');
+
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
+            return $response->withHeader('Location', '/admin/error-trace')->withStatus(302);
+        }
+
+        $decodedTrace = null;
+        $decodeError = null;
+        if ($payload !== '') {
+            try {
+                $decodedTrace = ErrorTraceCodec::decode($payload);
+                $audit->logInfo('admin.error_trace.decode', [
+                    'actor_user_id' => $actorUserId,
+                    'message' => 'Decoded encrypted error trace payload',
+                ]);
+            } catch (\Throwable $e) {
+                $decodeError = $e->getMessage();
+            }
+        }
+
+        return $this->renderWithLayout($response, 'admin/error_trace.php', [
+            'title' => 'Decode Error Trace',
+            'csrfToken' => CSRFProtection::generateToken(),
+            'inputPayload' => $payload,
+            'decodedTrace' => $decodedTrace,
+            'decodeError' => $decodeError,
         ]);
     }
 
@@ -1087,6 +1249,11 @@ class AdminController
     private function checkAuth(): bool
     {
         SessionManager::start();
-        return SessionManager::has('user_id');
+        if (!SessionManager::has('user_id')) {
+            return false;
+        }
+
+        $userId = (int) SessionManager::get('user_id');
+        return $this->adminAuthz->isAdmin($userId);
     }
 }
