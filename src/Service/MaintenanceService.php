@@ -87,6 +87,78 @@ class MaintenanceService
         ];
     }
 
+    public function verifyAuditChain(): array
+    {
+        return $this->runJob('audit.verify', function (): array {
+            $stmt = $this->db->query(
+                'SELECT id, event_type, outcome, message, correlation_id, ip_address, user_agent,
+                        actor_user_id, actor_user_uuid, project_id, project_uuid,
+                        oauth_client_id, oauth_client_public_id,
+                        webauthn_credential_id, webauthn_credential_public_id,
+                        target_type, target_id, metadata_json, chain_prev_hash, chain_hash
+                 FROM audit_log
+                 WHERE chain_hash IS NOT NULL
+                 ORDER BY id ASC'
+            );
+
+            $rows = $stmt->fetchAll();
+            $checked = 0;
+            $broken = 0;
+            $firstBrokenId = null;
+            $prevHash = '';
+
+            foreach ($rows as $row) {
+                $payload = [
+                    'event_type' => $row['event_type'],
+                    'outcome' => $row['outcome'],
+                    'message' => $row['message'],
+                    'correlation_id' => $row['correlation_id'],
+                    'ip_address' => $row['ip_address'],
+                    'user_agent' => $row['user_agent'],
+                    'actor_user_id' => $row['actor_user_id'],
+                    'actor_user_uuid' => $row['actor_user_uuid'],
+                    'project_id' => $row['project_id'],
+                    'project_uuid' => $row['project_uuid'],
+                    'oauth_client_id' => $row['oauth_client_id'],
+                    'oauth_client_public_id' => $row['oauth_client_public_id'],
+                    'webauthn_credential_id' => $row['webauthn_credential_id'],
+                    'webauthn_credential_public_id' => $row['webauthn_credential_public_id'],
+                    'target_type' => $row['target_type'],
+                    'target_id' => $row['target_id'],
+                    'metadata_json' => $row['metadata_json'],
+                ];
+
+                $payloadJson = json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+                $expectedHash = hash('sha256', $prevHash . '|' . $payloadJson);
+                $currentPrevHash = (string) ($row['chain_prev_hash'] ?? '');
+                $currentHash = (string) ($row['chain_hash'] ?? '');
+
+                $checked++;
+                if ($currentPrevHash !== $prevHash || $currentHash !== $expectedHash) {
+                    $broken++;
+                    if ($firstBrokenId === null) {
+                        $firstBrokenId = (int) $row['id'];
+                    }
+                }
+
+                $prevHash = $currentHash;
+            }
+
+            $result = [
+                'checked' => $checked,
+                'broken' => $broken,
+                'first_broken_id' => $firstBrokenId,
+            ];
+
+            if ($broken > 0) {
+                $first = $firstBrokenId !== null ? (string) $firstBrokenId : 'unknown';
+                throw new \RuntimeException("Audit chain verification failed (broken={$broken}, first_broken_id={$first})");
+            }
+
+            return $result;
+        });
+    }
+
     public function getRecentRuns(int $limit = 50): array
     {
         $stmt = $this->db->prepare(

@@ -27,6 +27,7 @@
                                     <th>Duration</th>
                                     <th>Message</th>
                                     <th>Stats</th>
+                                    <th>Error</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -51,6 +52,16 @@
                                         <td>
                                             <?php if ($stats): ?>
                                                 <pre class="mb-0 small"><?= htmlspecialchars(json_encode($stats, JSON_PRETTY_PRINT)) ?></pre>
+                                            <?php else: ?>
+                                                <span class="text-muted">-</span>
+                                            <?php endif; ?>
+                                        </td>
+                                        <td>
+                                            <?php if (!empty($run['error_trace'])): ?>
+                                                <details>
+                                                    <summary class="text-danger small">Trace</summary>
+                                                    <pre class="mb-0 small mt-2"><?= htmlspecialchars((string) $run['error_trace']) ?></pre>
+                                                </details>
                                             <?php else: ?>
                                                 <span class="text-muted">-</span>
                                             <?php endif; ?>

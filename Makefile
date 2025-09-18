@@ -1,4 +1,4 @@
-.PHONY: help install migrate bootstrap maintenance status test cs
+.PHONY: help install migrate bootstrap maintenance status audit-verify test cs
 
 help:
 	@echo "BlackWall OAuth 2.1 + OIDC Server"
@@ -9,6 +9,7 @@ help:
 	@echo "  bootstrap  - Run bootstrap CLI"
 	@echo "  maintenance - Run maintenance cleanup jobs"
 	@echo "  status     - Show recent maintenance runs"
+	@echo "  audit-verify - Verify audit hash chain integrity"
 	@echo "  test       - Run tests"
 	@echo "  cs         - Check code style"
 	@echo "  health     - Check environment variables"
@@ -30,6 +31,9 @@ maintenance:
 
 status:
 	php bin/maintenance status
+
+audit-verify:
+	php bin/maintenance audit:verify
 
 test:
 	vendor/bin/phpunit

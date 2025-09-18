@@ -36,6 +36,13 @@ Access admin panel: https://blackwall.cx/admin/audit
 - 10+ oauth.authorize.fail events per hour
 - Any security.csrf.fail events
 
+### Verify Audit Integrity
+
+```bash
+# Verify tamper-evident audit hash chain
+php /home/andy/domains/blackwall.cx/bin/maintenance audit:verify
+```
+
 ### Backup
 
 **Daily backup** (automate with cron):

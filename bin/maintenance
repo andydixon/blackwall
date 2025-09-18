@@ -12,7 +12,7 @@ Config::load(__DIR__ . '/..');
 
 $command = $argv[1] ?? null;
 if ($command === null) {
-    fwrite(STDERR, "Usage: php bin/maintenance <cleanup:tokens|cleanup:audit|cleanup:all|status> [--audit-retention-days=N]\n");
+    fwrite(STDERR, "Usage: php bin/maintenance <cleanup:tokens|cleanup:audit|cleanup:all|audit:verify|status> [--audit-retention-days=N]\n");
     exit(1);
 }
 
@@ -43,6 +43,11 @@ switch ($command) {
 
     case 'status':
         $result = $service->getRecentRuns(50);
+        echo json_encode($result, JSON_PRETTY_PRINT) . PHP_EOL;
+        break;
+
+    case 'audit:verify':
+        $result = $service->verifyAuditChain();
         echo json_encode($result, JSON_PRETTY_PRINT) . PHP_EOL;
         break;
 

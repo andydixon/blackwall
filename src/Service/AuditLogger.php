@@ -52,39 +52,110 @@ class AuditLogger
             }
         }
 
+        $metadata = $this->buildMetadata($context);
+        $message = $context['message'] ?? $this->generateMessage($eventType, $outcome);
+        $correlationId = $context['correlation_id'] ?? $this->correlationId ?? $this->generateCorrelationId();
+        $ipAddress = $context['ip_address'] ?? $this->ipAddress ?? '0.0.0.0';
+        $userAgent = $context['user_agent'] ?? $this->userAgent;
+        $actorUserId = $context['actor_user_id'] ?? null;
+        $actorUserUuid = $context['actor_user_uuid'] ?? null;
+        $projectId = $context['project_id'] ?? null;
+        $projectUuid = $context['project_uuid'] ?? null;
+        $oauthClientId = $context['oauth_client_id'] ?? null;
+        $oauthClientPublicId = $context['oauth_client_public_id'] ?? null;
+        $credentialDbId = $context['webauthn_credential_id'] ?? null;
+        $credentialPublicId = $context['webauthn_credential_public_id'] ?? null;
+        $targetType = $context['target_type'] ?? null;
+        $targetId = $context['target_id'] ?? null;
+        $metadataJson = !empty($metadata) ? json_encode($metadata) : null;
+
+        $this->db->beginTransaction();
+
+        $lockStmt = $this->db->prepare('SELECT GET_LOCK(?, 2) AS lock_acquired');
+        $lockStmt->execute(['blackwall:audit_chain']);
+        $lockRow = $lockStmt->fetch();
+        $lockAcquired = (int) ($lockRow['lock_acquired'] ?? 0) === 1;
+        if (!$lockAcquired) {
+            $this->db->rollBack();
+            throw new \RuntimeException('Failed to acquire audit chain lock');
+        }
+
         $stmt = $this->db->prepare(
             'INSERT INTO audit_log (
                 created_at, event_type, outcome, message, correlation_id, ip_address, user_agent,
                 actor_user_id, actor_user_uuid, project_id, project_uuid,
                 oauth_client_id, oauth_client_public_id,
                 webauthn_credential_id, webauthn_credential_public_id,
-                target_type, target_id, metadata_json
+                target_type, target_id, metadata_json,
+                chain_prev_hash, chain_hash
             ) VALUES (
-                NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )'
         );
 
-        $metadata = $this->buildMetadata($context);
+        try {
+            $prevHashStmt = $this->db->query(
+                'SELECT chain_hash FROM audit_log
+                 WHERE chain_hash IS NOT NULL
+                 ORDER BY id DESC
+                 LIMIT 1'
+            );
+            $prevHash = (string) ($prevHashStmt->fetchColumn() ?: '');
 
-        $stmt->execute([
-            $eventType,
-            $outcome,
-            $context['message'] ?? $this->generateMessage($eventType, $outcome),
-            $context['correlation_id'] ?? $this->correlationId ?? $this->generateCorrelationId(),
-            $context['ip_address'] ?? $this->ipAddress ?? '0.0.0.0',
-            $context['user_agent'] ?? $this->userAgent,
-            $context['actor_user_id'] ?? null,
-            $context['actor_user_uuid'] ?? null,
-            $context['project_id'] ?? null,
-            $context['project_uuid'] ?? null,
-            $context['oauth_client_id'] ?? null,
-            $context['oauth_client_public_id'] ?? null,
-            $context['webauthn_credential_id'] ?? null,
-            $context['webauthn_credential_public_id'] ?? null,
-            $context['target_type'] ?? null,
-            $context['target_id'] ?? null,
-            !empty($metadata) ? json_encode($metadata) : null
-        ]);
+            $chainPayload = [
+                'event_type' => $eventType,
+                'outcome' => $outcome,
+                'message' => $message,
+                'correlation_id' => $correlationId,
+                'ip_address' => $ipAddress,
+                'user_agent' => $userAgent,
+                'actor_user_id' => $actorUserId,
+                'actor_user_uuid' => $actorUserUuid,
+                'project_id' => $projectId,
+                'project_uuid' => $projectUuid,
+                'oauth_client_id' => $oauthClientId,
+                'oauth_client_public_id' => $oauthClientPublicId,
+                'webauthn_credential_id' => $credentialDbId,
+                'webauthn_credential_public_id' => $credentialPublicId,
+                'target_type' => $targetType,
+                'target_id' => $targetId,
+                'metadata_json' => $metadataJson,
+            ];
+
+            $payloadJson = json_encode($chainPayload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+            $chainHash = hash('sha256', $prevHash . '|' . $payloadJson);
+            $chainPrevHash = $prevHash !== '' ? $prevHash : null;
+
+            $stmt->execute([
+                $eventType,
+                $outcome,
+                $message,
+                $correlationId,
+                $ipAddress,
+                $userAgent,
+                $actorUserId,
+                $actorUserUuid,
+                $projectId,
+                $projectUuid,
+                $oauthClientId,
+                $oauthClientPublicId,
+                $credentialDbId,
+                $credentialPublicId,
+                $targetType,
+                $targetId,
+                $metadataJson,
+                $chainPrevHash,
+                $chainHash,
+            ]);
+
+            $this->db->commit();
+        } catch (\Throwable $e) {
+            $this->db->rollBack();
+            throw $e;
+        } finally {
+            $unlockStmt = $this->db->prepare('SELECT RELEASE_LOCK(?)');
+            $unlockStmt->execute(['blackwall:audit_chain']);
+        }
     }
 
     private function buildMetadata(array $context): array
