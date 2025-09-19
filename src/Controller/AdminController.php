@@ -18,6 +18,7 @@ use BlackWall\Security\SessionManager;
 use BlackWall\Security\CSRFProtection;
 use BlackWall\Security\ErrorTraceCodec;
 use BlackWall\Security\TokenHasher;
+use BlackWall\Config;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Views\PhpRenderer;
@@ -1232,6 +1233,15 @@ class AdminController
             return $response->withHeader('Location', '/admin/users/' . $user->uuid)->withStatus(302);
         }
         $credentialId = (int) $credential['id'];
+
+        $db = \BlackWall\Database::getInstance();
+        $countStmt = $db->prepare('SELECT COUNT(*) FROM webauthn_credentials WHERE user_id = ?');
+        $countStmt->execute([$userId]);
+        $currentKeyCount = (int) $countStmt->fetchColumn();
+        $minKeys = max(1, Config::getInt('MIN_WEBAUTHN_KEYS', 1));
+        if ($currentKeyCount <= $minKeys) {
+            return $response->withHeader('Location', '/admin/users/' . $user->uuid . '?error=min_keys')->withStatus(302);
+        }
 
         $audit->logSuccess('admin.user.credential.delete', [
             'actor_user_id' => $actorUserId,

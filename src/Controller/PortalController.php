@@ -6,6 +6,7 @@ namespace BlackWall\Controller;
 
 use BlackWall\Database;
 use BlackWall\Domain\PrivilegeLabelResolver;
+use BlackWall\Config;
 use BlackWall\Service\WebAuthnService;
 use BlackWall\Service\AuditLogger;
 use BlackWall\Security\SessionManager;
@@ -291,6 +292,14 @@ class PortalController
         }
 
         $credentialId = (int) $credential['id'];
+
+        $minKeys = max(1, Config::getInt('MIN_WEBAUTHN_KEYS', 1));
+        $countStmt = $db->prepare('SELECT COUNT(*) FROM webauthn_credentials WHERE user_id = ?');
+        $countStmt->execute([$userId]);
+        $currentKeyCount = (int) $countStmt->fetchColumn();
+        if ($currentKeyCount <= $minKeys) {
+            return $response->withHeader('Location', '/portal?error=min_keys')->withStatus(302);
+        }
 
         if ($credentialId === (int) $loginCredentialId) {
             return $response->withHeader('Location', '/portal?error=cannot_delete_current_key')->withStatus(302);

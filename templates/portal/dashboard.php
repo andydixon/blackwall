@@ -31,6 +31,8 @@
                     ✗ Unauthorized action
                 <?php elseif ($_GET['error'] === 'invalid_key'): ?>
                     ✗ Invalid key reference
+                <?php elseif ($_GET['error'] === 'min_keys'): ?>
+                    ✗ You must retain at least <?= (int) \BlackWall\Config::getInt('MIN_WEBAUTHN_KEYS', 1) ?> key(s)
                 <?php endif; ?>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>

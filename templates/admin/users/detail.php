@@ -10,6 +10,12 @@
     </div>
 </div>
 
+<?php if (isset($_GET['error']) && $_GET['error'] === 'min_keys'): ?>
+    <div class="alert alert-danger mb-4">
+        Cannot delete credential. User must retain at least <?= (int) \BlackWall\Config::getInt('MIN_WEBAUTHN_KEYS', 1) ?> key(s).
+    </div>
+<?php endif; ?>
+
 <?php if (isset($enrollmentLink)): ?>
     <div class="alert alert-success border-success mb-4" role="alert">
         <h4 class="alert-heading">✅ Enrollment Link Generated!</h4>
