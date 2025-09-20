@@ -34,12 +34,32 @@ class SessionManager
             $_SESSION['created_at'] = time();
         }
 
+        $idleTimeout = Config::getInt('SESSION_IDLE_TIMEOUT', 1800);
+        if ($idleTimeout > 0 && isset($_SESSION['last_activity']) && (time() - (int) $_SESSION['last_activity']) > $idleTimeout) {
+            self::destroy();
+            self::start();
+            return;
+        }
+
+        if (Config::getBool('SESSION_BIND_USER_AGENT', true)) {
+            $uaHash = hash('sha256', (string) ($_SERVER['HTTP_USER_AGENT'] ?? ''));
+            if (!isset($_SESSION['ua_hash'])) {
+                $_SESSION['ua_hash'] = $uaHash;
+            } elseif (!hash_equals((string) $_SESSION['ua_hash'], $uaHash)) {
+                self::destroy();
+                self::start();
+                return;
+            }
+        }
+
         $maxLifetime = Config::getInt('SESSION_LIFETIME', 7200);
         if (isset($_SESSION['created_at']) && (time() - $_SESSION['created_at']) > $maxLifetime) {
             self::destroy();
             self::start();
+            return;
         }
 
+        $_SESSION['last_activity'] = time();
         self::$started = true;
     }
 

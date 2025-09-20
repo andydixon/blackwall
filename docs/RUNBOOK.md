@@ -21,6 +21,10 @@ df -h /home/andy/domains/blackwall.cx
 tail -100 /home/andy/domains/blackwall.cx/logs/*.log | grep -i error
 ```
 
+Session hardening defaults:
+- `SESSION_IDLE_TIMEOUT=1800` (idle logout after 30 minutes)
+- `SESSION_BIND_USER_AGENT=true` (invalidate session if user-agent changes)
+
 ### Review Audit Logs
 
 Access admin panel: https://blackwall.cx/admin/audit
