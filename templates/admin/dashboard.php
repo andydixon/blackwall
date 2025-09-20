@@ -1,8 +1,7 @@
 <div class="row">
     <div class="col-12">
         <div class="page-header">
-            <h2>🏠 Dashboard</h2>
-            <p class="text-muted mb-0">Welcome to BlackWall OAuth 2.1 + OpenID Connect Server</p>
+            <h2>Dashboard</h2>
         </div>
 
         <div class="row g-4 mb-4">

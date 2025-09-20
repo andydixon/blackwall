@@ -83,6 +83,9 @@ $app->group('/admin', function (RouteCollectorProxy $group) {
     $group->get('/roles', [AdminController::class, 'adminRoles']);
     $group->post('/roles', [AdminController::class, 'adminRoleUpsert']);
     $group->post('/roles/{userId}/revoke', [AdminController::class, 'adminRoleRevoke']);
+    $group->get('/approvals', [AdminController::class, 'approvalsList']);
+    $group->post('/approvals/{id}/approve', [AdminController::class, 'approvalApprove']);
+    $group->post('/approvals/{id}/reject', [AdminController::class, 'approvalReject']);
 
     // Users
     $group->get('/users', [AdminController::class, 'usersList']);

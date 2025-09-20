@@ -29,6 +29,13 @@ Session hardening defaults:
 
 Access admin panel: https://blackwall.cx/admin/audit
 
+### Admin RBAC + Approvals
+
+- Roles: `super_admin`, `operator`, `auditor` (managed at `/admin/roles`)
+- Approval queue: `/admin/approvals`
+- High-risk operator action currently gated by approval:
+  - User credential deletion (`delete_user_credential`)
+
 **Look for:**
 - Multiple failed authentication attempts from same IP
 - Unauthorized access attempts (invalid project_id, privilege escalation)

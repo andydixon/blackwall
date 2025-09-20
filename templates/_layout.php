@@ -32,6 +32,9 @@
                         <a class="nav-link" href="/admin/roles">Roles</a>
                     </li>
                     <li class="nav-item">
+                        <a class="nav-link" href="/admin/approvals">Approvals</a>
+                    </li>
+                    <li class="nav-item">
                         <a class="nav-link" href="/admin/maintenance">Maintenance</a>
                     </li>
                     <li class="nav-item">

@@ -10,6 +10,7 @@ use BlackWall\Repository\ProjectRepository;
 use BlackWall\Repository\OAuthClientRepository;
 use BlackWall\Repository\PrivilegeLevelRepository;
 use BlackWall\Repository\UserProjectRoleRepository;
+use BlackWall\Service\ApprovalService;
 use BlackWall\Service\AdminAuthorizationService;
 use BlackWall\Service\AuditLogger;
 use BlackWall\Service\MaintenanceService;
@@ -31,6 +32,7 @@ class AdminController
     private OAuthClientRepository $clientRepo;
     private PrivilegeLevelRepository $privilegeRepo;
     private UserProjectRoleRepository $roleRepo;
+    private ApprovalService $approvalService;
     private AdminAuthorizationService $adminAuthz;
     private WebAuthnService $webauthn;
     private MaintenanceService $maintenance;
@@ -44,6 +46,7 @@ class AdminController
         $this->clientRepo = new OAuthClientRepository();
         $this->privilegeRepo = new PrivilegeLevelRepository();
         $this->roleRepo = new UserProjectRoleRepository();
+        $this->approvalService = new ApprovalService();
         $this->adminAuthz = new AdminAuthorizationService();
         $this->webauthn = new WebAuthnService();
         $this->maintenance = new MaintenanceService();
@@ -65,6 +68,42 @@ class AdminController
         // Render with layout
         $data['content'] = $content;
         return $this->renderer->render($response, '_layout.php', $data);
+    }
+
+    private function hasCapability(string $capability): bool
+    {
+        SessionManager::start();
+        $userId = (int) SessionManager::get('user_id');
+        $role = $this->adminAuthz->getRole($userId) ?? 'auditor';
+
+        $matrix = [
+            'super_admin' => [
+                'view_dashboard', 'view_users', 'manage_users', 'view_projects', 'manage_projects',
+                'view_clients', 'manage_clients', 'view_assignments', 'manage_assignments',
+                'view_privileges', 'manage_privileges', 'view_audit', 'view_maintenance',
+                'manage_roles', 'decode_error_trace', 'delete_credentials_direct',
+                'view_approvals', 'decide_approvals',
+            ],
+            'operator' => [
+                'view_dashboard', 'view_users', 'manage_users', 'view_projects', 'manage_projects',
+                'view_clients', 'manage_clients', 'view_assignments', 'manage_assignments',
+                'view_privileges', 'manage_privileges', 'view_audit', 'view_maintenance',
+                'view_approvals',
+            ],
+            'auditor' => [
+                'view_dashboard', 'view_audit', 'view_maintenance', 'decode_error_trace', 'view_approvals',
+            ],
+        ];
+
+        return in_array($capability, $matrix[$role] ?? [], true);
+    }
+
+    private function requireCapability(Response $response, string $capability): ?Response
+    {
+        if ($this->hasCapability($capability)) {
+            return null;
+        }
+        return $response->withStatus(403);
     }
 
     public function loginForm(Request $request, Response $response): Response
@@ -178,6 +217,9 @@ class AdminController
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
+        if (($deny = $this->requireCapability($response, 'view_dashboard')) !== null) {
+            return $deny;
+        }
 
         $db = \BlackWall\Database::getInstance();
         
@@ -269,6 +311,9 @@ class AdminController
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
+        if (($deny = $this->requireCapability($response, 'view_users')) !== null) {
+            return $deny;
+        }
 
         $users = $this->userRepo->findAll();
 
@@ -282,6 +327,9 @@ class AdminController
     {
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'manage_roles')) !== null) {
+            return $deny;
         }
 
         $actorUserId = (int) SessionManager::get('user_id');
@@ -301,6 +349,9 @@ class AdminController
     {
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'manage_roles')) !== null) {
+            return $deny;
         }
 
         $actorUserId = (int) SessionManager::get('user_id');
@@ -340,6 +391,9 @@ class AdminController
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
+        if (($deny = $this->requireCapability($response, 'manage_roles')) !== null) {
+            return $deny;
+        }
 
         $actorUserId = (int) SessionManager::get('user_id');
         if (!$this->adminAuthz->isSuperAdmin($actorUserId)) {
@@ -376,10 +430,114 @@ class AdminController
         return $response->withHeader('Location', '/admin/roles')->withStatus(302);
     }
 
+    public function approvalsList(Request $request, Response $response): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'view_approvals')) !== null) {
+            return $deny;
+        }
+
+        return $this->renderWithLayout($response, 'admin/approvals.php', [
+            'title' => 'Approvals',
+            'approvals' => $this->approvalService->list(200),
+            'csrfToken' => CSRFProtection::generateToken(),
+        ]);
+    }
+
+    public function approvalApprove(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'decide_approvals')) !== null) {
+            return $deny;
+        }
+
+        $body = $request->getParsedBody();
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $actorUserId = (int) SessionManager::get('user_id');
+
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
+            return $response->withHeader('Location', '/admin/approvals')->withStatus(302);
+        }
+
+        $approvalId = (int) ($args['id'] ?? 0);
+        $approval = $this->approvalService->getById($approvalId);
+        if (!$approval || $approval['status'] !== 'pending') {
+            return $response->withHeader('Location', '/admin/approvals')->withStatus(302);
+        }
+
+        if ((int) $approval['requested_by_user_id'] === $actorUserId) {
+            return $response->withHeader('Location', '/admin/approvals')->withStatus(302);
+        }
+
+        $payload = json_decode((string) $approval['payload_json'], true);
+        $payload = is_array($payload) ? $payload : [];
+
+        $executed = $this->executeApprovalAction((string) $approval['action_type'], $payload, $actorUserId);
+        if (!$executed) {
+            $this->approvalService->decide($approvalId, 'rejected', $actorUserId, 'Execution failed');
+            return $response->withHeader('Location', '/admin/approvals')->withStatus(302);
+        }
+
+        $this->approvalService->decide($approvalId, 'approved', $actorUserId, trim((string) ($body['note'] ?? '')));
+        $audit->logSuccess('admin.approval.approve', [
+            'actor_user_id' => $actorUserId,
+            'target_type' => 'approval_request',
+            'target_id' => (string) $approvalId,
+            'message' => 'Approved request',
+        ]);
+
+        return $response->withHeader('Location', '/admin/approvals')->withStatus(302);
+    }
+
+    public function approvalReject(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'decide_approvals')) !== null) {
+            return $deny;
+        }
+
+        $body = $request->getParsedBody();
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $actorUserId = (int) SessionManager::get('user_id');
+
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
+            return $response->withHeader('Location', '/admin/approvals')->withStatus(302);
+        }
+
+        $approvalId = (int) ($args['id'] ?? 0);
+        $this->approvalService->decide(
+            $approvalId,
+            'rejected',
+            $actorUserId,
+            trim((string) ($body['note'] ?? ''))
+        );
+        $audit->logInfo('admin.approval.reject', [
+            'actor_user_id' => $actorUserId,
+            'target_type' => 'approval_request',
+            'target_id' => (string) $approvalId,
+            'message' => 'Rejected request',
+        ]);
+
+        return $response->withHeader('Location', '/admin/approvals')->withStatus(302);
+    }
+
     public function maintenance(Request $request, Response $response): Response
     {
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'view_maintenance')) !== null) {
+            return $deny;
         }
 
         $runs = $this->maintenance->getRecentRuns(100);
@@ -395,6 +553,9 @@ class AdminController
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
+        if (($deny = $this->requireCapability($response, 'decode_error_trace')) !== null) {
+            return $deny;
+        }
 
         return $this->renderWithLayout($response, 'admin/error_trace.php', [
             'title' => 'Decode Error Trace',
@@ -409,6 +570,9 @@ class AdminController
     {
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'decode_error_trace')) !== null) {
+            return $deny;
         }
 
         $body = $request->getParsedBody();
@@ -451,6 +615,9 @@ class AdminController
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
+        if (($deny = $this->requireCapability($response, 'manage_users')) !== null) {
+            return $deny;
+        }
 
         return $this->renderWithLayout($response, 'admin/users/create.php', [
             'title' => 'Create User',
@@ -462,6 +629,9 @@ class AdminController
     {
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'manage_users')) !== null) {
+            return $deny;
         }
 
         $body = $request->getParsedBody();
@@ -492,6 +662,9 @@ class AdminController
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
+        if (($deny = $this->requireCapability($response, 'view_projects')) !== null) {
+            return $deny;
+        }
 
         $projects = $this->projectRepo->findAll();
 
@@ -506,6 +679,9 @@ class AdminController
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
+        if (($deny = $this->requireCapability($response, 'manage_projects')) !== null) {
+            return $deny;
+        }
 
         return $this->renderWithLayout($response, 'admin/projects/create.php', [
             'title' => 'Create Project',
@@ -517,6 +693,9 @@ class AdminController
     {
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'manage_projects')) !== null) {
+            return $deny;
         }
 
         $body = $request->getParsedBody();
@@ -553,6 +732,9 @@ class AdminController
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
+        if (($deny = $this->requireCapability($response, 'view_projects')) !== null) {
+            return $deny;
+        }
 
         $projectUuid = (string) ($args['projectUuid'] ?? '');
         $project = $this->projectRepo->findByUuid($projectUuid);
@@ -570,6 +752,9 @@ class AdminController
     {
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'view_audit')) !== null) {
+            return $deny;
         }
 
         $params = $request->getQueryParams();
@@ -607,6 +792,9 @@ class AdminController
     {
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'view_users')) !== null) {
+            return $deny;
         }
 
         $userUuid = (string) ($args['userUuid'] ?? '');
@@ -660,6 +848,9 @@ class AdminController
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
+        if (($deny = $this->requireCapability($response, 'manage_users')) !== null) {
+            return $deny;
+        }
 
         $userUuid = (string) ($args['userUuid'] ?? '');
         $user = $this->userRepo->findByUuid($userUuid);
@@ -698,6 +889,9 @@ class AdminController
     {
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'view_privileges')) !== null) {
+            return $deny;
         }
 
         $projectUuid = (string) ($args['projectUuid'] ?? '');
@@ -752,6 +946,9 @@ class AdminController
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
+        if (($deny = $this->requireCapability($response, 'manage_privileges')) !== null) {
+            return $deny;
+        }
 
         $projectUuid = (string) ($args['projectUuid'] ?? '');
         $project = $this->projectRepo->findByUuid($projectUuid);
@@ -804,6 +1001,9 @@ class AdminController
     {
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'manage_privileges')) !== null) {
+            return $deny;
         }
 
         $levelId = (int) ($args['id'] ?? 0);
@@ -859,6 +1059,9 @@ class AdminController
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
+        if (($deny = $this->requireCapability($response, 'manage_privileges')) !== null) {
+            return $deny;
+        }
 
         $levelId = (int) ($args['id'] ?? 0);
         $level = $this->privilegeRepo->findById($levelId);
@@ -902,6 +1105,9 @@ class AdminController
     {
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'view_assignments')) !== null) {
+            return $deny;
         }
 
         $projectUuid = (string) ($args['projectUuid'] ?? '');
@@ -960,6 +1166,9 @@ class AdminController
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
+        if (($deny = $this->requireCapability($response, 'manage_assignments')) !== null) {
+            return $deny;
+        }
 
         $projectUuid = (string) ($args['projectUuid'] ?? '');
         $project = $this->projectRepo->findByUuid($projectUuid);
@@ -989,6 +1198,9 @@ class AdminController
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
+        if (($deny = $this->requireCapability($response, 'manage_assignments')) !== null) {
+            return $deny;
+        }
 
         $assignmentId = (int) $args['id'];
         $body = $request->getParsedBody();
@@ -1007,6 +1219,9 @@ class AdminController
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
+        if (($deny = $this->requireCapability($response, 'manage_assignments')) !== null) {
+            return $deny;
+        }
 
         $assignmentId = (int) $args['id'];
         $this->roleRepo->delete($assignmentId);
@@ -1018,6 +1233,9 @@ class AdminController
     {
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'view_clients')) !== null) {
+            return $deny;
         }
 
         $projectUuid = (string) ($args['projectUuid'] ?? '');
@@ -1048,6 +1266,9 @@ class AdminController
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
+        if (($deny = $this->requireCapability($response, 'manage_clients')) !== null) {
+            return $deny;
+        }
 
         $projectUuid = (string) ($args['projectUuid'] ?? '');
         $project = $this->projectRepo->findByUuid($projectUuid);
@@ -1067,6 +1288,9 @@ class AdminController
     {
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'manage_clients')) !== null) {
+            return $deny;
         }
 
         $projectUuid = (string) ($args['projectUuid'] ?? '');
@@ -1119,6 +1343,9 @@ class AdminController
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
+        if (($deny = $this->requireCapability($response, 'view_clients')) !== null) {
+            return $deny;
+        }
 
         $clientPublicId = (string) ($args['clientPublicId'] ?? '');
         $db = \BlackWall\Database::getInstance();
@@ -1148,6 +1375,9 @@ class AdminController
     {
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'manage_users')) !== null) {
+            return $deny;
         }
 
         $userUuid = (string) ($args['userUuid'] ?? '');
@@ -1205,6 +1435,9 @@ class AdminController
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
+        if (($deny = $this->requireCapability($response, 'manage_users')) !== null) {
+            return $deny;
+        }
 
         $userUuid = (string) ($args['userUuid'] ?? '');
         $credentialPublicId = (string) ($args['credentialPublicId'] ?? '');
@@ -1243,6 +1476,19 @@ class AdminController
             return $response->withHeader('Location', '/admin/users/' . $user->uuid . '?error=min_keys')->withStatus(302);
         }
 
+        if (!$this->hasCapability('delete_credentials_direct')) {
+            $this->approvalService->create(
+                'delete_user_credential',
+                [
+                    'user_uuid' => $user->uuid,
+                    'credential_public_id' => $credentialPublicId,
+                ],
+                $actorUserId
+            );
+
+            return $response->withHeader('Location', '/admin/users/' . $user->uuid . '?success=delete_requested')->withStatus(302);
+        }
+
         $audit->logSuccess('admin.user.credential.delete', [
             'actor_user_id' => $actorUserId,
             'target_type' => 'user',
@@ -1254,6 +1500,54 @@ class AdminController
         $this->webauthn->deleteCredential($credentialId);
 
         return $response->withHeader('Location', '/admin/users/' . $user->uuid)->withStatus(302);
+    }
+
+    private function executeApprovalAction(string $actionType, array $payload, int $actorUserId): bool
+    {
+        switch ($actionType) {
+            case 'delete_user_credential':
+                $userUuid = (string) ($payload['user_uuid'] ?? '');
+                $credentialPublicId = (string) ($payload['credential_public_id'] ?? '');
+                if ($userUuid === '' || $credentialPublicId === '') {
+                    return false;
+                }
+
+                $user = $this->userRepo->findByUuid($userUuid);
+                if (!$user) {
+                    return false;
+                }
+
+                $db = \BlackWall\Database::getInstance();
+                $stmt = $db->prepare('SELECT id, user_id FROM webauthn_credentials WHERE credential_id = ?');
+                $stmt->execute([$credentialPublicId]);
+                $credential = $stmt->fetch();
+                if (!$credential || (int) $credential['user_id'] !== $user->id) {
+                    return false;
+                }
+
+                $countStmt = $db->prepare('SELECT COUNT(*) FROM webauthn_credentials WHERE user_id = ?');
+                $countStmt->execute([$user->id]);
+                $keyCount = (int) $countStmt->fetchColumn();
+                $minKeys = max(1, Config::getInt('MIN_WEBAUTHN_KEYS', 1));
+                if ($keyCount <= $minKeys) {
+                    return false;
+                }
+
+                /** @var AuditLogger $audit */
+                $audit = new AuditLogger();
+                $audit->logSuccess('admin.user.credential.delete.approved', [
+                    'actor_user_id' => $actorUserId,
+                    'target_type' => 'user',
+                    'target_id' => $user->uuid,
+                    'webauthn_credential_id' => (int) $credential['id'],
+                    'webauthn_credential_public_id' => $credentialPublicId,
+                    'message' => 'Credential deleted via approval workflow',
+                ]);
+
+                return $this->webauthn->deleteCredential((int) $credential['id']);
+        }
+
+        return false;
     }
 
     private function checkAuth(): bool
