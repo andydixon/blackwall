@@ -81,7 +81,7 @@ class AdminController
                 'view_dashboard', 'view_users', 'manage_users', 'view_projects', 'manage_projects',
                 'view_clients', 'manage_clients', 'view_assignments', 'manage_assignments',
                 'view_privileges', 'manage_privileges', 'view_audit', 'view_maintenance',
-                'manage_roles', 'decode_error_trace', 'delete_credentials_direct',
+                'manage_roles', 'decode_error_trace', 'delete_credentials_direct', 'change_user_status_direct',
                 'view_approvals', 'decide_approvals',
             ],
             'operator' => [
@@ -872,6 +872,19 @@ class AdminController
         $displayLabel = $body['display_label'] ?? null;
         $status = $body['status'] ?? 'active';
 
+        if ($status !== $user->status && !$this->hasCapability('change_user_status_direct')) {
+            $this->approvalService->create(
+                'change_user_status',
+                [
+                    'user_uuid' => $user->uuid,
+                    'requested_status' => $status,
+                ],
+                $actorUserId
+            );
+
+            return $response->withHeader('Location', '/admin/users/' . $user->uuid . '?success=status_change_requested')->withStatus(302);
+        }
+
         $this->userRepo->update($userId, $displayLabel, $status);
 
         $audit->logSuccess('admin.user.update', [
@@ -1545,6 +1558,31 @@ class AdminController
                 ]);
 
                 return $this->webauthn->deleteCredential((int) $credential['id']);
+
+            case 'change_user_status':
+                $userUuid = (string) ($payload['user_uuid'] ?? '');
+                $requestedStatus = (string) ($payload['requested_status'] ?? '');
+                if ($userUuid === '' || !in_array($requestedStatus, ['active', 'disabled'], true)) {
+                    return false;
+                }
+
+                $user = $this->userRepo->findByUuid($userUuid);
+                if (!$user) {
+                    return false;
+                }
+
+                $this->userRepo->update($user->id, $user->displayLabel, $requestedStatus);
+
+                /** @var AuditLogger $audit */
+                $audit = new AuditLogger();
+                $audit->logSuccess('admin.user.status_change.approved', [
+                    'actor_user_id' => $actorUserId,
+                    'target_type' => 'user',
+                    'target_id' => $user->uuid,
+                    'message' => "User status changed to {$requestedStatus} via approval workflow",
+                ]);
+
+                return true;
         }
 
         return false;

@@ -22,6 +22,12 @@
     </div>
 <?php endif; ?>
 
+<?php if (isset($_GET['success']) && $_GET['success'] === 'status_change_requested'): ?>
+    <div class="alert alert-success mb-4">
+        User status change request submitted for approval.
+    </div>
+<?php endif; ?>
+
 <?php if (isset($enrollmentLink)): ?>
     <div class="alert alert-success border-success mb-4" role="alert">
         <h4 class="alert-heading">✅ Enrollment Link Generated!</h4>
