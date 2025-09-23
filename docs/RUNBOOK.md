@@ -36,6 +36,7 @@ Access admin panel: https://blackwall.cx/admin/audit
 - High-risk operator action currently gated by approval:
   - User credential deletion (`delete_user_credential`)
   - User enable/disable (`change_user_status`)
+  - Privilege level deletion (`delete_privilege_level`)
 
 **Look for:**
 - Multiple failed authentication attempts from same IP

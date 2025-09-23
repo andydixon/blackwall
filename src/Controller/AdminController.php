@@ -81,7 +81,8 @@ class AdminController
                 'view_dashboard', 'view_users', 'manage_users', 'view_projects', 'manage_projects',
                 'view_clients', 'manage_clients', 'view_assignments', 'manage_assignments',
                 'view_privileges', 'manage_privileges', 'view_audit', 'view_maintenance',
-                'manage_roles', 'decode_error_trace', 'delete_credentials_direct', 'change_user_status_direct',
+                'manage_roles', 'decode_error_trace',
+                'delete_credentials_direct', 'change_user_status_direct', 'delete_privilege_direct',
                 'view_approvals', 'decide_approvals',
             ],
             'operator' => [
@@ -1101,6 +1102,18 @@ class AdminController
             return $response->withHeader('Location', "/admin/projects/{$project->uuid}/privileges?error=in_use")->withStatus(302);
         }
 
+        if (!$this->hasCapability('delete_privilege_direct')) {
+            $this->approvalService->create(
+                'delete_privilege_level',
+                [
+                    'level_id' => $level->id,
+                ],
+                $actorUserId
+            );
+
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/privileges?success=delete_requested")->withStatus(302);
+        }
+
         $this->privilegeRepo->delete($level->id);
 
         $audit->logSuccess('admin.privilege.delete', [
@@ -1580,6 +1593,36 @@ class AdminController
                     'target_type' => 'user',
                     'target_id' => $user->uuid,
                     'message' => "User status changed to {$requestedStatus} via approval workflow",
+                ]);
+
+                return true;
+
+            case 'delete_privilege_level':
+                $levelId = (int) ($payload['level_id'] ?? 0);
+                if ($levelId < 1) {
+                    return false;
+                }
+
+                $level = $this->privilegeRepo->findById($levelId);
+                if (!$level) {
+                    return false;
+                }
+
+                if ($this->privilegeRepo->isLevelInUse($level->projectId, $level->level)) {
+                    return false;
+                }
+
+                $this->privilegeRepo->delete($level->id);
+
+                /** @var AuditLogger $audit */
+                $audit = new AuditLogger();
+                $audit->logSuccess('admin.privilege.delete.approved', [
+                    'actor_user_id' => $actorUserId,
+                    'project_id' => $level->projectId,
+                    'privilege_level' => $level->level,
+                    'target_type' => 'project_privilege_level',
+                    'target_id' => (string) $level->id,
+                    'message' => 'Privilege level deleted via approval workflow',
                 ]);
 
                 return true;

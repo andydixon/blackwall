@@ -21,6 +21,8 @@
             <div class="alert alert-success">Privilege level updated successfully.</div>
         <?php elseif ($success === 'deleted'): ?>
             <div class="alert alert-success">Privilege level deleted successfully.</div>
+        <?php elseif ($success === 'delete_requested'): ?>
+            <div class="alert alert-success">Privilege level deletion request submitted for approval.</div>
         <?php endif; ?>
 
         <?php if ($error === 'csrf'): ?>
