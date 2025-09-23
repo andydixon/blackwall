@@ -19,27 +19,33 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/admin/dashboard">Dashboard</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/users">Users</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/projects">Projects</a>
-                    </li>
+                    <?php if (in_array($currentAdminRole ?? '', ['super_admin', 'operator'], true)): ?>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/admin/users">Users</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/admin/projects">Projects</a>
+                        </li>
+                    <?php endif; ?>
                     <li class="nav-item">
                         <a class="nav-link" href="/admin/audit">Audit Log</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/roles">Roles</a>
-                    </li>
+                    <?php if (($currentAdminRole ?? '') === 'super_admin'): ?>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/admin/roles">Roles</a>
+                        </li>
+                    <?php endif; ?>
                     <li class="nav-item">
                         <a class="nav-link" href="/admin/approvals">Approvals</a>
                     </li>
                     <li class="nav-item">
                         <a class="nav-link" href="/admin/maintenance">Maintenance</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/error-trace">Error Trace</a>
-                    </li>
+                    <?php if (in_array($currentAdminRole ?? '', ['super_admin', 'auditor'], true)): ?>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/admin/error-trace">Error Trace</a>
+                        </li>
+                    <?php endif; ?>
                 </ul>
                 <?php if (!empty($currentAdminRole)): ?>
                     <span class="badge bg-secondary me-3"><?= htmlspecialchars((string) $currentAdminRole) ?></span>

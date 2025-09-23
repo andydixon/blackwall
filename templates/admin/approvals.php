@@ -43,7 +43,7 @@
                                         <td class="text-muted"><?= htmlspecialchars((string) $approval['created_at']) ?></td>
                                         <td><pre class="mb-0 small"><?= htmlspecialchars((string) $payloadPretty) ?></pre></td>
                                         <td>
-                                            <?php if ($status === 'pending'): ?>
+                                            <?php if ($status === 'pending' && ($currentAdminRole ?? '') === 'super_admin'): ?>
                                                 <div class="d-flex gap-2">
                                                     <form method="POST" action="/admin/approvals/<?= (int) $approval['id'] ?>/approve" class="d-inline">
                                                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
@@ -56,6 +56,8 @@
                                                         <button type="submit" class="btn btn-sm btn-outline-danger">Reject</button>
                                                     </form>
                                                 </div>
+                                            <?php elseif ($status === 'pending'): ?>
+                                                <span class="text-muted small">Pending super-admin decision</span>
                                             <?php else: ?>
                                                 <div class="text-muted small">
                                                     <?= htmlspecialchars((string) ($approval['decision_note'] ?? '-')) ?>
