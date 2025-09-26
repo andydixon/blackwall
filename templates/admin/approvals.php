@@ -44,7 +44,7 @@
                                         <td><pre class="mb-0 small"><?= htmlspecialchars((string) $payloadPretty) ?></pre></td>
                                         <td>
                                             <?php if ($status === 'pending' && ($currentAdminRole ?? '') === 'super_admin'): ?>
-                                                <div class="d-flex gap-2">
+                                                <div class="d-flex gap-2 flex-wrap">
                                                     <form method="POST" action="/admin/approvals/<?= (int) $approval['id'] ?>/approve" class="d-inline">
                                                         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
                                                         <input type="hidden" name="note" value="Approved via admin UI">
@@ -55,9 +55,25 @@
                                                         <input type="hidden" name="note" value="Rejected via admin UI">
                                                         <button type="submit" class="btn btn-sm btn-outline-danger">Reject</button>
                                                     </form>
+                                                    <?php if ((int) $approval['requested_by_user_id'] === (int) \BlackWall\Security\SessionManager::get('user_id')): ?>
+                                                        <form method="POST" action="/admin/approvals/<?= (int) $approval['id'] ?>/cancel" class="d-inline">
+                                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                                                            <input type="hidden" name="note" value="Cancelled by requester">
+                                                            <button type="submit" class="btn btn-sm btn-outline-secondary">Cancel</button>
+                                                        </form>
+                                                    <?php endif; ?>
                                                 </div>
                                             <?php elseif ($status === 'pending'): ?>
-                                                <span class="text-muted small">Pending super-admin decision</span>
+                                                <div class="d-flex gap-2 flex-wrap align-items-center">
+                                                    <span class="text-muted small">Pending super-admin decision</span>
+                                                    <?php if ((int) $approval['requested_by_user_id'] === (int) \BlackWall\Security\SessionManager::get('user_id')): ?>
+                                                        <form method="POST" action="/admin/approvals/<?= (int) $approval['id'] ?>/cancel" class="d-inline">
+                                                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                                                            <input type="hidden" name="note" value="Cancelled by requester">
+                                                            <button type="submit" class="btn btn-sm btn-outline-secondary">Cancel</button>
+                                                        </form>
+                                                    <?php endif; ?>
+                                                </div>
                                             <?php else: ?>
                                                 <div class="text-muted small">
                                                     <?= htmlspecialchars((string) ($approval['decision_note'] ?? '-')) ?>

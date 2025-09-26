@@ -86,6 +86,7 @@ $app->group('/admin', function (RouteCollectorProxy $group) {
     $group->get('/approvals', [AdminController::class, 'approvalsList']);
     $group->post('/approvals/{id}/approve', [AdminController::class, 'approvalApprove']);
     $group->post('/approvals/{id}/reject', [AdminController::class, 'approvalReject']);
+    $group->post('/approvals/{id}/cancel', [AdminController::class, 'approvalCancel']);
 
     // Users
     $group->get('/users', [AdminController::class, 'usersList']);

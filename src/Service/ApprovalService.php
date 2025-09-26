@@ -64,4 +64,15 @@ class ApprovalService
         $stmt->execute([$status, $approvedByUserId, $note, $id]);
         return $stmt->rowCount() > 0;
     }
+
+    public function cancelByRequester(int $id, int $requestedByUserId, ?string $note = null): bool
+    {
+        $stmt = $this->db->prepare(
+            "UPDATE approval_requests
+             SET status = 'cancelled', decision_note = ?, decided_at = NOW()
+             WHERE id = ? AND status = 'pending' AND requested_by_user_id = ?"
+        );
+        $stmt->execute([$note, $id, $requestedByUserId]);
+        return $stmt->rowCount() > 0;
+    }
 }

@@ -532,6 +532,42 @@ class AdminController
         return $response->withHeader('Location', '/admin/approvals')->withStatus(302);
     }
 
+    public function approvalCancel(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'view_approvals')) !== null) {
+            return $deny;
+        }
+
+        $body = $request->getParsedBody();
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $actorUserId = (int) SessionManager::get('user_id');
+
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
+            return $response->withHeader('Location', '/admin/approvals')->withStatus(302);
+        }
+
+        $approvalId = (int) ($args['id'] ?? 0);
+        $this->approvalService->cancelByRequester(
+            $approvalId,
+            $actorUserId,
+            trim((string) ($body['note'] ?? 'Cancelled by requester'))
+        );
+
+        $audit->logInfo('admin.approval.cancel', [
+            'actor_user_id' => $actorUserId,
+            'target_type' => 'approval_request',
+            'target_id' => (string) $approvalId,
+            'message' => 'Cancelled request',
+        ]);
+
+        return $response->withHeader('Location', '/admin/approvals')->withStatus(302);
+    }
+
     public function maintenance(Request $request, Response $response): Response
     {
         if (!$this->checkAuth()) {
