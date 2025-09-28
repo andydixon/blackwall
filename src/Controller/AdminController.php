@@ -376,6 +376,18 @@ class AdminController
             return $response->withHeader('Location', '/admin/roles')->withStatus(302);
         }
 
+        $existingRole = $this->adminAuthz->getRole($userId);
+        $targetUser = $this->userRepo->findById($userId);
+        if (
+            $existingRole === 'super_admin'
+            && $role !== 'super_admin'
+            && $targetUser !== null
+            && $targetUser->status === 'active'
+            && $this->adminAuthz->countActiveRoleOnActiveUsers('super_admin') <= 1
+        ) {
+            return $response->withHeader('Location', '/admin/roles?error=last_super_admin')->withStatus(302);
+        }
+
         $this->adminAuthz->upsertRole($userId, $role);
         $audit->logSuccess('admin.role.upsert', [
             'actor_user_id' => $actorUserId,
@@ -417,7 +429,18 @@ class AdminController
 
         // Prevent removing your own role from current session.
         if ($userId === $actorUserId) {
-            return $response->withHeader('Location', '/admin/roles')->withStatus(302);
+            return $response->withHeader('Location', '/admin/roles?error=self_revoke')->withStatus(302);
+        }
+
+        $existingRole = $this->adminAuthz->getRole($userId);
+        $targetUser = $this->userRepo->findById($userId);
+        if (
+            $existingRole === 'super_admin'
+            && $targetUser !== null
+            && $targetUser->status === 'active'
+            && $this->adminAuthz->countActiveRoleOnActiveUsers('super_admin') <= 1
+        ) {
+            return $response->withHeader('Location', '/admin/roles?error=last_super_admin')->withStatus(302);
         }
 
         $this->adminAuthz->revokeRole($userId);
@@ -908,6 +931,21 @@ class AdminController
 
         $displayLabel = $body['display_label'] ?? null;
         $status = $body['status'] ?? 'active';
+        if (!in_array($status, ['active', 'disabled'], true)) {
+            return $response->withHeader('Location', '/admin/users/' . $user->uuid)->withStatus(302);
+        }
+
+        $isDisablingActiveSuperAdmin = (
+            $user->status === 'active'
+            && $status === 'disabled'
+            && $this->adminAuthz->getRole($user->id) === 'super_admin'
+        );
+        if (
+            $isDisablingActiveSuperAdmin
+            && $this->adminAuthz->countActiveRoleOnActiveUsers('super_admin') <= 1
+        ) {
+            return $response->withHeader('Location', '/admin/users/' . $user->uuid . '?error=last_super_admin')->withStatus(302);
+        }
 
         if ($status !== $user->status && !$this->hasCapability('change_user_status_direct')) {
             $this->approvalService->create(
@@ -1617,6 +1655,18 @@ class AdminController
 
                 $user = $this->userRepo->findByUuid($userUuid);
                 if (!$user) {
+                    return false;
+                }
+
+                $isDisablingActiveSuperAdmin = (
+                    $user->status === 'active'
+                    && $requestedStatus === 'disabled'
+                    && $this->adminAuthz->getRole($user->id) === 'super_admin'
+                );
+                if (
+                    $isDisablingActiveSuperAdmin
+                    && $this->adminAuthz->countActiveRoleOnActiveUsers('super_admin') <= 1
+                ) {
                     return false;
                 }
 

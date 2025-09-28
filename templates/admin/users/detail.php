@@ -16,6 +16,12 @@
     </div>
 <?php endif; ?>
 
+<?php if (isset($_GET['error']) && $_GET['error'] === 'last_super_admin'): ?>
+    <div class="alert alert-danger mb-4">
+        Operation blocked. At least one active <code>super_admin</code> user must remain.
+    </div>
+<?php endif; ?>
+
 <?php if (isset($_GET['success']) && $_GET['success'] === 'delete_requested'): ?>
     <div class="alert alert-success mb-4">
         Credential deletion request submitted for approval.

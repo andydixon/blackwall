@@ -9,6 +9,16 @@
             </div>
         </div>
 
+        <?php if (isset($_GET['error']) && $_GET['error'] === 'last_super_admin'): ?>
+            <div class="alert alert-danger">
+                Operation blocked. At least one active <code>super_admin</code> must remain.
+            </div>
+        <?php elseif (isset($_GET['error']) && $_GET['error'] === 'self_revoke'): ?>
+            <div class="alert alert-danger">
+                Operation blocked. You cannot revoke your own admin role from the current session.
+            </div>
+        <?php endif; ?>
+
         <div class="card mb-4">
             <div class="card-header">
                 <h5 class="mb-0">Assign Role</h5>

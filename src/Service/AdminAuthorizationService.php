@@ -80,4 +80,25 @@ class AdminAuthorizationService
         );
         $stmt->execute([$userId]);
     }
+
+    public function countActiveRole(string $role): int
+    {
+        $stmt = $this->db->prepare(
+            'SELECT COUNT(*) FROM admin_roles WHERE role = ? AND is_active = 1'
+        );
+        $stmt->execute([$role]);
+        return (int) $stmt->fetchColumn();
+    }
+
+    public function countActiveRoleOnActiveUsers(string $role): int
+    {
+        $stmt = $this->db->prepare(
+            "SELECT COUNT(*)
+             FROM admin_roles ar
+             JOIN users u ON u.id = ar.user_id
+             WHERE ar.role = ? AND ar.is_active = 1 AND u.status = 'active'"
+        );
+        $stmt->execute([$role]);
+        return (int) $stmt->fetchColumn();
+    }
 }
