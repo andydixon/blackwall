@@ -463,9 +463,15 @@ class AdminController
             return $deny;
         }
 
+        $actorUserId = (int) SessionManager::get('user_id');
+
         return $this->renderWithLayout($response, 'admin/approvals.php', [
             'title' => 'Approvals',
-            'approvals' => $this->approvalService->list(200),
+            'approvals' => $this->approvalService->listVisibleToUser(
+                $actorUserId,
+                $this->adminAuthz->isSuperAdmin($actorUserId),
+                200
+            ),
             'csrfToken' => CSRFProtection::generateToken(),
         ]);
     }
@@ -486,17 +492,17 @@ class AdminController
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
-            return $response->withHeader('Location', '/admin/approvals')->withStatus(302);
+            return $response->withHeader('Location', '/admin/approvals?error=csrf')->withStatus(302);
         }
 
         $approvalId = (int) ($args['id'] ?? 0);
         $approval = $this->approvalService->getById($approvalId);
         if (!$approval || $approval['status'] !== 'pending') {
-            return $response->withHeader('Location', '/admin/approvals')->withStatus(302);
+            return $response->withHeader('Location', '/admin/approvals?error=not_pending')->withStatus(302);
         }
 
         if ((int) $approval['requested_by_user_id'] === $actorUserId) {
-            return $response->withHeader('Location', '/admin/approvals')->withStatus(302);
+            return $response->withHeader('Location', '/admin/approvals?error=self_decide')->withStatus(302);
         }
 
         $payload = json_decode((string) $approval['payload_json'], true);
@@ -505,10 +511,12 @@ class AdminController
         $executed = $this->executeApprovalAction((string) $approval['action_type'], $payload, $actorUserId);
         if (!$executed) {
             $this->approvalService->decide($approvalId, 'rejected', $actorUserId, 'Execution failed');
-            return $response->withHeader('Location', '/admin/approvals')->withStatus(302);
+            return $response->withHeader('Location', '/admin/approvals?error=execution_failed')->withStatus(302);
         }
 
-        $this->approvalService->decide($approvalId, 'approved', $actorUserId, trim((string) ($body['note'] ?? '')));
+        if (!$this->approvalService->decide($approvalId, 'approved', $actorUserId, trim((string) ($body['note'] ?? '')))) {
+            return $response->withHeader('Location', '/admin/approvals?error=not_pending')->withStatus(302);
+        }
         $audit->logSuccess('admin.approval.approve', [
             'actor_user_id' => $actorUserId,
             'target_type' => 'approval_request',
@@ -516,7 +524,7 @@ class AdminController
             'message' => 'Approved request',
         ]);
 
-        return $response->withHeader('Location', '/admin/approvals')->withStatus(302);
+        return $response->withHeader('Location', '/admin/approvals?success=approved')->withStatus(302);
     }
 
     public function approvalReject(Request $request, Response $response, array $args): Response
@@ -535,16 +543,19 @@ class AdminController
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
-            return $response->withHeader('Location', '/admin/approvals')->withStatus(302);
+            return $response->withHeader('Location', '/admin/approvals?error=csrf')->withStatus(302);
         }
 
         $approvalId = (int) ($args['id'] ?? 0);
-        $this->approvalService->decide(
+        $decided = $this->approvalService->decide(
             $approvalId,
             'rejected',
             $actorUserId,
             trim((string) ($body['note'] ?? ''))
         );
+        if (!$decided) {
+            return $response->withHeader('Location', '/admin/approvals?error=not_pending')->withStatus(302);
+        }
         $audit->logInfo('admin.approval.reject', [
             'actor_user_id' => $actorUserId,
             'target_type' => 'approval_request',
@@ -552,7 +563,7 @@ class AdminController
             'message' => 'Rejected request',
         ]);
 
-        return $response->withHeader('Location', '/admin/approvals')->withStatus(302);
+        return $response->withHeader('Location', '/admin/approvals?success=rejected')->withStatus(302);
     }
 
     public function approvalCancel(Request $request, Response $response, array $args): Response
@@ -571,15 +582,18 @@ class AdminController
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
-            return $response->withHeader('Location', '/admin/approvals')->withStatus(302);
+            return $response->withHeader('Location', '/admin/approvals?error=csrf')->withStatus(302);
         }
 
         $approvalId = (int) ($args['id'] ?? 0);
-        $this->approvalService->cancelByRequester(
+        $cancelled = $this->approvalService->cancelByRequester(
             $approvalId,
             $actorUserId,
             trim((string) ($body['note'] ?? 'Cancelled by requester'))
         );
+        if (!$cancelled) {
+            return $response->withHeader('Location', '/admin/approvals?error=not_pending')->withStatus(302);
+        }
 
         $audit->logInfo('admin.approval.cancel', [
             'actor_user_id' => $actorUserId,
@@ -588,7 +602,7 @@ class AdminController
             'message' => 'Cancelled request',
         ]);
 
-        return $response->withHeader('Location', '/admin/approvals')->withStatus(302);
+        return $response->withHeader('Location', '/admin/approvals?success=cancelled')->withStatus(302);
     }
 
     public function maintenance(Request $request, Response $response): Response

@@ -33,10 +33,16 @@ Access admin panel: https://blackwall.cx/admin/audit
 
 - Roles: `super_admin`, `operator`, `auditor` (managed at `/admin/roles`)
 - Approval queue: `/admin/approvals`
+- Approval visibility:
+  - `super_admin`: full queue and decision controls
+  - `operator`/`auditor`: own requests only
 - High-risk operator action currently gated by approval:
   - User credential deletion (`delete_user_credential`)
   - User enable/disable (`change_user_status`)
   - Privilege level deletion (`delete_privilege_level`)
+- Safety guardrails:
+  - Cannot revoke or downgrade the last active `super_admin`
+  - Cannot disable the last active `super_admin` user
 
 **Look for:**
 - Multiple failed authentication attempts from same IP

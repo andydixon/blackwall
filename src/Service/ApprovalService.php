@@ -54,6 +54,31 @@ class ApprovalService
         return $stmt->fetchAll();
     }
 
+    public function listVisibleToUser(int $userId, bool $includeAll, int $limit = 100): array
+    {
+        if ($includeAll) {
+            return $this->list($limit);
+        }
+
+        $stmt = $this->db->prepare(
+            "SELECT ar.*,
+                    req.uuid AS requested_by_uuid,
+                    req.display_label AS requested_by_display_label,
+                    appr.uuid AS approved_by_uuid,
+                    appr.display_label AS approved_by_display_label
+             FROM approval_requests ar
+             JOIN users req ON req.id = ar.requested_by_user_id
+             LEFT JOIN users appr ON appr.id = ar.approved_by_user_id
+             WHERE ar.requested_by_user_id = ?
+             ORDER BY
+                CASE ar.status WHEN 'pending' THEN 0 ELSE 1 END,
+                ar.created_at DESC
+             LIMIT ?"
+        );
+        $stmt->execute([$userId, $limit]);
+        return $stmt->fetchAll();
+    }
+
     public function decide(int $id, string $status, int $approvedByUserId, ?string $note = null): bool
     {
         $stmt = $this->db->prepare(

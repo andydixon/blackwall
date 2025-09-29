@@ -2,8 +2,30 @@
     <div class="col-12">
         <div class="page-header">
             <h2>✅ Approval Queue</h2>
-            <p class="text-muted mb-0">Pending and historical approval requests.</p>
+            <p class="text-muted mb-0">
+                <?= ($currentAdminRole ?? '') === 'super_admin'
+                    ? 'Pending and historical approval requests.'
+                    : 'Your submitted approval requests.' ?>
+            </p>
         </div>
+
+        <?php if (isset($_GET['success']) && $_GET['success'] === 'approved'): ?>
+            <div class="alert alert-success">Approval request approved.</div>
+        <?php elseif (isset($_GET['success']) && $_GET['success'] === 'rejected'): ?>
+            <div class="alert alert-success">Approval request rejected.</div>
+        <?php elseif (isset($_GET['success']) && $_GET['success'] === 'cancelled'): ?>
+            <div class="alert alert-success">Approval request cancelled.</div>
+        <?php endif; ?>
+
+        <?php if (isset($_GET['error']) && $_GET['error'] === 'csrf'): ?>
+            <div class="alert alert-danger">Security validation failed. Please retry.</div>
+        <?php elseif (isset($_GET['error']) && $_GET['error'] === 'not_pending'): ?>
+            <div class="alert alert-danger">Request is no longer pending.</div>
+        <?php elseif (isset($_GET['error']) && $_GET['error'] === 'self_decide'): ?>
+            <div class="alert alert-danger">You cannot approve your own request.</div>
+        <?php elseif (isset($_GET['error']) && $_GET['error'] === 'execution_failed'): ?>
+            <div class="alert alert-danger">Approval execution failed and the request was rejected.</div>
+        <?php endif; ?>
 
         <div class="card">
             <div class="card-body">
