@@ -12,14 +12,17 @@ Config::load(__DIR__ . '/..');
 
 $command = $argv[1] ?? null;
 if ($command === null) {
-    fwrite(STDERR, "Usage: php bin/maintenance <cleanup:tokens|cleanup:audit|cleanup:all|audit:verify|status> [--audit-retention-days=N]\n");
+    fwrite(STDERR, "Usage: php bin/maintenance <cleanup:tokens|cleanup:audit|cleanup:approvals|cleanup:all|audit:verify|status> [--audit-retention-days=N] [--approval-pending-max-age-days=N]\n");
     exit(1);
 }
 
 $auditRetentionDays = null;
+$approvalPendingMaxAgeDays = null;
 foreach (array_slice($argv, 2) as $arg) {
     if (str_starts_with($arg, '--audit-retention-days=')) {
         $auditRetentionDays = (int) substr($arg, strlen('--audit-retention-days='));
+    } elseif (str_starts_with($arg, '--approval-pending-max-age-days=')) {
+        $approvalPendingMaxAgeDays = (int) substr($arg, strlen('--approval-pending-max-age-days='));
     }
 }
 
@@ -37,7 +40,12 @@ switch ($command) {
         break;
 
     case 'cleanup:all':
-        $result = $service->cleanupAll($auditRetentionDays);
+        $result = $service->cleanupAll($auditRetentionDays, $approvalPendingMaxAgeDays);
+        echo json_encode($result, JSON_PRETTY_PRINT) . PHP_EOL;
+        break;
+
+    case 'cleanup:approvals':
+        $result = $service->cleanupApprovals($approvalPendingMaxAgeDays);
         echo json_encode($result, JSON_PRETTY_PRINT) . PHP_EOL;
         break;
 

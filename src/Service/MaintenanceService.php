@@ -79,12 +79,38 @@ class MaintenanceService
         });
     }
 
-    public function cleanupAll(?int $auditRetentionDays = null): array
+    public function cleanupAll(?int $auditRetentionDays = null, ?int $approvalPendingMaxAgeDays = null): array
     {
         return [
             'cleanup.tokens' => $this->cleanupTokens(),
             'cleanup.audit' => $this->cleanupAudit($auditRetentionDays),
+            'cleanup.approvals' => $this->cleanupApprovals($approvalPendingMaxAgeDays),
         ];
+    }
+
+    public function cleanupApprovals(?int $maxPendingAgeDays = null): array
+    {
+        $days = $maxPendingAgeDays ?? Config::getInt('APPROVAL_PENDING_MAX_AGE_DAYS', 14);
+        if ($days < 1) {
+            $days = 1;
+        }
+
+        return $this->runJob('cleanup.approvals', function () use ($days): array {
+            $stmt = $this->db->prepare(
+                "UPDATE approval_requests
+                 SET status = 'rejected',
+                     decision_note = 'Auto-rejected: request expired',
+                     decided_at = NOW()
+                 WHERE status = 'pending'
+                   AND created_at < DATE_SUB(NOW(), INTERVAL ? DAY)"
+            );
+            $stmt->execute([$days]);
+
+            return [
+                'approval_pending_max_age_days' => $days,
+                'approval_requests_auto_rejected' => $stmt->rowCount(),
+            ];
+        });
     }
 
     public function verifyAuditChain(): array

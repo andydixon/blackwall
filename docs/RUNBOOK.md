@@ -117,6 +117,9 @@ php /home/andy/domains/blackwall.cx/bin/maintenance cleanup:all
 
 -- Optional: override audit retention window for one run
 php /home/andy/domains/blackwall.cx/bin/maintenance cleanup:audit --audit-retention-days=365
+
+-- Optional: auto-reject stale pending approvals for one run
+php /home/andy/domains/blackwall.cx/bin/maintenance cleanup:approvals --approval-pending-max-age-days=30
 ```
 
 ### Review User Access
