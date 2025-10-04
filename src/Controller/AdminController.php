@@ -1273,6 +1273,7 @@ class AdminController
             'assignments' => $assignments,
             'allUsers' => $allUsers,
             'privilegeLevels' => $privilegeLevels,
+            'csrfToken' => CSRFProtection::generateToken(),
         ]);
     }
     public function assignmentCreate(Request $request, Response $response, array $args): Response
@@ -1291,20 +1292,38 @@ class AdminController
         }
         $projectId = $project->id;
         $body = $request->getParsedBody();
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $actorUserId = (int) SessionManager::get('user_id');
+
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments?error=csrf")->withStatus(302);
+        }
+
         $userId = (int) ($body['user_id'] ?? 0);
         $privilegeLevel = (int) ($body['privilege_level'] ?? 0);
 
         if (!$userId || !$privilegeLevel) {
-            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments")->withStatus(302);
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments?error=invalid")->withStatus(302);
         }
 
         // Check if assignment already exists
         $existing = $this->roleRepo->findByUserAndProject($userId, $projectId);
         if (!$existing) {
-            $this->roleRepo->create($userId, $projectId, $privilegeLevel);
+            $created = $this->roleRepo->create($userId, $projectId, $privilegeLevel);
+            $audit->logSuccess('admin.assignment.create', [
+                'actor_user_id' => $actorUserId,
+                'project_id' => $project->id,
+                'project_uuid' => $project->uuid,
+                'target_type' => 'user_project_role',
+                'target_id' => (string) $created->id,
+                'message' => "Assigned user {$userId} at privilege level {$privilegeLevel}",
+            ]);
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments?success=created")->withStatus(302);
         }
 
-        return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments")->withStatus(302);
+        return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments?error=exists")->withStatus(302);
     }
 
     public function assignmentUpdate(Request $request, Response $response, array $args): Response
@@ -1318,6 +1337,14 @@ class AdminController
 
         $assignmentId = (int) $args['id'];
         $body = $request->getParsedBody();
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
+            $referer = $request->getHeaderLine('Referer') ?: '/admin/projects';
+            return $response->withHeader('Location', $referer)->withStatus(302);
+        }
+
         $privilegeLevel = (int) ($body['privilege_level'] ?? 0);
 
         if ($privilegeLevel) {
@@ -1337,8 +1364,28 @@ class AdminController
             return $deny;
         }
 
+        $body = $request->getParsedBody();
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $actorUserId = (int) SessionManager::get('user_id');
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
+            $referer = $request->getHeaderLine('Referer') ?: '/admin/projects';
+            return $response->withHeader('Location', $referer)->withStatus(302);
+        }
+
         $assignmentId = (int) $args['id'];
+        $assignment = $this->roleRepo->findById($assignmentId);
         $this->roleRepo->delete($assignmentId);
+        if ($assignment !== null) {
+            $audit->logSuccess('admin.assignment.delete', [
+                'actor_user_id' => $actorUserId,
+                'project_id' => $assignment->projectId,
+                'target_type' => 'user_project_role',
+                'target_id' => (string) $assignment->id,
+                'message' => "Removed assignment for user {$assignment->userId}",
+            ]);
+        }
 
         $referer = $request->getHeaderLine('Referer') ?: '/admin/projects';
         return $response->withHeader('Location', $referer)->withStatus(302);

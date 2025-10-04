@@ -15,6 +15,17 @@
             </div>
         </div>
 
+        <?php if (isset($_GET['success']) && $_GET['success'] === 'created'): ?>
+            <div class="alert alert-success">Assignment created successfully.</div>
+        <?php endif; ?>
+        <?php if (isset($_GET['error']) && $_GET['error'] === 'csrf'): ?>
+            <div class="alert alert-danger">Security validation failed. Please retry.</div>
+        <?php elseif (isset($_GET['error']) && $_GET['error'] === 'invalid'): ?>
+            <div class="alert alert-danger">Invalid assignment input.</div>
+        <?php elseif (isset($_GET['error']) && $_GET['error'] === 'exists'): ?>
+            <div class="alert alert-danger">That user already has an assignment on this project.</div>
+        <?php endif; ?>
+
         <div class="card">
             <div class="card-body">
                 <?php if (empty($assignments)): ?>
@@ -57,6 +68,7 @@
                                         </td>
                                         <td>
                                             <form method="POST" action="/admin/assignments/<?= $assignment['id'] ?>/delete" class="d-inline" onsubmit="return confirm('Remove this assignment?')">
+                                                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
                                                 <button type="submit" class="btn btn-sm btn-outline-danger">Remove</button>
                                             </form>
                                         </td>
@@ -81,6 +93,7 @@
             </div>
             <form method="POST" action="/admin/projects/<?= $project->uuid ?>/assignments/create">
                 <div class="modal-body">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
                     <div class="mb-3">
                         <label class="form-label">User</label>
                         <select name="user_id" class="form-select" required>
