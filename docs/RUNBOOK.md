@@ -29,6 +29,8 @@ Session hardening defaults:
 
 Access admin panel: https://blackwall.cx/admin/audit
 
+Export filtered audit logs (CSV): https://blackwall.cx/admin/audit/export
+
 ### Admin RBAC + Approvals
 
 - Roles: `super_admin`, `operator`, `auditor` (managed at `/admin/roles`)

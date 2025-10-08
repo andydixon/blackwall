@@ -42,6 +42,13 @@
                         <label class="form-label">&nbsp;</label>
                         <button type="submit" class="btn btn-primary w-100">Search</button>
                     </div>
+                    <div class="col-md-3">
+                        <label class="form-label">&nbsp;</label>
+                        <a class="btn btn-outline-light w-100"
+                           href="/admin/audit/export?<?= htmlspecialchars(http_build_query(array_filter($filters, fn($v) => $v !== null && $v !== ''))) ?>">
+                            Export CSV
+                        </a>
+                    </div>
                 </form>
             </div>
         </div>

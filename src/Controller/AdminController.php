@@ -832,17 +832,8 @@ class AdminController
         }
 
         $params = $request->getQueryParams();
-        
         $audit = new AuditLogger();
-        $filters = [
-            'date_from' => $params['date_from'] ?? null,
-            'date_to' => $params['date_to'] ?? null,
-            'project_uuid' => $params['project_uuid'] ?? null,
-            'ip_address' => $params['ip_address'] ?? null,
-            'event_type' => $params['event_type'] ?? null,
-            'outcome' => $params['outcome'] ?? null,
-            'correlation_id' => $params['correlation_id'] ?? null,
-        ];
+        $filters = $this->extractAuditFilters($params);
 
         $page = (int) ($params['page'] ?? 1);
         $perPage = 50;
@@ -860,6 +851,67 @@ class AdminController
             'total' => $total,
             'pages' => ceil($total / $perPage),
         ]);
+    }
+
+    public function auditExport(Request $request, Response $response): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'view_audit')) !== null) {
+            return $deny;
+        }
+
+        $params = $request->getQueryParams();
+        $filters = $this->extractAuditFilters($params);
+        $limit = max(1, min(10000, (int) ($params['limit'] ?? 2000)));
+
+        $audit = new AuditLogger();
+        $rows = $audit->search($filters, $limit, 0);
+
+        $handle = fopen('php://temp', 'r+');
+        if ($handle === false) {
+            return $response->withStatus(500);
+        }
+
+        fputcsv($handle, [
+            'created_at', 'event_type', 'outcome', 'message', 'correlation_id',
+            'ip_address', 'actor_user_uuid', 'project_uuid', 'oauth_client_public_id',
+            'webauthn_credential_public_id', 'target_type', 'target_id', 'metadata_json',
+        ]);
+
+        foreach ($rows as $row) {
+            fputcsv($handle, [
+                (string) ($row['created_at'] ?? ''),
+                (string) ($row['event_type'] ?? ''),
+                (string) ($row['outcome'] ?? ''),
+                (string) ($row['message'] ?? ''),
+                (string) ($row['correlation_id'] ?? ''),
+                (string) ($row['ip_address'] ?? ''),
+                (string) ($row['actor_user_uuid'] ?? ''),
+                (string) ($row['project_uuid'] ?? ''),
+                (string) ($row['oauth_client_public_id'] ?? ''),
+                (string) ($row['webauthn_credential_public_id'] ?? ''),
+                (string) ($row['target_type'] ?? ''),
+                (string) ($row['target_id'] ?? ''),
+                (string) ($row['metadata_json'] ?? ''),
+            ]);
+        }
+
+        rewind($handle);
+        $csv = stream_get_contents($handle);
+        fclose($handle);
+        if ($csv === false) {
+            return $response->withStatus(500);
+        }
+
+        $filename = 'audit_export_' . gmdate('Ymd_His') . '.csv';
+        $response->getBody()->write($csv);
+
+        return $response
+            ->withHeader('Content-Type', 'text/csv; charset=utf-8')
+            ->withHeader('Content-Disposition', 'attachment; filename="' . $filename . '"')
+            ->withHeader('Cache-Control', 'no-store');
     }
 
     public function userDetail(Request $request, Response $response, array $args): Response
@@ -1530,7 +1582,6 @@ class AdminController
         ]);
     }
     public function clientUpdate(Request $request, Response $response, array $args): Response { return $response; }
-    public function auditExport(Request $request, Response $response): Response { return $response; }
 
     public function generateEnrollmentLink(Request $request, Response $response, array $args): Response
     {
@@ -1787,5 +1838,18 @@ class AdminController
 
         $userId = (int) SessionManager::get('user_id');
         return $this->adminAuthz->isAdmin($userId);
+    }
+
+    private function extractAuditFilters(array $params): array
+    {
+        return [
+            'date_from' => $params['date_from'] ?? null,
+            'date_to' => $params['date_to'] ?? null,
+            'project_uuid' => $params['project_uuid'] ?? null,
+            'ip_address' => $params['ip_address'] ?? null,
+            'event_type' => $params['event_type'] ?? null,
+            'outcome' => $params['outcome'] ?? null,
+            'correlation_id' => $params['correlation_id'] ?? null,
+        ];
     }
 }
