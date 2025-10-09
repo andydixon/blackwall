@@ -819,6 +819,7 @@ class AdminController
         return $this->renderWithLayout($response, 'admin/projects/detail.php', [
             'title' => $project->name,
             'project' => $project,
+            'csrfToken' => CSRFProtection::generateToken(),
         ]);
     }
 
@@ -1037,7 +1038,50 @@ class AdminController
 
         return $response->withHeader('Location', '/admin/users/' . $user->uuid)->withStatus(302);
     }
-    public function projectUpdate(Request $request, Response $response, array $args): Response { return $response; }
+    public function projectUpdate(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'manage_projects')) !== null) {
+            return $deny;
+        }
+
+        $projectUuid = (string) ($args['projectUuid'] ?? '');
+        $project = $this->projectRepo->findByUuid($projectUuid);
+        if (!$project) {
+            return $response->withStatus(404);
+        }
+
+        $body = $request->getParsedBody();
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $actorUserId = (int) SessionManager::get('user_id');
+
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}?error=csrf")->withStatus(302);
+        }
+
+        $name = trim((string) ($body['name'] ?? ''));
+        $status = (string) ($body['status'] ?? 'active');
+        if ($name === '' || !in_array($status, ['active', 'disabled'], true)) {
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}?error=invalid")->withStatus(302);
+        }
+
+        $this->projectRepo->update($project->id, $name, $status);
+
+        $audit->logSuccess('admin.project.update', [
+            'actor_user_id' => $actorUserId,
+            'project_id' => $project->id,
+            'project_uuid' => $project->uuid,
+            'target_type' => 'project',
+            'target_id' => $project->uuid,
+            'message' => "Updated project settings (status={$status})",
+        ]);
+
+        return $response->withHeader('Location', "/admin/projects/{$project->uuid}?success=updated")->withStatus(302);
+    }
 
     public function privilegeLevels(Request $request, Response $response, array $args): Response
     {
@@ -1579,9 +1623,92 @@ class AdminController
             'client' => $client,
             'project' => $project,
             'secret' => $secret,
+            'csrfToken' => CSRFProtection::generateToken(),
         ]);
     }
-    public function clientUpdate(Request $request, Response $response, array $args): Response { return $response; }
+
+    public function clientUpdate(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'manage_clients')) !== null) {
+            return $deny;
+        }
+
+        $clientPublicId = (string) ($args['clientPublicId'] ?? '');
+        $db = \BlackWall\Database::getInstance();
+        $stmt = $db->prepare('SELECT * FROM oauth_clients WHERE client_id = ?');
+        $stmt->execute([$clientPublicId]);
+        $client = $stmt->fetch();
+        if (!$client) {
+            return $response->withStatus(404);
+        }
+
+        $project = $this->projectRepo->findById((int) $client['project_id']);
+        if ($project === null) {
+            return $response->withStatus(404);
+        }
+
+        $body = $request->getParsedBody();
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $actorUserId = (int) SessionManager::get('user_id');
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
+            return $response->withHeader('Location', "/admin/clients/{$clientPublicId}?error=csrf")->withStatus(302);
+        }
+
+        $name = trim((string) ($body['name'] ?? ''));
+        $status = (string) ($body['status'] ?? 'active');
+        $redirectUrisRaw = (string) ($body['redirect_uris'] ?? '');
+        $redirectUris = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', $redirectUrisRaw) ?: [])));
+        $scopes = array_values(array_filter(array_map('trim', preg_split('/[\s,]+/', (string) ($body['scopes'] ?? '')) ?: [])));
+        $accessTokenType = (string) ($body['access_token_type'] ?? $client['access_token_type']);
+        $accessTokenLifetime = (int) ($body['access_token_lifetime'] ?? $client['access_token_lifetime']);
+        $refreshTokenLifetime = (int) ($body['refresh_token_lifetime'] ?? $client['refresh_token_lifetime']);
+        $oidcEnabled = isset($body['oidc_enabled']) ? 1 : 0;
+
+        if (
+            $name === ''
+            || !in_array($status, ['active', 'disabled'], true)
+            || empty($redirectUris)
+            || !in_array($accessTokenType, ['jwt', 'opaque'], true)
+            || $accessTokenLifetime < 60
+            || $accessTokenLifetime > 86400
+            || $refreshTokenLifetime < 300
+            || $refreshTokenLifetime > 7776000
+        ) {
+            return $response->withHeader('Location', "/admin/clients/{$clientPublicId}?error=invalid")->withStatus(302);
+        }
+
+        $grants = json_decode((string) ($client['grants'] ?? '[]'), true);
+        $grants = is_array($grants) && !empty($grants) ? $grants : ['authorization_code', 'refresh_token'];
+
+        $this->clientRepo->update((int) $client['id'], [
+            'name' => $name,
+            'redirect_uris' => $redirectUris,
+            'grants' => $grants,
+            'scopes' => $scopes,
+            'access_token_type' => $accessTokenType,
+            'access_token_lifetime' => $accessTokenLifetime,
+            'refresh_token_lifetime' => $refreshTokenLifetime,
+            'oidc_enabled' => $oidcEnabled,
+            'status' => $status,
+        ]);
+
+        $audit->logSuccess('admin.client.update', [
+            'actor_user_id' => $actorUserId,
+            'project_id' => $project->id,
+            'project_uuid' => $project->uuid,
+            'oauth_client_public_id' => $clientPublicId,
+            'target_type' => 'oauth_client',
+            'target_id' => $clientPublicId,
+            'message' => "Updated OAuth client settings (status={$status})",
+        ]);
+
+        return $response->withHeader('Location', "/admin/clients/{$clientPublicId}?success=updated")->withStatus(302);
+    }
 
     public function generateEnrollmentLink(Request $request, Response $response, array $args): Response
     {

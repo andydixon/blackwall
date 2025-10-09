@@ -32,6 +32,15 @@
     </script>
 <?php endif; ?>
 
+<?php if (isset($_GET['success']) && $_GET['success'] === 'updated'): ?>
+    <div class="alert alert-success">OAuth client updated successfully.</div>
+<?php endif; ?>
+<?php if (isset($_GET['error']) && $_GET['error'] === 'csrf'): ?>
+    <div class="alert alert-danger">Security validation failed. Please retry.</div>
+<?php elseif (isset($_GET['error']) && $_GET['error'] === 'invalid'): ?>
+    <div class="alert alert-danger">Invalid OAuth client settings.</div>
+<?php endif; ?>
+
 <div class="row">
     <div class="col-lg-8">
         <div class="card bg-dark border-secondary mb-4">
@@ -78,6 +87,63 @@
                 <pre class="bg-dark text-light border border-secondary p-3 mb-0"><?= htmlspecialchars($client['redirect_uris']) ?></pre>
             </div>
         </div>
+
+        <?php if (in_array($currentAdminRole ?? '', ['super_admin', 'operator'], true)): ?>
+            <div class="card bg-dark border-secondary mt-4">
+                <div class="card-header fw-bold">Edit Client</div>
+                <div class="card-body">
+                    <form method="POST" action="/admin/clients/<?= urlencode($client['client_id']) ?>/update">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                        <div class="mb-3">
+                            <label class="form-label">Name</label>
+                            <input type="text" name="name" class="form-control" value="<?= htmlspecialchars($client['name']) ?>" required maxlength="255">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Status</label>
+                            <select name="status" class="form-select" required>
+                                <option value="active" <?= ($client['status'] ?? '') === 'active' ? 'selected' : '' ?>>Active</option>
+                                <option value="disabled" <?= ($client['status'] ?? '') === 'disabled' ? 'selected' : '' ?>>Disabled</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Redirect URIs (one per line)</label>
+                            <textarea name="redirect_uris" class="form-control font-monospace" rows="4" required><?= htmlspecialchars(implode("\n", json_decode((string) ($client['redirect_uris'] ?? '[]'), true) ?: [])) ?></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Scopes (space or comma separated)</label>
+                            <input type="text" name="scopes" class="form-control" value="<?= htmlspecialchars(implode(' ', json_decode((string) ($client['scopes'] ?? '[]'), true) ?: [])) ?>">
+                        </div>
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">Access Token Type</label>
+                                <select name="access_token_type" class="form-select" required>
+                                    <option value="jwt" <?= ($client['access_token_type'] ?? 'jwt') === 'jwt' ? 'selected' : '' ?>>JWT</option>
+                                    <option value="opaque" <?= ($client['access_token_type'] ?? 'jwt') === 'opaque' ? 'selected' : '' ?>>Opaque</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">OIDC Enabled</label>
+                                <div class="form-check mt-2">
+                                    <input class="form-check-input" type="checkbox" value="1" id="oidcEnabled" name="oidc_enabled" <?= ((int) ($client['oidc_enabled'] ?? 1) === 1) ? 'checked' : '' ?>>
+                                    <label class="form-check-label" for="oidcEnabled">Enable OpenID Connect</label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Access Token Lifetime (seconds)</label>
+                                <input type="number" min="60" max="86400" name="access_token_lifetime" class="form-control" value="<?= (int) ($client['access_token_lifetime'] ?? 3600) ?>" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Refresh Token Lifetime (seconds)</label>
+                                <input type="number" min="300" max="7776000" name="refresh_token_lifetime" class="form-control" value="<?= (int) ($client['refresh_token_lifetime'] ?? 2592000) ?>" required>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <button type="submit" class="btn btn-primary">Save Client</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        <?php endif; ?>
     </div>
     
     <div class="col-lg-4">
