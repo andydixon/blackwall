@@ -5,6 +5,8 @@
 
         <?php if (isset($_GET['success']) && $_GET['success'] === 'updated'): ?>
             <div class="alert alert-success">Project updated successfully.</div>
+        <?php elseif (isset($_GET['success']) && $_GET['success'] === 'status_change_requested'): ?>
+            <div class="alert alert-success">Project status change request submitted for approval.</div>
         <?php endif; ?>
         <?php if (isset($_GET['error']) && $_GET['error'] === 'csrf'): ?>
             <div class="alert alert-danger">Security validation failed. Please retry.</div>

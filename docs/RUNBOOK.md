@@ -42,6 +42,8 @@ Export filtered audit logs (CSV): https://blackwall.cx/admin/audit/export
   - User credential deletion (`delete_user_credential`)
   - User enable/disable (`change_user_status`)
   - Privilege level deletion (`delete_privilege_level`)
+  - Project enable/disable (`change_project_status`)
+  - OAuth client enable/disable (`change_client_status`)
 - Safety guardrails:
   - Cannot revoke or downgrade the last active `super_admin`
   - Cannot disable the last active `super_admin` user

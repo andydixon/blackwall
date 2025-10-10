@@ -83,6 +83,7 @@ class AdminController
                 'view_privileges', 'manage_privileges', 'view_audit', 'view_maintenance',
                 'manage_roles', 'decode_error_trace',
                 'delete_credentials_direct', 'change_user_status_direct', 'delete_privilege_direct',
+                'change_project_status_direct', 'change_client_status_direct',
                 'view_approvals', 'decide_approvals',
             ],
             'operator' => [
@@ -1069,6 +1070,19 @@ class AdminController
             return $response->withHeader('Location', "/admin/projects/{$project->uuid}?error=invalid")->withStatus(302);
         }
 
+        if ($status !== $project->status && !$this->hasCapability('change_project_status_direct')) {
+            $this->approvalService->create(
+                'change_project_status',
+                [
+                    'project_uuid' => $project->uuid,
+                    'requested_status' => $status,
+                ],
+                $actorUserId
+            );
+
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}?success=status_change_requested")->withStatus(302);
+        }
+
         $this->projectRepo->update($project->id, $name, $status);
 
         $audit->logSuccess('admin.project.update', [
@@ -1682,6 +1696,19 @@ class AdminController
             return $response->withHeader('Location', "/admin/clients/{$clientPublicId}?error=invalid")->withStatus(302);
         }
 
+        if ($status !== (string) $client['status'] && !$this->hasCapability('change_client_status_direct')) {
+            $this->approvalService->create(
+                'change_client_status',
+                [
+                    'client_public_id' => $clientPublicId,
+                    'requested_status' => $status,
+                ],
+                $actorUserId
+            );
+
+            return $response->withHeader('Location', "/admin/clients/{$clientPublicId}?success=status_change_requested")->withStatus(302);
+        }
+
         $grants = json_decode((string) ($client['grants'] ?? '[]'), true);
         $grants = is_array($grants) && !empty($grants) ? $grants : ['authorization_code', 'refresh_token'];
 
@@ -1948,6 +1975,70 @@ class AdminController
                     'target_type' => 'project_privilege_level',
                     'target_id' => (string) $level->id,
                     'message' => 'Privilege level deleted via approval workflow',
+                ]);
+
+                return true;
+
+            case 'change_project_status':
+                $projectUuid = (string) ($payload['project_uuid'] ?? '');
+                $requestedStatus = (string) ($payload['requested_status'] ?? '');
+                if ($projectUuid === '' || !in_array($requestedStatus, ['active', 'disabled'], true)) {
+                    return false;
+                }
+
+                $project = $this->projectRepo->findByUuid($projectUuid);
+                if ($project === null) {
+                    return false;
+                }
+
+                $this->projectRepo->update($project->id, $project->name, $requestedStatus);
+
+                /** @var AuditLogger $audit */
+                $audit = new AuditLogger();
+                $audit->logSuccess('admin.project.status_change.approved', [
+                    'actor_user_id' => $actorUserId,
+                    'project_id' => $project->id,
+                    'project_uuid' => $project->uuid,
+                    'target_type' => 'project',
+                    'target_id' => $project->uuid,
+                    'message' => "Project status changed to {$requestedStatus} via approval workflow",
+                ]);
+
+                return true;
+
+            case 'change_client_status':
+                $clientPublicId = (string) ($payload['client_public_id'] ?? '');
+                $requestedStatus = (string) ($payload['requested_status'] ?? '');
+                if ($clientPublicId === '' || !in_array($requestedStatus, ['active', 'disabled'], true)) {
+                    return false;
+                }
+
+                $client = $this->clientRepo->findByClientId($clientPublicId);
+                if ($client === null) {
+                    return false;
+                }
+
+                $this->clientRepo->update($client->id, [
+                    'name' => $client->name,
+                    'redirect_uris' => $client->redirectUris,
+                    'grants' => $client->grants,
+                    'scopes' => $client->scopes,
+                    'access_token_type' => $client->accessTokenType,
+                    'access_token_lifetime' => $client->accessTokenLifetime,
+                    'refresh_token_lifetime' => $client->refreshTokenLifetime,
+                    'oidc_enabled' => $client->oidcEnabled ? 1 : 0,
+                    'status' => $requestedStatus,
+                ]);
+
+                /** @var AuditLogger $audit */
+                $audit = new AuditLogger();
+                $audit->logSuccess('admin.client.status_change.approved', [
+                    'actor_user_id' => $actorUserId,
+                    'project_id' => $client->projectId,
+                    'oauth_client_public_id' => $client->clientId,
+                    'target_type' => 'oauth_client',
+                    'target_id' => $client->clientId,
+                    'message' => "OAuth client status changed to {$requestedStatus} via approval workflow",
                 ]);
 
                 return true;
