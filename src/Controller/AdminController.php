@@ -19,6 +19,9 @@ use BlackWall\Security\SessionManager;
 use BlackWall\Security\CSRFProtection;
 use BlackWall\Security\ErrorTraceCodec;
 use BlackWall\Security\TokenHasher;
+use BlackWall\Security\RateLimiter;
+use BlackWall\Security\AdminMutationPolicy;
+use BlackWall\Security\AuditExportSigner;
 use BlackWall\Config;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
@@ -84,6 +87,8 @@ class AdminController
                 'manage_roles', 'decode_error_trace',
                 'delete_credentials_direct', 'change_user_status_direct', 'delete_privilege_direct',
                 'change_project_status_direct', 'change_client_status_direct',
+                'update_project_settings_direct', 'update_client_settings_direct',
+                'assignment_mutations_direct',
                 'view_approvals', 'decide_approvals',
             ],
             'operator' => [
@@ -298,6 +303,11 @@ class AdminController
         );
         $failBreakdown = $breakdownFailStmt->fetchAll();
 
+        $actorUserId = (int) SessionManager::get('user_id');
+        $myPendingApprovals = $this->hasCapability('view_approvals')
+            ? $this->approvalService->listPendingByRequester($actorUserId, 6)
+            : [];
+
         return $this->renderWithLayout($response, 'admin/dashboard.php', [
             'title' => 'Dashboard',
             'stats' => $stats,
@@ -305,6 +315,8 @@ class AdminController
             'outcomeStats' => $outcomeStats,
             'successBreakdown' => $successBreakdown,
             'failBreakdown' => $failBreakdown,
+            'myPendingApprovals' => $myPendingApprovals,
+            'csrfToken' => CSRFProtection::generateToken(),
         ]);
     }
 
@@ -364,6 +376,9 @@ class AdminController
         $body = $request->getParsedBody();
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'role_upsert', '/admin/roles')) !== null) {
+            return $limited;
+        }
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
@@ -417,6 +432,9 @@ class AdminController
         $body = $request->getParsedBody();
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'role_revoke', '/admin/roles')) !== null) {
+            return $limited;
+        }
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
@@ -465,14 +483,29 @@ class AdminController
         }
 
         $actorUserId = (int) SessionManager::get('user_id');
+        $includeAll = $this->adminAuthz->isSuperAdmin($actorUserId);
+        $params = $request->getQueryParams();
+        $filters = [
+            'status' => $params['status'] ?? '',
+            'action_type' => $params['action_type'] ?? '',
+            'requested_by_uuid' => $params['requested_by_uuid'] ?? '',
+            'date_from' => $params['date_from'] ?? '',
+            'date_to' => $params['date_to'] ?? '',
+        ];
+        $page = max(1, (int) ($params['page'] ?? 1));
+        $perPage = 50;
+        $offset = ($page - 1) * $perPage;
+        $approvals = $this->approvalService->searchVisibleToUser($actorUserId, $includeAll, $filters, $perPage, $offset);
+        $total = $this->approvalService->countVisibleToUser($actorUserId, $includeAll, $filters);
 
         return $this->renderWithLayout($response, 'admin/approvals.php', [
             'title' => 'Approvals',
-            'approvals' => $this->approvalService->listVisibleToUser(
-                $actorUserId,
-                $this->adminAuthz->isSuperAdmin($actorUserId),
-                200
-            ),
+            'approvals' => $approvals,
+            'filters' => $filters,
+            'page' => $page,
+            'perPage' => $perPage,
+            'total' => $total,
+            'pages' => (int) ceil($total / $perPage),
             'csrfToken' => CSRFProtection::generateToken(),
         ]);
     }
@@ -490,6 +523,9 @@ class AdminController
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $actorUserId = (int) SessionManager::get('user_id');
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'approval_approve', '/admin/approvals')) !== null) {
+            return $limited;
+        }
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
@@ -541,6 +577,9 @@ class AdminController
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $actorUserId = (int) SessionManager::get('user_id');
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'approval_reject', '/admin/approvals')) !== null) {
+            return $limited;
+        }
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
@@ -580,6 +619,9 @@ class AdminController
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $actorUserId = (int) SessionManager::get('user_id');
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'approval_cancel', '/admin/approvals')) !== null) {
+            return $limited;
+        }
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
@@ -656,6 +698,9 @@ class AdminController
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $actorUserId = SessionManager::get('user_id');
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'error_trace_decode', '/admin/error-trace')) !== null) {
+            return $limited;
+        }
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
@@ -714,6 +759,9 @@ class AdminController
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $userId = SessionManager::get('user_id');
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'user_create', '/admin/users')) !== null) {
+            return $limited;
+        }
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
@@ -778,8 +826,12 @@ class AdminController
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $userId = SessionManager::get('user_id');
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'project_create', '/admin/projects')) !== null) {
+            return $limited;
+        }
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
             return $response->withHeader('Location', '/admin/projects')->withStatus(302);
         }
 
@@ -867,6 +919,7 @@ class AdminController
         $params = $request->getQueryParams();
         $filters = $this->extractAuditFilters($params);
         $limit = max(1, min(10000, (int) ($params['limit'] ?? 2000)));
+        $detached = ((string) ($params['detached'] ?? '0')) === '1';
 
         $audit = new AuditLogger();
         $rows = $audit->search($filters, $limit, 0);
@@ -908,12 +961,53 @@ class AdminController
         }
 
         $filename = 'audit_export_' . gmdate('Ymd_His') . '.csv';
-        $response->getBody()->write($csv);
+        $sha256 = AuditExportSigner::sha256($csv);
+        $signature = AuditExportSigner::signIfConfigured($csv);
 
-        return $response
+        /** @var AuditLogger|null $requestAudit */
+        $requestAudit = $request->getAttribute('audit_logger');
+        if ($requestAudit instanceof AuditLogger) {
+            $requestAudit->logInfo('admin.audit.export', [
+                'actor_user_id' => (int) SessionManager::get('user_id'),
+                'message' => 'Exported filtered audit logs (rows=' . count($rows) . ', detached=' . ($detached ? 'yes' : 'no') . ')',
+                'target_type' => 'audit_export',
+                'target_id' => $filename,
+            ]);
+        }
+
+        if ($detached) {
+            $manifest = [
+                'filename' => $filename,
+                'generated_at_utc' => gmdate('c'),
+                'row_count' => count($rows),
+                'sha256' => $sha256,
+                'signature' => $signature['signature'] ?? null,
+                'signature_algorithm' => $signature['algorithm'] ?? null,
+                'signature_key_id' => $signature['key_id'] ?? null,
+                'download_url' => '/admin/audit/export?' . http_build_query(array_merge($filters, ['limit' => $limit])),
+                'filters' => $filters,
+            ];
+            $response->getBody()->write((string) json_encode($manifest, JSON_PRETTY_PRINT));
+            return $response
+                ->withHeader('Content-Type', 'application/json')
+                ->withHeader('Cache-Control', 'no-store');
+        }
+
+        $response->getBody()->write($csv);
+        $response = $response
             ->withHeader('Content-Type', 'text/csv; charset=utf-8')
             ->withHeader('Content-Disposition', 'attachment; filename="' . $filename . '"')
-            ->withHeader('Cache-Control', 'no-store');
+            ->withHeader('Cache-Control', 'no-store')
+            ->withHeader('X-BlackWall-Audit-Export-SHA256', $sha256);
+
+        if ($signature !== null) {
+            $response = $response
+                ->withHeader('X-BlackWall-Audit-Export-Signature', $signature['signature'])
+                ->withHeader('X-BlackWall-Audit-Export-Signature-Alg', $signature['algorithm'])
+                ->withHeader('X-BlackWall-Audit-Export-Signature-Key-Id', $signature['key_id']);
+        }
+
+        return $response;
     }
 
     public function userDetail(Request $request, Response $response, array $args): Response
@@ -991,6 +1085,9 @@ class AdminController
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $actorUserId = SessionManager::get('user_id');
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'user_update', '/admin/users/' . $user->uuid)) !== null) {
+            return $limited;
+        }
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
@@ -1058,6 +1155,9 @@ class AdminController
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $actorUserId = (int) SessionManager::get('user_id');
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'project_update', '/admin/projects/' . $project->uuid)) !== null) {
+            return $limited;
+        }
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
@@ -1070,17 +1170,24 @@ class AdminController
             return $response->withHeader('Location', "/admin/projects/{$project->uuid}?error=invalid")->withStatus(302);
         }
 
-        if ($status !== $project->status && !$this->hasCapability('change_project_status_direct')) {
+        if (AdminMutationPolicy::shouldRequireProjectSettingsApproval(
+            $this->hasCapability('update_project_settings_direct'),
+            $project->name,
+            $project->status,
+            $name,
+            $status
+        )) {
             $this->approvalService->create(
-                'change_project_status',
+                'update_project_settings',
                 [
                     'project_uuid' => $project->uuid,
+                    'requested_name' => $name,
                     'requested_status' => $status,
                 ],
                 $actorUserId
             );
 
-            return $response->withHeader('Location', "/admin/projects/{$project->uuid}?success=status_change_requested")->withStatus(302);
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}?success=settings_change_requested")->withStatus(302);
         }
 
         $this->projectRepo->update($project->id, $name, $status);
@@ -1172,6 +1279,9 @@ class AdminController
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $actorUserId = SessionManager::get('user_id');
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'privilege_create', '/admin/projects/' . $project->uuid . '/privileges')) !== null) {
+            return $limited;
+        }
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
@@ -1233,6 +1343,9 @@ class AdminController
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $actorUserId = SessionManager::get('user_id');
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'privilege_update', '/admin/projects/' . $project->uuid . '/privileges')) !== null) {
+            return $limited;
+        }
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
@@ -1290,6 +1403,9 @@ class AdminController
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $actorUserId = SessionManager::get('user_id');
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'privilege_delete', '/admin/projects/' . $project->uuid . '/privileges')) !== null) {
+            return $limited;
+        }
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
@@ -1405,6 +1521,9 @@ class AdminController
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $actorUserId = (int) SessionManager::get('user_id');
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'assignment_create', '/admin/projects/' . $project->uuid . '/assignments')) !== null) {
+            return $limited;
+        }
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
@@ -1420,20 +1539,33 @@ class AdminController
 
         // Check if assignment already exists
         $existing = $this->roleRepo->findByUserAndProject($userId, $projectId);
-        if (!$existing) {
-            $created = $this->roleRepo->create($userId, $projectId, $privilegeLevel);
-            $audit->logSuccess('admin.assignment.create', [
-                'actor_user_id' => $actorUserId,
-                'project_id' => $project->id,
-                'project_uuid' => $project->uuid,
-                'target_type' => 'user_project_role',
-                'target_id' => (string) $created->id,
-                'message' => "Assigned user {$userId} at privilege level {$privilegeLevel}",
-            ]);
-            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments?success=created")->withStatus(302);
+        if ($existing) {
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments?error=exists")->withStatus(302);
         }
 
-        return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments?error=exists")->withStatus(302);
+        if (AdminMutationPolicy::shouldRequireAssignmentApproval($this->hasCapability('assignment_mutations_direct'))) {
+            $this->approvalService->create(
+                'create_assignment',
+                [
+                    'project_uuid' => $project->uuid,
+                    'user_id' => $userId,
+                    'privilege_level' => $privilegeLevel,
+                ],
+                $actorUserId
+            );
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments?success=create_requested")->withStatus(302);
+        }
+
+        $created = $this->roleRepo->create($userId, $projectId, $privilegeLevel);
+        $audit->logSuccess('admin.assignment.create', [
+            'actor_user_id' => $actorUserId,
+            'project_id' => $project->id,
+            'project_uuid' => $project->uuid,
+            'target_type' => 'user_project_role',
+            'target_id' => (string) $created->id,
+            'message' => "Assigned user {$userId} at privilege level {$privilegeLevel}",
+        ]);
+        return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments?success=created")->withStatus(302);
     }
 
     public function assignmentUpdate(Request $request, Response $response, array $args): Response
@@ -1449,19 +1581,46 @@ class AdminController
         $body = $request->getParsedBody();
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
+        $referer = $request->getHeaderLine('Referer') ?: '/admin/projects';
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'assignment_update', $referer)) !== null) {
+            return $limited;
+        }
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
-            $referer = $request->getHeaderLine('Referer') ?: '/admin/projects';
             return $response->withHeader('Location', $referer)->withStatus(302);
         }
 
         $privilegeLevel = (int) ($body['privilege_level'] ?? 0);
-
-        if ($privilegeLevel) {
-            $this->roleRepo->update($assignmentId, $privilegeLevel);
+        if ($privilegeLevel < 1 || $privilegeLevel > 10) {
+            return $response->withHeader('Location', $referer)->withStatus(302);
         }
 
-        $referer = $request->getHeaderLine('Referer') ?: '/admin/projects';
+        $assignment = $this->roleRepo->findById($assignmentId);
+        if ($assignment === null) {
+            return $response->withHeader('Location', $referer)->withStatus(302);
+        }
+
+        if (AdminMutationPolicy::shouldRequireAssignmentApproval($this->hasCapability('assignment_mutations_direct'))) {
+            $this->approvalService->create(
+                'update_assignment',
+                [
+                    'assignment_id' => $assignmentId,
+                    'requested_privilege_level' => $privilegeLevel,
+                ],
+                (int) SessionManager::get('user_id')
+            );
+            return $response->withHeader('Location', $this->appendQueryParam($referer, 'success', 'update_requested'))->withStatus(302);
+        }
+
+        $this->roleRepo->update($assignmentId, $privilegeLevel);
+        $audit->logSuccess('admin.assignment.update', [
+            'actor_user_id' => (int) SessionManager::get('user_id'),
+            'project_id' => $assignment->projectId,
+            'target_type' => 'user_project_role',
+            'target_id' => (string) $assignment->id,
+            'message' => "Updated assignment privilege level to {$privilegeLevel}",
+        ]);
+
         return $response->withHeader('Location', $referer)->withStatus(302);
     }
 
@@ -1478,26 +1637,41 @@ class AdminController
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $actorUserId = (int) SessionManager::get('user_id');
+        $referer = $request->getHeaderLine('Referer') ?: '/admin/projects';
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'assignment_delete', $referer)) !== null) {
+            return $limited;
+        }
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
-            $referer = $request->getHeaderLine('Referer') ?: '/admin/projects';
             return $response->withHeader('Location', $referer)->withStatus(302);
         }
 
         $assignmentId = (int) $args['id'];
         $assignment = $this->roleRepo->findById($assignmentId);
-        $this->roleRepo->delete($assignmentId);
-        if ($assignment !== null) {
-            $audit->logSuccess('admin.assignment.delete', [
-                'actor_user_id' => $actorUserId,
-                'project_id' => $assignment->projectId,
-                'target_type' => 'user_project_role',
-                'target_id' => (string) $assignment->id,
-                'message' => "Removed assignment for user {$assignment->userId}",
-            ]);
+        if ($assignment === null) {
+            return $response->withHeader('Location', $referer)->withStatus(302);
         }
 
-        $referer = $request->getHeaderLine('Referer') ?: '/admin/projects';
+        if (AdminMutationPolicy::shouldRequireAssignmentApproval($this->hasCapability('assignment_mutations_direct'))) {
+            $this->approvalService->create(
+                'delete_assignment',
+                [
+                    'assignment_id' => $assignmentId,
+                ],
+                $actorUserId
+            );
+            return $response->withHeader('Location', $this->appendQueryParam($referer, 'success', 'delete_requested'))->withStatus(302);
+        }
+
+        $this->roleRepo->delete($assignmentId);
+        $audit->logSuccess('admin.assignment.delete', [
+            'actor_user_id' => $actorUserId,
+            'project_id' => $assignment->projectId,
+            'target_type' => 'user_project_role',
+            'target_id' => (string) $assignment->id,
+            'message' => "Removed assignment for user {$assignment->userId}",
+        ]);
+
         return $response->withHeader('Location', $referer)->withStatus(302);
     }
     public function clientsList(Request $request, Response $response, array $args): Response
@@ -1571,8 +1745,14 @@ class AdminController
         }
         $projectId = $project->id;
         $body = $request->getParsedBody();
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'client_create', '/admin/projects/' . $project->uuid . '/clients')) !== null) {
+            return $limited;
+        }
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
             return $response->withHeader('Location', "/admin/projects/{$project->uuid}/clients")->withStatus(302);
         }
 
@@ -1598,8 +1778,6 @@ class AdminController
             'active'
         ]);
 
-        /** @var AuditLogger $audit */
-        $audit = $request->getAttribute('audit_logger');
         $userId = SessionManager::get('user_id');
         $audit->logSuccess('admin.client.create', [
             'actor_user_id' => $userId,
@@ -1668,6 +1846,9 @@ class AdminController
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $actorUserId = (int) SessionManager::get('user_id');
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'client_update', '/admin/clients/' . $clientPublicId)) !== null) {
+            return $limited;
+        }
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
             return $response->withHeader('Location', "/admin/clients/{$clientPublicId}?error=csrf")->withStatus(302);
@@ -1696,17 +1877,42 @@ class AdminController
             return $response->withHeader('Location', "/admin/clients/{$clientPublicId}?error=invalid")->withStatus(302);
         }
 
-        if ($status !== (string) $client['status'] && !$this->hasCapability('change_client_status_direct')) {
+        $currentSettings = [
+            'name' => (string) $client['name'],
+            'status' => (string) $client['status'],
+            'redirect_uris' => json_decode((string) ($client['redirect_uris'] ?? '[]'), true) ?: [],
+            'scopes' => json_decode((string) ($client['scopes'] ?? '[]'), true) ?: [],
+            'access_token_type' => (string) ($client['access_token_type'] ?? 'jwt'),
+            'access_token_lifetime' => (int) ($client['access_token_lifetime'] ?? 3600),
+            'refresh_token_lifetime' => (int) ($client['refresh_token_lifetime'] ?? 2592000),
+            'oidc_enabled' => (int) ($client['oidc_enabled'] ?? 1),
+        ];
+        $requestedSettings = [
+            'name' => $name,
+            'status' => $status,
+            'redirect_uris' => $redirectUris,
+            'scopes' => $scopes,
+            'access_token_type' => $accessTokenType,
+            'access_token_lifetime' => $accessTokenLifetime,
+            'refresh_token_lifetime' => $refreshTokenLifetime,
+            'oidc_enabled' => $oidcEnabled,
+        ];
+
+        if (AdminMutationPolicy::shouldRequireClientSettingsApproval(
+            $this->hasCapability('update_client_settings_direct'),
+            $currentSettings,
+            $requestedSettings
+        )) {
             $this->approvalService->create(
-                'change_client_status',
+                'update_client_settings',
                 [
                     'client_public_id' => $clientPublicId,
-                    'requested_status' => $status,
+                    'settings' => $requestedSettings,
                 ],
                 $actorUserId
             );
 
-            return $response->withHeader('Location', "/admin/clients/{$clientPublicId}?success=status_change_requested")->withStatus(302);
+            return $response->withHeader('Location', "/admin/clients/{$clientPublicId}?success=settings_change_requested")->withStatus(302);
         }
 
         $grants = json_decode((string) ($client['grants'] ?? '[]'), true);
@@ -1752,6 +1958,9 @@ class AdminController
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $actorUserId = SessionManager::get('user_id');
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'user_enrollment_link', '/admin/users/' . $userUuid)) !== null) {
+            return $limited;
+        }
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
@@ -1812,6 +2021,9 @@ class AdminController
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $actorUserId = SessionManager::get('user_id');
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'credential_delete', '/admin/users/' . $userUuid)) !== null) {
+            return $limited;
+        }
 
         if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
             $audit->logFail('security.csrf.fail');
@@ -1979,6 +2191,163 @@ class AdminController
 
                 return true;
 
+            case 'create_assignment':
+                $projectUuid = (string) ($payload['project_uuid'] ?? '');
+                $userId = (int) ($payload['user_id'] ?? 0);
+                $privilegeLevel = (int) ($payload['privilege_level'] ?? 0);
+                if ($projectUuid === '' || $userId < 1 || $privilegeLevel < 1 || $privilegeLevel > 10) {
+                    return false;
+                }
+
+                $project = $this->projectRepo->findByUuid($projectUuid);
+                if ($project === null) {
+                    return false;
+                }
+
+                $existing = $this->roleRepo->findByUserAndProject($userId, $project->id);
+                if ($existing !== null) {
+                    return false;
+                }
+
+                $created = $this->roleRepo->create($userId, $project->id, $privilegeLevel);
+                $audit = new AuditLogger();
+                $audit->logSuccess('admin.assignment.create.approved', [
+                    'actor_user_id' => $actorUserId,
+                    'project_id' => $project->id,
+                    'project_uuid' => $project->uuid,
+                    'target_type' => 'user_project_role',
+                    'target_id' => (string) $created->id,
+                    'message' => "Assignment created via approval workflow (user_id={$userId}, level={$privilegeLevel})",
+                ]);
+                return true;
+
+            case 'update_assignment':
+                $assignmentId = (int) ($payload['assignment_id'] ?? 0);
+                $requestedLevel = (int) ($payload['requested_privilege_level'] ?? 0);
+                if ($assignmentId < 1 || $requestedLevel < 1 || $requestedLevel > 10) {
+                    return false;
+                }
+
+                $assignment = $this->roleRepo->findById($assignmentId);
+                if ($assignment === null) {
+                    return false;
+                }
+
+                $this->roleRepo->update($assignmentId, $requestedLevel);
+                $audit = new AuditLogger();
+                $audit->logSuccess('admin.assignment.update.approved', [
+                    'actor_user_id' => $actorUserId,
+                    'project_id' => $assignment->projectId,
+                    'target_type' => 'user_project_role',
+                    'target_id' => (string) $assignment->id,
+                    'message' => "Assignment updated via approval workflow (level={$requestedLevel})",
+                ]);
+                return true;
+
+            case 'delete_assignment':
+                $assignmentId = (int) ($payload['assignment_id'] ?? 0);
+                if ($assignmentId < 1) {
+                    return false;
+                }
+
+                $assignment = $this->roleRepo->findById($assignmentId);
+                if ($assignment === null) {
+                    return false;
+                }
+
+                $this->roleRepo->delete($assignmentId);
+                $audit = new AuditLogger();
+                $audit->logSuccess('admin.assignment.delete.approved', [
+                    'actor_user_id' => $actorUserId,
+                    'project_id' => $assignment->projectId,
+                    'target_type' => 'user_project_role',
+                    'target_id' => (string) $assignment->id,
+                    'message' => "Assignment deleted via approval workflow (user_id={$assignment->userId})",
+                ]);
+                return true;
+
+            case 'update_project_settings':
+                $projectUuid = (string) ($payload['project_uuid'] ?? '');
+                $requestedName = trim((string) ($payload['requested_name'] ?? ''));
+                $requestedStatus = (string) ($payload['requested_status'] ?? '');
+                if ($projectUuid === '' || $requestedName === '' || !in_array($requestedStatus, ['active', 'disabled'], true)) {
+                    return false;
+                }
+
+                $project = $this->projectRepo->findByUuid($projectUuid);
+                if ($project === null) {
+                    return false;
+                }
+
+                $this->projectRepo->update($project->id, $requestedName, $requestedStatus);
+                $audit = new AuditLogger();
+                $audit->logSuccess('admin.project.update.approved', [
+                    'actor_user_id' => $actorUserId,
+                    'project_id' => $project->id,
+                    'project_uuid' => $project->uuid,
+                    'target_type' => 'project',
+                    'target_id' => $project->uuid,
+                    'message' => "Project settings updated via approval workflow (status={$requestedStatus})",
+                ]);
+                return true;
+
+            case 'update_client_settings':
+                $clientPublicId = (string) ($payload['client_public_id'] ?? '');
+                $settings = $payload['settings'] ?? null;
+                if ($clientPublicId === '' || !is_array($settings)) {
+                    return false;
+                }
+
+                $name = trim((string) ($settings['name'] ?? ''));
+                $status = (string) ($settings['status'] ?? '');
+                $redirectUris = is_array($settings['redirect_uris'] ?? null) ? $settings['redirect_uris'] : [];
+                $scopes = is_array($settings['scopes'] ?? null) ? $settings['scopes'] : [];
+                $accessTokenType = (string) ($settings['access_token_type'] ?? '');
+                $accessTokenLifetime = (int) ($settings['access_token_lifetime'] ?? 0);
+                $refreshTokenLifetime = (int) ($settings['refresh_token_lifetime'] ?? 0);
+                $oidcEnabled = (int) (($settings['oidc_enabled'] ?? 0) ? 1 : 0);
+
+                if (
+                    $name === ''
+                    || !in_array($status, ['active', 'disabled'], true)
+                    || empty($redirectUris)
+                    || !in_array($accessTokenType, ['jwt', 'opaque'], true)
+                    || $accessTokenLifetime < 60
+                    || $accessTokenLifetime > 86400
+                    || $refreshTokenLifetime < 300
+                    || $refreshTokenLifetime > 7776000
+                ) {
+                    return false;
+                }
+
+                $client = $this->clientRepo->findByClientId($clientPublicId);
+                if ($client === null) {
+                    return false;
+                }
+
+                $this->clientRepo->update($client->id, [
+                    'name' => $name,
+                    'redirect_uris' => $redirectUris,
+                    'grants' => $client->grants,
+                    'scopes' => $scopes,
+                    'access_token_type' => $accessTokenType,
+                    'access_token_lifetime' => $accessTokenLifetime,
+                    'refresh_token_lifetime' => $refreshTokenLifetime,
+                    'oidc_enabled' => $oidcEnabled,
+                    'status' => $status,
+                ]);
+
+                $audit = new AuditLogger();
+                $audit->logSuccess('admin.client.update.approved', [
+                    'actor_user_id' => $actorUserId,
+                    'project_id' => $client->projectId,
+                    'oauth_client_public_id' => $client->clientId,
+                    'target_type' => 'oauth_client',
+                    'target_id' => $client->clientId,
+                    'message' => "OAuth client settings updated via approval workflow (status={$status})",
+                ]);
+                return true;
+
             case 'change_project_status':
                 $projectUuid = (string) ($payload['project_uuid'] ?? '');
                 $requestedStatus = (string) ($payload['requested_status'] ?? '');
@@ -2045,6 +2414,42 @@ class AdminController
         }
 
         return false;
+    }
+
+    private function enforceAdminMutationRateLimit(
+        Request $request,
+        Response $response,
+        AuditLogger $audit,
+        string $action,
+        string $redirectUrl
+    ): ?Response {
+        $maxAttempts = max(1, Config::getInt('ADMIN_MUTATION_RATE_LIMIT_ATTEMPTS', 60));
+        $windowSeconds = max(1, Config::getInt('ADMIN_MUTATION_RATE_LIMIT_WINDOW_SECONDS', 60));
+
+        $userId = (int) SessionManager::get('user_id');
+        $ipAddress = (string) ($request->getAttribute('ip_address') ?? '0.0.0.0');
+        $identifier = "admin_user:{$userId}|ip:{$ipAddress}";
+
+        $limiter = new RateLimiter();
+        if ($limiter->check($identifier, 'admin.mutation.' . $action, $maxAttempts, $windowSeconds)) {
+            return null;
+        }
+
+        $audit->logFail('security.rate_limit.admin_mutation', [
+            'actor_user_id' => $userId,
+            'ip_address' => $ipAddress,
+            'message' => "Admin mutation rate limit exceeded for {$action}",
+        ]);
+
+        return $response
+            ->withHeader('Location', $this->appendQueryParam($redirectUrl, 'error', 'rate_limited'))
+            ->withStatus(302);
+    }
+
+    private function appendQueryParam(string $url, string $key, string $value): string
+    {
+        $separator = str_contains($url, '?') ? '&' : '?';
+        return $url . $separator . rawurlencode($key) . '=' . rawurlencode($value);
     }
 
     private function checkAuth(): bool

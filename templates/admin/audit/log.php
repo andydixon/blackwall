@@ -2,6 +2,10 @@
     <div class="col-12">
         <h2>Audit Log</h2>
 
+        <?php if (isset($_GET['error']) && $_GET['error'] === 'rate_limited'): ?>
+            <div class="alert alert-danger">Too many admin changes in a short period. Please wait and retry.</div>
+        <?php endif; ?>
+
         <div class="card bg-dark mb-3">
             <div class="card-body">
                 <form method="GET" action="/admin/audit" class="row g-3">
@@ -47,6 +51,13 @@
                         <a class="btn btn-outline-light w-100"
                            href="/admin/audit/export?<?= htmlspecialchars(http_build_query(array_filter($filters, fn($v) => $v !== null && $v !== ''))) ?>">
                             Export CSV
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">&nbsp;</label>
+                        <a class="btn btn-outline-info w-100"
+                           href="/admin/audit/export?<?= htmlspecialchars(http_build_query(array_merge(array_filter($filters, fn($v) => $v !== null && $v !== ''), ['detached' => 1]))) ?>">
+                            Export Signature Manifest
                         </a>
                     </div>
                 </form>

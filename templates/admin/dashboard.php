@@ -238,6 +238,49 @@
         </div>
 
         <div class="row g-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">🧾 My Pending Requests</h5>
+                        <a href="/admin/approvals?status=pending" class="btn btn-sm btn-outline-light">Open Queue</a>
+                    </div>
+                    <div class="card-body">
+                        <?php if (!empty($myPendingApprovals)): ?>
+                            <div class="table-responsive">
+                                <table class="table table-dark table-hover mb-0 align-middle">
+                                    <thead>
+                                        <tr>
+                                            <th>ID</th>
+                                            <th>Action</th>
+                                            <th>Created</th>
+                                            <th>Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <?php foreach ($myPendingApprovals as $request): ?>
+                                            <tr>
+                                                <td><code><?= (int) $request['id'] ?></code></td>
+                                                <td><code><?= htmlspecialchars((string) $request['action_type']) ?></code></td>
+                                                <td class="text-muted"><?= htmlspecialchars((string) $request['created_at']) ?></td>
+                                                <td>
+                                                    <form method="POST" action="/admin/approvals/<?= (int) $request['id'] ?>/cancel" class="d-inline">
+                                                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                                                        <input type="hidden" name="note" value="Cancelled from dashboard widget">
+                                                        <button type="submit" class="btn btn-sm btn-outline-secondary">Cancel</button>
+                                                    </form>
+                                                </td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php else: ?>
+                            <p class="text-muted mb-0">You have no pending approval requests.</p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
             <div class="col-lg-8">
                 <div class="card">
                     <div class="card-header">

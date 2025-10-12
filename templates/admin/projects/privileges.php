@@ -33,6 +33,8 @@
             <div class="alert alert-danger">A privilege level with this level number or name already exists.</div>
         <?php elseif ($error === 'in_use'): ?>
             <div class="alert alert-danger">This level is currently assigned to users and cannot be deleted.</div>
+        <?php elseif ($error === 'rate_limited'): ?>
+            <div class="alert alert-danger">Too many admin changes in a short period. Please wait and retry.</div>
         <?php endif; ?>
 
         <div class="card">

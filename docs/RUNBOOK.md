@@ -30,6 +30,7 @@ Session hardening defaults:
 Access admin panel: https://blackwall.cx/admin/audit
 
 Export filtered audit logs (CSV): https://blackwall.cx/admin/audit/export
+- Detached signature manifest: append `?detached=1`
 
 ### Admin RBAC + Approvals
 
@@ -44,9 +45,16 @@ Export filtered audit logs (CSV): https://blackwall.cx/admin/audit/export
   - Privilege level deletion (`delete_privilege_level`)
   - Project enable/disable (`change_project_status`)
   - OAuth client enable/disable (`change_client_status`)
+  - Project settings updates (`update_project_settings`)
+  - OAuth client settings updates (`update_client_settings`)
+  - Assignment create/update/delete (`create_assignment`, `update_assignment`, `delete_assignment`)
 - Safety guardrails:
   - Cannot revoke or downgrade the last active `super_admin`
   - Cannot disable the last active `super_admin` user
+
+Admin mutation throttling defaults:
+- `ADMIN_MUTATION_RATE_LIMIT_ATTEMPTS=60`
+- `ADMIN_MUTATION_RATE_LIMIT_WINDOW_SECONDS=60`
 
 **Look for:**
 - Multiple failed authentication attempts from same IP

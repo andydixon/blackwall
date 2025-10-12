@@ -34,6 +34,8 @@
 
 <?php if (isset($_GET['success']) && $_GET['success'] === 'updated'): ?>
     <div class="alert alert-success">OAuth client updated successfully.</div>
+<?php elseif (isset($_GET['success']) && $_GET['success'] === 'settings_change_requested'): ?>
+    <div class="alert alert-success">OAuth client settings change request submitted for approval.</div>
 <?php elseif (isset($_GET['success']) && $_GET['success'] === 'status_change_requested'): ?>
     <div class="alert alert-success">OAuth client status change request submitted for approval.</div>
 <?php endif; ?>
@@ -41,6 +43,8 @@
     <div class="alert alert-danger">Security validation failed. Please retry.</div>
 <?php elseif (isset($_GET['error']) && $_GET['error'] === 'invalid'): ?>
     <div class="alert alert-danger">Invalid OAuth client settings.</div>
+<?php elseif (isset($_GET['error']) && $_GET['error'] === 'rate_limited'): ?>
+    <div class="alert alert-danger">Too many admin changes in a short period. Please wait and retry.</div>
 <?php endif; ?>
 
 <div class="row">

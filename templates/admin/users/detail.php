@@ -22,6 +22,12 @@
     </div>
 <?php endif; ?>
 
+<?php if (isset($_GET['error']) && $_GET['error'] === 'rate_limited'): ?>
+    <div class="alert alert-danger mb-4">
+        Too many admin changes in a short period. Please wait and retry.
+    </div>
+<?php endif; ?>
+
 <?php if (isset($_GET['success']) && $_GET['success'] === 'delete_requested'): ?>
     <div class="alert alert-success mb-4">
         Credential deletion request submitted for approval.

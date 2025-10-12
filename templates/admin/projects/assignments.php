@@ -17,6 +17,12 @@
 
         <?php if (isset($_GET['success']) && $_GET['success'] === 'created'): ?>
             <div class="alert alert-success">Assignment created successfully.</div>
+        <?php elseif (isset($_GET['success']) && $_GET['success'] === 'create_requested'): ?>
+            <div class="alert alert-success">Assignment creation request submitted for approval.</div>
+        <?php elseif (isset($_GET['success']) && $_GET['success'] === 'update_requested'): ?>
+            <div class="alert alert-success">Assignment update request submitted for approval.</div>
+        <?php elseif (isset($_GET['success']) && $_GET['success'] === 'delete_requested'): ?>
+            <div class="alert alert-success">Assignment removal request submitted for approval.</div>
         <?php endif; ?>
         <?php if (isset($_GET['error']) && $_GET['error'] === 'csrf'): ?>
             <div class="alert alert-danger">Security validation failed. Please retry.</div>
@@ -24,6 +30,8 @@
             <div class="alert alert-danger">Invalid assignment input.</div>
         <?php elseif (isset($_GET['error']) && $_GET['error'] === 'exists'): ?>
             <div class="alert alert-danger">That user already has an assignment on this project.</div>
+        <?php elseif (isset($_GET['error']) && $_GET['error'] === 'rate_limited'): ?>
+            <div class="alert alert-danger">Too many admin changes in a short period. Please wait and retry.</div>
         <?php endif; ?>
 
         <div class="card">

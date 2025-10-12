@@ -17,6 +17,10 @@
             <div class="alert alert-danger">
                 Operation blocked. You cannot revoke your own admin role from the current session.
             </div>
+        <?php elseif (isset($_GET['error']) && $_GET['error'] === 'rate_limited'): ?>
+            <div class="alert alert-danger">
+                Too many admin changes in a short period. Please wait and retry.
+            </div>
         <?php endif; ?>
 
         <div class="card mb-4">

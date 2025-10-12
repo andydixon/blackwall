@@ -25,7 +25,48 @@
             <div class="alert alert-danger">You cannot approve your own request.</div>
         <?php elseif (isset($_GET['error']) && $_GET['error'] === 'execution_failed'): ?>
             <div class="alert alert-danger">Approval execution failed and the request was rejected.</div>
+        <?php elseif (isset($_GET['error']) && $_GET['error'] === 'rate_limited'): ?>
+            <div class="alert alert-danger">Too many admin changes in a short period. Please wait and retry.</div>
         <?php endif; ?>
+
+        <div class="card mb-3">
+            <div class="card-body">
+                <form method="GET" action="/admin/approvals" class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label">Status</label>
+                        <select name="status" class="form-select">
+                            <option value="">All</option>
+                            <option value="pending" <?= ($filters['status'] ?? '') === 'pending' ? 'selected' : '' ?>>Pending</option>
+                            <option value="approved" <?= ($filters['status'] ?? '') === 'approved' ? 'selected' : '' ?>>Approved</option>
+                            <option value="rejected" <?= ($filters['status'] ?? '') === 'rejected' ? 'selected' : '' ?>>Rejected</option>
+                            <option value="cancelled" <?= ($filters['status'] ?? '') === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Action Type</label>
+                        <input type="text" name="action_type" class="form-control" value="<?= htmlspecialchars((string) ($filters['action_type'] ?? '')) ?>" placeholder="change_user_status">
+                    </div>
+                    <?php if (($currentAdminRole ?? '') === 'super_admin'): ?>
+                        <div class="col-md-3">
+                            <label class="form-label">Requester UUID</label>
+                            <input type="text" name="requested_by_uuid" class="form-control" value="<?= htmlspecialchars((string) ($filters['requested_by_uuid'] ?? '')) ?>" placeholder="User UUID">
+                        </div>
+                    <?php endif; ?>
+                    <div class="col-md-3">
+                        <label class="form-label">Date From</label>
+                        <input type="date" name="date_from" class="form-control" value="<?= htmlspecialchars((string) ($filters['date_from'] ?? '')) ?>">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Date To</label>
+                        <input type="date" name="date_to" class="form-control" value="<?= htmlspecialchars((string) ($filters['date_to'] ?? '')) ?>">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">&nbsp;</label>
+                        <button type="submit" class="btn btn-primary w-100">Filter</button>
+                    </div>
+                </form>
+            </div>
+        </div>
 
         <div class="card">
             <div class="card-body">
@@ -110,6 +151,20 @@
                             </tbody>
                         </table>
                     </div>
+                <?php endif; ?>
+
+                <?php if (($pages ?? 1) > 1): ?>
+                    <nav class="mt-3">
+                        <ul class="pagination pagination-sm">
+                            <?php for ($i = 1; $i <= (int) ($pages ?? 1); $i++): ?>
+                                <li class="page-item <?= $i === (int) ($page ?? 1) ? 'active' : '' ?>">
+                                    <a class="page-link" href="?<?= htmlspecialchars(http_build_query(array_merge($filters ?? [], ['page' => $i]))) ?>">
+                                        <?= $i ?>
+                                    </a>
+                                </li>
+                            <?php endfor; ?>
+                        </ul>
+                    </nav>
                 <?php endif; ?>
             </div>
         </div>
