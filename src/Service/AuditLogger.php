@@ -208,6 +208,17 @@ class AuditLogger
             $params[] = $filters['project_uuid'];
         }
 
+        if (!empty($filters['project_ids']) && is_array($filters['project_ids'])) {
+            $projectIds = array_values(array_filter(array_map('intval', $filters['project_ids']), static fn(int $v): bool => $v > 0));
+            if (!empty($projectIds)) {
+                $placeholders = implode(',', array_fill(0, count($projectIds), '?'));
+                $conditions[] = "project_id IN ({$placeholders})";
+                foreach ($projectIds as $projectId) {
+                    $params[] = $projectId;
+                }
+            }
+        }
+
         if (!empty($filters['actor_user_uuid'])) {
             $conditions[] = 'actor_user_uuid = ?';
             $params[] = $filters['actor_user_uuid'];
@@ -275,6 +286,17 @@ class AuditLogger
         if (!empty($filters['project_uuid'])) {
             $conditions[] = 'project_uuid = ?';
             $params[] = $filters['project_uuid'];
+        }
+
+        if (!empty($filters['project_ids']) && is_array($filters['project_ids'])) {
+            $projectIds = array_values(array_filter(array_map('intval', $filters['project_ids']), static fn(int $v): bool => $v > 0));
+            if (!empty($projectIds)) {
+                $placeholders = implode(',', array_fill(0, count($projectIds), '?'));
+                $conditions[] = "project_id IN ({$placeholders})";
+                foreach ($projectIds as $projectId) {
+                    $params[] = $projectId;
+                }
+            }
         }
 
         if (!empty($filters['actor_user_uuid'])) {

@@ -34,6 +34,11 @@ Export filtered audit logs (CSV): https://blackwall.cx/admin/audit/export
 
 ### Admin RBAC + Approvals
 
+- Admin access model:
+  - Any user with `privilege_level = 1` on at least one project can access `/admin`.
+  - Super-admin scope is inferred from level-1 membership on project named `BlackWall Admin` (or `ADMIN_SUPER_PROJECT_UUID` override).
+  - Project admins only see data for projects they administer.
+
 - Roles: `super_admin`, `operator`, `auditor` (managed at `/admin/roles`)
 - Approval queue: `/admin/approvals`
 - Approval visibility:

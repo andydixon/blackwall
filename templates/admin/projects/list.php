@@ -2,7 +2,9 @@
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2>Projects</h2>
-            <a href="/admin/projects/create" class="btn btn-primary">+ Create Project</a>
+            <?php if (!empty($canCreateProject)): ?>
+                <a href="/admin/projects/create" class="btn btn-primary">+ Create Project</a>
+            <?php endif; ?>
         </div>
 
         <div class="card bg-dark">

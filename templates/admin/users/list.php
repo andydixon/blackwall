@@ -2,7 +2,9 @@
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h2>Users</h2>
-            <a href="/admin/users/create" class="btn btn-primary">+ Create User</a>
+            <?php if (!empty($canCreateUser)): ?>
+                <a href="/admin/users/create" class="btn btn-primary">+ Create User</a>
+            <?php endif; ?>
         </div>
 
         <div class="card bg-dark">

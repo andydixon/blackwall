@@ -41,6 +41,7 @@ class AdminController
     private MaintenanceService $maintenance;
     private TokenHasher $hasher;
     private PhpRenderer $renderer;
+    private ?array $cachedScope = null;
 
     public function __construct()
     {
@@ -61,7 +62,18 @@ class AdminController
     {
         SessionManager::start();
         $currentUserId = SessionManager::get('user_id');
-        $data['currentAdminRole'] = $currentUserId ? $this->adminAuthz->getRole((int) $currentUserId) : null;
+        if ($currentUserId) {
+            $scope = $this->getAdminScope((int) $currentUserId);
+            if ($scope['is_super_admin']) {
+                $data['currentAdminRole'] = 'super_admin';
+            } elseif ($scope['is_admin']) {
+                $data['currentAdminRole'] = 'operator';
+            } else {
+                $data['currentAdminRole'] = null;
+            }
+        } else {
+            $data['currentAdminRole'] = null;
+        }
 
         // Render the content template
         $contentRenderer = new PhpRenderer(__DIR__ . '/../../templates');
@@ -77,7 +89,8 @@ class AdminController
     {
         SessionManager::start();
         $userId = (int) SessionManager::get('user_id');
-        $role = $this->adminAuthz->getRole($userId) ?? 'auditor';
+        $scope = $this->getAdminScope($userId);
+        $role = $scope['is_super_admin'] ? 'super_admin' : ($scope['is_admin'] ? 'operator' : 'auditor');
 
         $matrix = [
             'super_admin' => [
@@ -94,7 +107,7 @@ class AdminController
             'operator' => [
                 'view_dashboard', 'view_users', 'manage_users', 'view_projects', 'manage_projects',
                 'view_clients', 'manage_clients', 'view_assignments', 'manage_assignments',
-                'view_privileges', 'manage_privileges', 'view_audit', 'view_maintenance',
+                'view_privileges', 'manage_privileges', 'view_audit',
                 'view_approvals',
             ],
             'auditor' => [
@@ -229,31 +242,144 @@ class AdminController
         }
 
         $db = \BlackWall\Database::getInstance();
-        
-        // Get stats
-        $stats = [
-            'users' => $db->query("SELECT COUNT(*) FROM users")->fetchColumn(),
-            'projects' => $db->query("SELECT COUNT(*) FROM projects")->fetchColumn(),
-            'clients' => $db->query("SELECT COUNT(*) FROM oauth_clients")->fetchColumn(),
-            'audit_count' => $db->query("SELECT COUNT(*) FROM audit_log")->fetchColumn(),
-        ];
-        
-        // Get recent activity
-        $stmt = $db->query("SELECT * FROM audit_log ORDER BY created_at DESC LIMIT 10");
-        $recent_logs = $stmt->fetchAll();
+        $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
+        $projectIds = $scope['project_ids'];
 
-        // Outcome analytics (success/fail) for today/week/month
-        $stmt = $db->query(
-            "SELECT
-                outcome,
-                SUM(created_at >= CURDATE()) AS today_count,
-                SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS week_count,
-                SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS month_count
-             FROM audit_log
-             WHERE outcome IN ('success', 'fail')
-             GROUP BY outcome"
-        );
-        $outcomeRows = $stmt->fetchAll();
+        if (!$scope['is_super_admin'] && empty($projectIds)) {
+            $stats = ['users' => 0, 'projects' => 0, 'clients' => 0, 'audit_count' => 0];
+            $recent_logs = [];
+            $outcomeRows = [];
+            $successBreakdown = [];
+            $failBreakdown = [];
+        } elseif ($scope['is_super_admin']) {
+            // Get stats
+            $stats = [
+                'users' => $db->query("SELECT COUNT(*) FROM users")->fetchColumn(),
+                'projects' => $db->query("SELECT COUNT(*) FROM projects")->fetchColumn(),
+                'clients' => $db->query("SELECT COUNT(*) FROM oauth_clients")->fetchColumn(),
+                'audit_count' => $db->query("SELECT COUNT(*) FROM audit_log")->fetchColumn(),
+            ];
+            
+            // Get recent activity
+            $stmt = $db->query("SELECT * FROM audit_log ORDER BY created_at DESC LIMIT 10");
+            $recent_logs = $stmt->fetchAll();
+
+            $stmt = $db->query(
+                "SELECT
+                    outcome,
+                    SUM(created_at >= CURDATE()) AS today_count,
+                    SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS week_count,
+                    SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS month_count
+                 FROM audit_log
+                 WHERE outcome IN ('success', 'fail')
+                 GROUP BY outcome"
+            );
+            $outcomeRows = $stmt->fetchAll();
+
+            $breakdownSuccessStmt = $db->query(
+                "SELECT
+                    event_type,
+                    SUM(created_at >= CURDATE()) AS today_count,
+                    SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS week_count,
+                    SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS month_count
+                 FROM audit_log
+                 WHERE outcome = 'success'
+                   AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                 GROUP BY event_type
+                 ORDER BY month_count DESC, week_count DESC, today_count DESC, event_type ASC
+                 LIMIT 12"
+            );
+            $successBreakdown = $breakdownSuccessStmt->fetchAll();
+
+            $breakdownFailStmt = $db->query(
+                "SELECT
+                    event_type,
+                    SUM(created_at >= CURDATE()) AS today_count,
+                    SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS week_count,
+                    SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS month_count
+                 FROM audit_log
+                 WHERE outcome = 'fail'
+                   AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                 GROUP BY event_type
+                 ORDER BY month_count DESC, week_count DESC, today_count DESC, event_type ASC
+                 LIMIT 12"
+            );
+            $failBreakdown = $breakdownFailStmt->fetchAll();
+        } else {
+            $projectPlaceholders = implode(',', array_fill(0, count($projectIds), '?'));
+            $statsStmt = $db->prepare(
+                "SELECT
+                    (SELECT COUNT(DISTINCT upr.user_id) FROM user_project_roles upr WHERE upr.project_id IN ({$projectPlaceholders})) AS users_count,
+                    (SELECT COUNT(*) FROM projects p WHERE p.id IN ({$projectPlaceholders})) AS projects_count,
+                    (SELECT COUNT(*) FROM oauth_clients c WHERE c.project_id IN ({$projectPlaceholders})) AS clients_count,
+                    (SELECT COUNT(*) FROM audit_log a WHERE a.project_id IN ({$projectPlaceholders})) AS audit_count"
+            );
+            $statsStmt->execute(array_merge($projectIds, $projectIds, $projectIds, $projectIds));
+            $statRow = $statsStmt->fetch() ?: [];
+            $stats = [
+                'users' => (int) ($statRow['users_count'] ?? 0),
+                'projects' => (int) ($statRow['projects_count'] ?? 0),
+                'clients' => (int) ($statRow['clients_count'] ?? 0),
+                'audit_count' => (int) ($statRow['audit_count'] ?? 0),
+            ];
+
+            $recentStmt = $db->prepare(
+                "SELECT * FROM audit_log
+                 WHERE project_id IN ({$projectPlaceholders})
+                 ORDER BY created_at DESC
+                 LIMIT 10"
+            );
+            $recentStmt->execute($projectIds);
+            $recent_logs = $recentStmt->fetchAll();
+
+            $outcomeStmt = $db->prepare(
+                "SELECT
+                    outcome,
+                    SUM(created_at >= CURDATE()) AS today_count,
+                    SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS week_count,
+                    SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS month_count
+                 FROM audit_log
+                 WHERE outcome IN ('success', 'fail')
+                   AND project_id IN ({$projectPlaceholders})
+                 GROUP BY outcome"
+            );
+            $outcomeStmt->execute($projectIds);
+            $outcomeRows = $outcomeStmt->fetchAll();
+
+            $successStmt = $db->prepare(
+                "SELECT
+                    event_type,
+                    SUM(created_at >= CURDATE()) AS today_count,
+                    SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS week_count,
+                    SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS month_count
+                 FROM audit_log
+                 WHERE outcome = 'success'
+                   AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                   AND project_id IN ({$projectPlaceholders})
+                 GROUP BY event_type
+                 ORDER BY month_count DESC, week_count DESC, today_count DESC, event_type ASC
+                 LIMIT 12"
+            );
+            $successStmt->execute($projectIds);
+            $successBreakdown = $successStmt->fetchAll();
+
+            $failStmt = $db->prepare(
+                "SELECT
+                    event_type,
+                    SUM(created_at >= CURDATE()) AS today_count,
+                    SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS week_count,
+                    SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS month_count
+                 FROM audit_log
+                 WHERE outcome = 'fail'
+                   AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                   AND project_id IN ({$projectPlaceholders})
+                 GROUP BY event_type
+                 ORDER BY month_count DESC, week_count DESC, today_count DESC, event_type ASC
+                 LIMIT 12"
+            );
+            $failStmt->execute($projectIds);
+            $failBreakdown = $failStmt->fetchAll();
+        }
 
         $outcomeStats = [
             'success' => ['today' => 0, 'week' => 0, 'month' => 0],
@@ -273,35 +399,6 @@ class AdminController
             ];
         }
 
-        $breakdownSuccessStmt = $db->query(
-            "SELECT
-                event_type,
-                SUM(created_at >= CURDATE()) AS today_count,
-                SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS week_count,
-                SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS month_count
-             FROM audit_log
-             WHERE outcome = 'success'
-               AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-             GROUP BY event_type
-             ORDER BY month_count DESC, week_count DESC, today_count DESC, event_type ASC
-             LIMIT 12"
-        );
-        $successBreakdown = $breakdownSuccessStmt->fetchAll();
-
-        $breakdownFailStmt = $db->query(
-            "SELECT
-                event_type,
-                SUM(created_at >= CURDATE()) AS today_count,
-                SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS week_count,
-                SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS month_count
-             FROM audit_log
-             WHERE outcome = 'fail'
-               AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
-             GROUP BY event_type
-             ORDER BY month_count DESC, week_count DESC, today_count DESC, event_type ASC
-             LIMIT 12"
-        );
-        $failBreakdown = $breakdownFailStmt->fetchAll();
 
         $actorUserId = (int) SessionManager::get('user_id');
         $myPendingApprovals = $this->hasCapability('view_approvals')
@@ -329,11 +426,40 @@ class AdminController
             return $deny;
         }
 
-        $users = $this->userRepo->findAll();
+        $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
+        if ($scope['is_super_admin']) {
+            $users = $this->userRepo->findAll();
+        } elseif (!empty($scope['project_ids'])) {
+            $db = \BlackWall\Database::getInstance();
+            $placeholders = implode(',', array_fill(0, count($scope['project_ids']), '?'));
+            $stmt = $db->prepare(
+                "SELECT DISTINCT u.*
+                 FROM users u
+                 JOIN user_project_roles upr ON upr.user_id = u.id
+                 WHERE upr.project_id IN ({$placeholders})
+                 ORDER BY u.created_at DESC"
+            );
+            $stmt->execute($scope['project_ids']);
+            $rows = $stmt->fetchAll();
+            $users = array_map(
+                static fn(array $row): \BlackWall\Model\User => new \BlackWall\Model\User(
+                    id: (int) $row['id'],
+                    uuid: (string) $row['uuid'],
+                    displayLabel: $row['display_label'],
+                    status: (string) $row['status'],
+                    createdAt: new \DateTimeImmutable((string) $row['created_at']),
+                    updatedAt: new \DateTimeImmutable((string) $row['updated_at'])
+                ),
+                $rows
+            );
+        } else {
+            $users = [];
+        }
 
         return $this->renderWithLayout($response, 'admin/users/list.php', [
             'title' => 'Users',
             'users' => $users,
+            'canCreateUser' => $scope['is_super_admin'],
         ]);
     }
 
@@ -347,7 +473,7 @@ class AdminController
         }
 
         $actorUserId = (int) SessionManager::get('user_id');
-        if (!$this->adminAuthz->isSuperAdmin($actorUserId)) {
+        if (!$this->getAdminScope($actorUserId)['is_super_admin']) {
             return $response->withStatus(403);
         }
 
@@ -369,7 +495,7 @@ class AdminController
         }
 
         $actorUserId = (int) SessionManager::get('user_id');
-        if (!$this->adminAuthz->isSuperAdmin($actorUserId)) {
+        if (!$this->getAdminScope($actorUserId)['is_super_admin']) {
             return $response->withStatus(403);
         }
 
@@ -425,7 +551,7 @@ class AdminController
         }
 
         $actorUserId = (int) SessionManager::get('user_id');
-        if (!$this->adminAuthz->isSuperAdmin($actorUserId)) {
+        if (!$this->getAdminScope($actorUserId)['is_super_admin']) {
             return $response->withStatus(403);
         }
 
@@ -483,7 +609,7 @@ class AdminController
         }
 
         $actorUserId = (int) SessionManager::get('user_id');
-        $includeAll = $this->adminAuthz->isSuperAdmin($actorUserId);
+        $includeAll = $this->getAdminScope($actorUserId)['is_super_admin'];
         $params = $request->getQueryParams();
         $filters = [
             'status' => $params['status'] ?? '',
@@ -739,6 +865,11 @@ class AdminController
             return $deny;
         }
 
+        $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
+        if (!$scope['is_super_admin']) {
+            return $response->withStatus(403);
+        }
+
         return $this->renderWithLayout($response, 'admin/users/create.php', [
             'title' => 'Create User',
             'csrfToken' => CSRFProtection::generateToken(),
@@ -752,6 +883,11 @@ class AdminController
         }
         if (($deny = $this->requireCapability($response, 'manage_users')) !== null) {
             return $deny;
+        }
+
+        $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
+        if (!$scope['is_super_admin']) {
+            return $response->withStatus(403);
         }
 
         $body = $request->getParsedBody();
@@ -789,11 +925,39 @@ class AdminController
             return $deny;
         }
 
-        $projects = $this->projectRepo->findAll();
+        $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
+        if ($scope['is_super_admin']) {
+            $projects = $this->projectRepo->findAll();
+        } elseif (!empty($scope['project_ids'])) {
+            $db = \BlackWall\Database::getInstance();
+            $placeholders = implode(',', array_fill(0, count($scope['project_ids']), '?'));
+            $stmt = $db->prepare(
+                "SELECT * FROM projects
+                 WHERE id IN ({$placeholders})
+                 ORDER BY created_at DESC"
+            );
+            $stmt->execute($scope['project_ids']);
+            $rows = $stmt->fetchAll();
+            $projects = array_map(
+                static fn(array $row): \BlackWall\Model\Project => new \BlackWall\Model\Project(
+                    id: (int) $row['id'],
+                    uuid: (string) $row['uuid'],
+                    name: (string) $row['name'],
+                    ownerUserId: !empty($row['owner_user_id']) ? (int) $row['owner_user_id'] : null,
+                    status: (string) $row['status'],
+                    createdAt: new \DateTimeImmutable((string) $row['created_at']),
+                    updatedAt: new \DateTimeImmutable((string) $row['updated_at'])
+                ),
+                $rows
+            );
+        } else {
+            $projects = [];
+        }
 
         return $this->renderWithLayout($response, 'admin/projects/list.php', [
             'title' => 'Projects',
             'projects' => $projects,
+            'canCreateProject' => $scope['is_super_admin'],
         ]);
     }
 
@@ -804,6 +968,11 @@ class AdminController
         }
         if (($deny = $this->requireCapability($response, 'manage_projects')) !== null) {
             return $deny;
+        }
+
+        $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
+        if (!$scope['is_super_admin']) {
+            return $response->withStatus(403);
         }
 
         return $this->renderWithLayout($response, 'admin/projects/create.php', [
@@ -819,6 +988,11 @@ class AdminController
         }
         if (($deny = $this->requireCapability($response, 'manage_projects')) !== null) {
             return $deny;
+        }
+
+        $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
+        if (!$scope['is_super_admin']) {
+            return $response->withStatus(403);
         }
 
         $body = $request->getParsedBody();
@@ -868,6 +1042,9 @@ class AdminController
         if (!$project) {
             return $response->withStatus(404);
         }
+        if (!$this->canAccessProjectId($project->id)) {
+            return $response->withStatus(403);
+        }
 
         return $this->renderWithLayout($response, 'admin/projects/detail.php', [
             'title' => $project->name,
@@ -888,6 +1065,14 @@ class AdminController
         $params = $request->getQueryParams();
         $audit = new AuditLogger();
         $filters = $this->extractAuditFilters($params);
+        $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
+        if (!$scope['is_super_admin']) {
+            if (!empty($filters['project_uuid']) && !$this->canAccessProjectUuid((string) $filters['project_uuid'])) {
+                $filters['project_uuid'] = '__no_access__';
+            } else {
+                $filters['project_ids'] = $scope['project_ids'];
+            }
+        }
 
         $page = (int) ($params['page'] ?? 1);
         $perPage = 50;
@@ -920,6 +1105,14 @@ class AdminController
         $filters = $this->extractAuditFilters($params);
         $limit = max(1, min(10000, (int) ($params['limit'] ?? 2000)));
         $detached = ((string) ($params['detached'] ?? '0')) === '1';
+        $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
+        if (!$scope['is_super_admin']) {
+            if (!empty($filters['project_uuid']) && !$this->canAccessProjectUuid((string) $filters['project_uuid'])) {
+                $filters['project_uuid'] = '__no_access__';
+            } else {
+                $filters['project_ids'] = $scope['project_ids'];
+            }
+        }
 
         $audit = new AuditLogger();
         $rows = $audit->search($filters, $limit, 0);
@@ -1026,23 +1219,43 @@ class AdminController
             return $response->withStatus(404);
         }
         $userId = $user->id;
+        if (!$this->canAccessUserId($userId)) {
+            return $response->withStatus(403);
+        }
 
         // Get WebAuthn credentials
         $credentials = $this->webauthn->getUserCredentials($userId);
 
-        // Get project assignments
+        // Get project assignments (scoped for non-super admins)
         $db = \BlackWall\Database::getInstance();
-        $stmt = $db->prepare(
-            'SELECT upr.*, p.uuid AS project_uuid, p.name as project_name, ppl.name AS privilege_name
-             FROM user_project_roles upr
-             JOIN projects p ON upr.project_id = p.id
-             LEFT JOIN project_privilege_levels ppl
-               ON ppl.project_id = upr.project_id
-              AND ppl.level = upr.privilege_level
-             WHERE upr.user_id = ?
-             ORDER BY upr.created_at DESC'
-        );
-        $stmt->execute([$userId]);
+        $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
+        if ($scope['is_super_admin']) {
+            $stmt = $db->prepare(
+                'SELECT upr.*, p.uuid AS project_uuid, p.name as project_name, ppl.name AS privilege_name
+                 FROM user_project_roles upr
+                 JOIN projects p ON upr.project_id = p.id
+                 LEFT JOIN project_privilege_levels ppl
+                   ON ppl.project_id = upr.project_id
+                  AND ppl.level = upr.privilege_level
+                 WHERE upr.user_id = ?
+                 ORDER BY upr.created_at DESC'
+            );
+            $stmt->execute([$userId]);
+        } else {
+            $placeholders = implode(',', array_fill(0, count($scope['project_ids']), '?'));
+            $stmt = $db->prepare(
+                "SELECT upr.*, p.uuid AS project_uuid, p.name as project_name, ppl.name AS privilege_name
+                 FROM user_project_roles upr
+                 JOIN projects p ON upr.project_id = p.id
+                 LEFT JOIN project_privilege_levels ppl
+                   ON ppl.project_id = upr.project_id
+                  AND ppl.level = upr.privilege_level
+                 WHERE upr.user_id = ?
+                   AND upr.project_id IN ({$placeholders})
+                 ORDER BY upr.created_at DESC"
+            );
+            $stmt->execute(array_merge([$userId], $scope['project_ids']));
+        }
         $assignments = $stmt->fetchAll();
         foreach ($assignments as &$assignment) {
             $assignment['privilege_label'] = PrivilegeLabelResolver::resolve(
@@ -1080,6 +1293,9 @@ class AdminController
             return $response->withStatus(404);
         }
         $userId = $user->id;
+        if (!$this->canAccessUserId($userId)) {
+            return $response->withStatus(403);
+        }
         $body = $request->getParsedBody();
 
         /** @var AuditLogger $audit */
@@ -1103,11 +1319,11 @@ class AdminController
         $isDisablingActiveSuperAdmin = (
             $user->status === 'active'
             && $status === 'disabled'
-            && $this->adminAuthz->getRole($user->id) === 'super_admin'
+            && $this->isUserScopedSuperAdmin($user->id)
         );
         if (
             $isDisablingActiveSuperAdmin
-            && $this->adminAuthz->countActiveRoleOnActiveUsers('super_admin') <= 1
+            && $this->countActiveScopedSuperAdmins() <= 1
         ) {
             return $response->withHeader('Location', '/admin/users/' . $user->uuid . '?error=last_super_admin')->withStatus(302);
         }
@@ -1149,6 +1365,9 @@ class AdminController
         $project = $this->projectRepo->findByUuid($projectUuid);
         if (!$project) {
             return $response->withStatus(404);
+        }
+        if (!$this->canAccessProjectId($project->id)) {
+            return $response->withStatus(403);
         }
 
         $body = $request->getParsedBody();
@@ -1217,6 +1436,9 @@ class AdminController
         $project = $this->projectRepo->findByUuid($projectUuid);
         if (!$project) {
             return $response->withStatus(404);
+        }
+        if (!$this->canAccessProjectId($project->id)) {
+            return $response->withStatus(403);
         }
 
         $levels = $this->privilegeRepo->findAllByProject($project->id);
@@ -1338,6 +1560,9 @@ class AdminController
         if (!$project) {
             return $response->withStatus(404);
         }
+        if (!$this->canAccessProjectId($project->id)) {
+            return $response->withStatus(403);
+        }
 
         $body = $request->getParsedBody();
         /** @var AuditLogger $audit */
@@ -1398,6 +1623,9 @@ class AdminController
         if (!$project) {
             return $response->withStatus(404);
         }
+        if (!$this->canAccessProjectId($project->id)) {
+            return $response->withStatus(403);
+        }
 
         $body = $request->getParsedBody();
         /** @var AuditLogger $audit */
@@ -1456,6 +1684,9 @@ class AdminController
         if (!$project) {
             return $response->withStatus(404);
         }
+        if (!$this->canAccessProjectId($project->id)) {
+            return $response->withStatus(403);
+        }
         $projectId = $project->id;
 
         // Get all assignments for this project with user info
@@ -1480,8 +1711,33 @@ class AdminController
         }
         unset($assignment);
 
-        // Get all users for the dropdown
-        $allUsers = $this->userRepo->findAll();
+        // Get all users for the dropdown (scoped for non-super admins)
+        $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
+        if ($scope['is_super_admin']) {
+            $allUsers = $this->userRepo->findAll();
+        } else {
+            $placeholders = implode(',', array_fill(0, count($scope['project_ids']), '?'));
+            $stmt = $db->prepare(
+                "SELECT DISTINCT u.*
+                 FROM users u
+                 JOIN user_project_roles upr ON upr.user_id = u.id
+                 WHERE upr.project_id IN ({$placeholders})
+                 ORDER BY u.created_at DESC"
+            );
+            $stmt->execute($scope['project_ids']);
+            $rows = $stmt->fetchAll();
+            $allUsers = array_map(
+                static fn(array $row): \BlackWall\Model\User => new \BlackWall\Model\User(
+                    id: (int) $row['id'],
+                    uuid: (string) $row['uuid'],
+                    displayLabel: $row['display_label'],
+                    status: (string) $row['status'],
+                    createdAt: new \DateTimeImmutable((string) $row['created_at']),
+                    updatedAt: new \DateTimeImmutable((string) $row['updated_at'])
+                ),
+                $rows
+            );
+        }
 
         // Get privilege levels for this project (or create default ones)
         $privilegeLevels = [];
@@ -1515,6 +1771,9 @@ class AdminController
         $project = $this->projectRepo->findByUuid($projectUuid);
         if (!$project) {
             return $response->withStatus(404);
+        }
+        if (!$this->canAccessProjectId($project->id)) {
+            return $response->withStatus(403);
         }
         $projectId = $project->id;
         $body = $request->getParsedBody();
@@ -1599,6 +1858,9 @@ class AdminController
         if ($assignment === null) {
             return $response->withHeader('Location', $referer)->withStatus(302);
         }
+        if (!$this->canAccessProjectId($assignment->projectId)) {
+            return $response->withStatus(403);
+        }
 
         if (AdminMutationPolicy::shouldRequireAssignmentApproval($this->hasCapability('assignment_mutations_direct'))) {
             $this->approvalService->create(
@@ -1651,6 +1913,9 @@ class AdminController
         if ($assignment === null) {
             return $response->withHeader('Location', $referer)->withStatus(302);
         }
+        if (!$this->canAccessProjectId($assignment->projectId)) {
+            return $response->withStatus(403);
+        }
 
         if (AdminMutationPolicy::shouldRequireAssignmentApproval($this->hasCapability('assignment_mutations_direct'))) {
             $this->approvalService->create(
@@ -1689,6 +1954,9 @@ class AdminController
         if (!$project) {
             return $response->withStatus(404);
         }
+        if (!$this->canAccessProjectId($project->id)) {
+            return $response->withStatus(403);
+        }
         $projectId = $project->id;
 
         // Get all OAuth clients for this project
@@ -1721,6 +1989,9 @@ class AdminController
         if (!$project) {
             return $response->withStatus(404);
         }
+        if (!$this->canAccessProjectId($project->id)) {
+            return $response->withStatus(403);
+        }
 
         return $this->renderWithLayout($response, 'admin/clients/create.php', [
             'title' => 'Create OAuth Client',
@@ -1742,6 +2013,9 @@ class AdminController
         $project = $this->projectRepo->findByUuid($projectUuid);
         if (!$project) {
             return $response->withStatus(404);
+        }
+        if (!$this->canAccessProjectId($project->id)) {
+            return $response->withStatus(403);
         }
         $projectId = $project->id;
         $body = $request->getParsedBody();
@@ -1807,6 +2081,12 @@ class AdminController
         }
 
         $project = $this->projectRepo->findById((int) $client['project_id']);
+        if ($project === null) {
+            return $response->withStatus(404);
+        }
+        if (!$this->canAccessProjectId($project->id)) {
+            return $response->withStatus(403);
+        }
 
         $secret = $request->getQueryParams()['secret'] ?? null;
 
@@ -1840,6 +2120,9 @@ class AdminController
         $project = $this->projectRepo->findById((int) $client['project_id']);
         if ($project === null) {
             return $response->withStatus(404);
+        }
+        if (!$this->canAccessProjectId($project->id)) {
+            return $response->withStatus(403);
         }
 
         $body = $request->getParsedBody();
@@ -1972,6 +2255,9 @@ class AdminController
             return $response->withStatus(404);
         }
         $userId = $user->id;
+        if (!$this->canAccessUserId($userId)) {
+            return $response->withStatus(403);
+        }
 
         // Generate a secure enrollment token
         $token = bin2hex(random_bytes(32));
@@ -2035,6 +2321,9 @@ class AdminController
             return $response->withStatus(404);
         }
         $userId = $user->id;
+        if (!$this->canAccessUserId($userId)) {
+            return $response->withStatus(403);
+        }
 
         $db = \BlackWall\Database::getInstance();
         $stmt = $db->prepare('SELECT id, user_id FROM webauthn_credentials WHERE credential_id = ?');
@@ -2139,11 +2428,11 @@ class AdminController
                 $isDisablingActiveSuperAdmin = (
                     $user->status === 'active'
                     && $requestedStatus === 'disabled'
-                    && $this->adminAuthz->getRole($user->id) === 'super_admin'
+                    && $this->isUserScopedSuperAdmin($user->id)
                 );
                 if (
                     $isDisablingActiveSuperAdmin
-                    && $this->adminAuthz->countActiveRoleOnActiveUsers('super_admin') <= 1
+                    && $this->countActiveScopedSuperAdmins() <= 1
                 ) {
                     return false;
                 }
@@ -2460,7 +2749,150 @@ class AdminController
         }
 
         $userId = (int) SessionManager::get('user_id');
-        return $this->adminAuthz->isAdmin($userId);
+        return $this->getAdminScope($userId)['is_admin'];
+    }
+
+    private function getAdminScope(int $userId): array
+    {
+        if ($userId < 1) {
+            return [
+                'is_admin' => false,
+                'is_super_admin' => false,
+                'project_ids' => [],
+                'project_uuids' => [],
+                'project_uuid_set' => [],
+            ];
+        }
+
+        if ($this->cachedScope !== null && (int) ($this->cachedScope['user_id'] ?? 0) === $userId) {
+            return $this->cachedScope;
+        }
+
+        $db = \BlackWall\Database::getInstance();
+        $stmt = $db->prepare(
+            "SELECT p.id, p.uuid, p.name
+             FROM user_project_roles upr
+             JOIN projects p ON p.id = upr.project_id
+             WHERE upr.user_id = ? AND upr.privilege_level = 1"
+        );
+        $stmt->execute([$userId]);
+        $rows = $stmt->fetchAll();
+
+        $isAdmin = !empty($rows);
+        $isSuperAdmin = false;
+        $projectIds = [];
+        $projectUuids = [];
+
+        foreach ($rows as $row) {
+            $projectIds[] = (int) $row['id'];
+            $projectUuids[] = (string) $row['uuid'];
+            if ($this->isSuperProject((string) $row['uuid'], (string) ($row['name'] ?? ''))) {
+                $isSuperAdmin = true;
+            }
+        }
+
+        if ($isSuperAdmin) {
+            $all = $db->query('SELECT id, uuid FROM projects')->fetchAll();
+            $projectIds = array_map(static fn(array $r): int => (int) $r['id'], $all);
+            $projectUuids = array_map(static fn(array $r): string => (string) $r['uuid'], $all);
+        }
+
+        $scope = [
+            'user_id' => $userId,
+            'is_admin' => $isAdmin,
+            'is_super_admin' => $isSuperAdmin,
+            'project_ids' => array_values(array_unique($projectIds)),
+            'project_uuids' => array_values(array_unique($projectUuids)),
+            'project_uuid_set' => array_fill_keys(array_values(array_unique($projectUuids)), true),
+        ];
+        $this->cachedScope = $scope;
+        return $scope;
+    }
+
+    private function canAccessProjectId(int $projectId): bool
+    {
+        $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
+        return $scope['is_super_admin'] || in_array($projectId, $scope['project_ids'], true);
+    }
+
+    private function canAccessProjectUuid(string $projectUuid): bool
+    {
+        $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
+        return $scope['is_super_admin'] || isset($scope['project_uuid_set'][$projectUuid]);
+    }
+
+    private function canAccessUserId(int $userId): bool
+    {
+        $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
+        if ($scope['is_super_admin']) {
+            return true;
+        }
+        if (empty($scope['project_ids'])) {
+            return false;
+        }
+
+        $db = \BlackWall\Database::getInstance();
+        $placeholders = implode(',', array_fill(0, count($scope['project_ids']), '?'));
+        $sql = "SELECT COUNT(*) FROM user_project_roles WHERE user_id = ? AND project_id IN ({$placeholders})";
+        $stmt = $db->prepare($sql);
+        $stmt->execute(array_merge([$userId], $scope['project_ids']));
+        return (int) $stmt->fetchColumn() > 0;
+    }
+
+    private function isUserScopedSuperAdmin(int $userId): bool
+    {
+        if ($userId < 1) {
+            return false;
+        }
+
+        $db = \BlackWall\Database::getInstance();
+        $stmt = $db->prepare(
+            "SELECT p.uuid, p.name
+             FROM user_project_roles upr
+             JOIN projects p ON p.id = upr.project_id
+             WHERE upr.user_id = ? AND upr.privilege_level = 1"
+        );
+        $stmt->execute([$userId]);
+        $rows = $stmt->fetchAll();
+
+        foreach ($rows as $row) {
+            if ($this->isSuperProject((string) $row['uuid'], (string) $row['name'])) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function countActiveScopedSuperAdmins(): int
+    {
+        $db = \BlackWall\Database::getInstance();
+        $stmt = $db->query(
+            "SELECT upr.user_id, p.uuid, p.name
+             FROM user_project_roles upr
+             JOIN projects p ON p.id = upr.project_id
+             JOIN users u ON u.id = upr.user_id
+             WHERE upr.privilege_level = 1
+               AND u.status = 'active'"
+        );
+        $rows = $stmt->fetchAll();
+
+        $userIds = [];
+        foreach ($rows as $row) {
+            if ($this->isSuperProject((string) $row['uuid'], (string) $row['name'])) {
+                $userIds[] = (int) $row['user_id'];
+            }
+        }
+
+        return count(array_unique($userIds));
+    }
+
+    private function isSuperProject(string $projectUuid, string $projectName): bool
+    {
+        $adminProjectName = strtolower(trim((string) Config::get('ADMIN_SUPER_PROJECT_NAME', 'BlackWall Admin')));
+        $adminProjectUuid = trim((string) Config::get('ADMIN_SUPER_PROJECT_UUID', ''));
+        $rowName = strtolower(trim($projectName));
+        return ($adminProjectUuid !== '' && $projectUuid === $adminProjectUuid) || $rowName === $adminProjectName;
     }
 
     private function extractAuditFilters(array $params): array

@@ -38,9 +38,11 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/admin/approvals">Approvals</a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/admin/maintenance">Maintenance</a>
-                    </li>
+                    <?php if (($currentAdminRole ?? '') === 'super_admin'): ?>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/admin/maintenance">Maintenance</a>
+                        </li>
+                    <?php endif; ?>
                     <?php if (in_array($currentAdminRole ?? '', ['super_admin', 'auditor'], true)): ?>
                         <li class="nav-item">
                             <a class="nav-link" href="/admin/error-trace">Error Trace</a>
