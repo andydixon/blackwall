@@ -1045,6 +1045,9 @@ class AdminController
         if (!$this->canAccessProjectId($project->id)) {
             return $response->withStatus(403);
         }
+        if (!$this->canAccessProjectId($project->id)) {
+            return $response->withStatus(403);
+        }
 
         return $this->renderWithLayout($response, 'admin/projects/detail.php', [
             'title' => $project->name,
@@ -2383,6 +2386,9 @@ class AdminController
                 if (!$user) {
                     return false;
                 }
+                if (!$this->canAccessUserId($user->id)) {
+                    return false;
+                }
 
                 $db = \BlackWall\Database::getInstance();
                 $stmt = $db->prepare('SELECT id, user_id FROM webauthn_credentials WHERE credential_id = ?');
@@ -2424,6 +2430,9 @@ class AdminController
                 if (!$user) {
                     return false;
                 }
+                if (!$this->canAccessUserId($user->id)) {
+                    return false;
+                }
 
                 $isDisablingActiveSuperAdmin = (
                     $user->status === 'active'
@@ -2460,6 +2469,9 @@ class AdminController
                 if (!$level) {
                     return false;
                 }
+                if (!$this->canAccessProjectId($level->projectId)) {
+                    return false;
+                }
 
                 if ($this->privilegeRepo->isLevelInUse($level->projectId, $level->level)) {
                     return false;
@@ -2492,6 +2504,12 @@ class AdminController
                 if ($project === null) {
                     return false;
                 }
+                if (!$this->canAccessProjectId($project->id)) {
+                    return false;
+                }
+                if (!$this->canAccessUserId($userId)) {
+                    return false;
+                }
 
                 $existing = $this->roleRepo->findByUserAndProject($userId, $project->id);
                 if ($existing !== null) {
@@ -2521,6 +2539,9 @@ class AdminController
                 if ($assignment === null) {
                     return false;
                 }
+                if (!$this->canAccessProjectId($assignment->projectId)) {
+                    return false;
+                }
 
                 $this->roleRepo->update($assignmentId, $requestedLevel);
                 $audit = new AuditLogger();
@@ -2541,6 +2562,9 @@ class AdminController
 
                 $assignment = $this->roleRepo->findById($assignmentId);
                 if ($assignment === null) {
+                    return false;
+                }
+                if (!$this->canAccessProjectId($assignment->projectId)) {
                     return false;
                 }
 
@@ -2565,6 +2589,9 @@ class AdminController
 
                 $project = $this->projectRepo->findByUuid($projectUuid);
                 if ($project === null) {
+                    return false;
+                }
+                if (!$this->canAccessProjectId($project->id)) {
                     return false;
                 }
 
@@ -2613,6 +2640,9 @@ class AdminController
                 if ($client === null) {
                     return false;
                 }
+                if (!$this->canAccessProjectId($client->projectId)) {
+                    return false;
+                }
 
                 $this->clientRepo->update($client->id, [
                     'name' => $name,
@@ -2648,6 +2678,9 @@ class AdminController
                 if ($project === null) {
                     return false;
                 }
+                if (!$this->canAccessProjectId($project->id)) {
+                    return false;
+                }
 
                 $this->projectRepo->update($project->id, $project->name, $requestedStatus);
 
@@ -2673,6 +2706,9 @@ class AdminController
 
                 $client = $this->clientRepo->findByClientId($clientPublicId);
                 if ($client === null) {
+                    return false;
+                }
+                if (!$this->canAccessProjectId($client->projectId)) {
                     return false;
                 }
 
