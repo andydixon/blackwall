@@ -1798,6 +1798,9 @@ class AdminController
         if (!$userId || !$privilegeLevel) {
             return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments?error=invalid")->withStatus(302);
         }
+        if (!$this->canAccessUserId($userId)) {
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments?error=user_out_of_scope")->withStatus(302);
+        }
 
         // Check if assignment already exists
         $existing = $this->roleRepo->findByUserAndProject($userId, $projectId);
