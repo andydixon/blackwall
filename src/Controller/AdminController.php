@@ -609,7 +609,9 @@ class AdminController
         }
 
         $actorUserId = (int) SessionManager::get('user_id');
-        $includeAll = $this->getAdminScope($actorUserId)['is_super_admin'];
+        $scope = $this->getAdminScope($actorUserId);
+        $includeAll = $scope['is_super_admin'];
+        $visibleProjectIds = $includeAll ? [] : $scope['project_ids'];
         $params = $request->getQueryParams();
         $filters = [
             'status' => $params['status'] ?? '',
@@ -621,8 +623,15 @@ class AdminController
         $page = max(1, (int) ($params['page'] ?? 1));
         $perPage = 50;
         $offset = ($page - 1) * $perPage;
-        $approvals = $this->approvalService->searchVisibleToUser($actorUserId, $includeAll, $filters, $perPage, $offset);
-        $total = $this->approvalService->countVisibleToUser($actorUserId, $includeAll, $filters);
+        $approvals = $this->approvalService->searchVisibleToUser(
+            $actorUserId,
+            $includeAll,
+            $filters,
+            $perPage,
+            $offset,
+            $visibleProjectIds
+        );
+        $total = $this->approvalService->countVisibleToUser($actorUserId, $includeAll, $filters, $visibleProjectIds);
 
         return $this->renderWithLayout($response, 'admin/approvals.php', [
             'title' => 'Approvals',
@@ -1406,7 +1415,8 @@ class AdminController
                     'requested_name' => $name,
                     'requested_status' => $status,
                 ],
-                $actorUserId
+                $actorUserId,
+                $project->id
             );
 
             return $response->withHeader('Location', "/admin/projects/{$project->uuid}?success=settings_change_requested")->withStatus(302);
@@ -1653,7 +1663,8 @@ class AdminController
                 [
                     'level_id' => $level->id,
                 ],
-                $actorUserId
+                $actorUserId,
+                $project->id
             );
 
             return $response->withHeader('Location', "/admin/projects/{$project->uuid}/privileges?success=delete_requested")->withStatus(302);
@@ -1816,7 +1827,8 @@ class AdminController
                     'user_id' => $userId,
                     'privilege_level' => $privilegeLevel,
                 ],
-                $actorUserId
+                $actorUserId,
+                $project->id
             );
             return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments?success=create_requested")->withStatus(302);
         }
@@ -1875,7 +1887,8 @@ class AdminController
                     'assignment_id' => $assignmentId,
                     'requested_privilege_level' => $privilegeLevel,
                 ],
-                (int) SessionManager::get('user_id')
+                (int) SessionManager::get('user_id'),
+                $assignment->projectId
             );
             return $response->withHeader('Location', $this->appendQueryParam($referer, 'success', 'update_requested'))->withStatus(302);
         }
@@ -1929,7 +1942,8 @@ class AdminController
                 [
                     'assignment_id' => $assignmentId,
                 ],
-                $actorUserId
+                $actorUserId,
+                $assignment->projectId
             );
             return $response->withHeader('Location', $this->appendQueryParam($referer, 'success', 'delete_requested'))->withStatus(302);
         }
@@ -2198,7 +2212,8 @@ class AdminController
                     'client_public_id' => $clientPublicId,
                     'settings' => $requestedSettings,
                 ],
-                $actorUserId
+                $actorUserId,
+                $project->id
             );
 
             return $response->withHeader('Location', "/admin/clients/{$clientPublicId}?success=settings_change_requested")->withStatus(302);

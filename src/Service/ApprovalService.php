@@ -16,13 +16,13 @@ class ApprovalService
         $this->db = Database::getInstance();
     }
 
-    public function create(string $actionType, array $payload, int $requestedByUserId): int
+    public function create(string $actionType, array $payload, int $requestedByUserId, ?int $projectId = null): int
     {
         $stmt = $this->db->prepare(
-            "INSERT INTO approval_requests (action_type, status, payload_json, requested_by_user_id)
-             VALUES (?, 'pending', ?, ?)"
+            "INSERT INTO approval_requests (action_type, status, payload_json, requested_by_user_id, project_id)
+             VALUES (?, 'pending', ?, ?, ?)"
         );
-        $stmt->execute([$actionType, json_encode($payload), $requestedByUserId]);
+        $stmt->execute([$actionType, json_encode($payload), $requestedByUserId, $projectId]);
         return (int) $this->db->lastInsertId();
     }
 
@@ -64,14 +64,22 @@ class ApprovalService
         bool $includeAll,
         array $filters,
         int $limit = 100,
-        int $offset = 0
+        int $offset = 0,
+        array $visibleProjectIds = []
     ): array {
         $conditions = [];
         $params = [];
 
         if (!$includeAll) {
-            $conditions[] = 'ar.requested_by_user_id = ?';
-            $params[] = $userId;
+            if (empty($visibleProjectIds)) {
+                $conditions[] = 'ar.requested_by_user_id = ?';
+                $params[] = $userId;
+            } else {
+                $placeholders = implode(',', array_fill(0, count($visibleProjectIds), '?'));
+                $conditions[] = "(ar.requested_by_user_id = ? OR ar.project_id IN ({$placeholders}))";
+                $params[] = $userId;
+                $params = array_merge($params, $visibleProjectIds);
+            }
         }
 
         if (!empty($filters['status'])) {
@@ -122,14 +130,21 @@ class ApprovalService
         return $stmt->fetchAll();
     }
 
-    public function countVisibleToUser(int $userId, bool $includeAll, array $filters): int
+    public function countVisibleToUser(int $userId, bool $includeAll, array $filters, array $visibleProjectIds = []): int
     {
         $conditions = [];
         $params = [];
 
         if (!$includeAll) {
-            $conditions[] = 'ar.requested_by_user_id = ?';
-            $params[] = $userId;
+            if (empty($visibleProjectIds)) {
+                $conditions[] = 'ar.requested_by_user_id = ?';
+                $params[] = $userId;
+            } else {
+                $placeholders = implode(',', array_fill(0, count($visibleProjectIds), '?'));
+                $conditions[] = "(ar.requested_by_user_id = ? OR ar.project_id IN ({$placeholders}))";
+                $params[] = $userId;
+                $params = array_merge($params, $visibleProjectIds);
+            }
         }
 
         if (!empty($filters['status'])) {

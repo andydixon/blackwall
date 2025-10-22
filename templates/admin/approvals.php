@@ -5,7 +5,7 @@
             <p class="text-muted mb-0">
                 <?= ($currentAdminRole ?? '') === 'super_admin'
                     ? 'Pending and historical approval requests.'
-                    : 'Your submitted approval requests.' ?>
+                    : 'Approval requests within your admin scope (plus your own unscoped requests).' ?>
             </p>
         </div>
 
