@@ -41,10 +41,13 @@ class ApprovalService
                     req.uuid AS requested_by_uuid,
                     req.display_label AS requested_by_display_label,
                     appr.uuid AS approved_by_uuid,
-                    appr.display_label AS approved_by_display_label
+                    appr.display_label AS approved_by_display_label,
+                    p.uuid AS project_uuid,
+                    p.name AS project_name
              FROM approval_requests ar
              JOIN users req ON req.id = ar.requested_by_user_id
              LEFT JOIN users appr ON appr.id = ar.approved_by_user_id
+             LEFT JOIN projects p ON p.id = ar.project_id
              ORDER BY
                 CASE ar.status WHEN 'pending' THEN 0 ELSE 1 END,
                 ar.created_at DESC
@@ -96,6 +99,10 @@ class ApprovalService
             $conditions[] = 'req.uuid = ?';
             $params[] = (string) $filters['requested_by_uuid'];
         }
+        if (!empty($filters['project_uuid'])) {
+            $conditions[] = 'p.uuid = ?';
+            $params[] = (string) $filters['project_uuid'];
+        }
 
         if (!empty($filters['date_from'])) {
             $conditions[] = 'ar.created_at >= ?';
@@ -112,10 +119,13 @@ class ApprovalService
                        req.uuid AS requested_by_uuid,
                        req.display_label AS requested_by_display_label,
                        appr.uuid AS approved_by_uuid,
-                       appr.display_label AS approved_by_display_label
+                       appr.display_label AS approved_by_display_label,
+                       p.uuid AS project_uuid,
+                       p.name AS project_name
                 FROM approval_requests ar
                 JOIN users req ON req.id = ar.requested_by_user_id
                 LEFT JOIN users appr ON appr.id = ar.approved_by_user_id
+                LEFT JOIN projects p ON p.id = ar.project_id
                 {$where}
                 ORDER BY
                    CASE ar.status WHEN 'pending' THEN 0 ELSE 1 END,
@@ -161,6 +171,10 @@ class ApprovalService
             $conditions[] = 'req.uuid = ?';
             $params[] = (string) $filters['requested_by_uuid'];
         }
+        if (!empty($filters['project_uuid'])) {
+            $conditions[] = 'p.uuid = ?';
+            $params[] = (string) $filters['project_uuid'];
+        }
 
         if (!empty($filters['date_from'])) {
             $conditions[] = 'ar.created_at >= ?';
@@ -176,6 +190,7 @@ class ApprovalService
         $sql = "SELECT COUNT(*)
                 FROM approval_requests ar
                 JOIN users req ON req.id = ar.requested_by_user_id
+                LEFT JOIN projects p ON p.id = ar.project_id
                 {$where}";
 
         $stmt = $this->db->prepare($sql);

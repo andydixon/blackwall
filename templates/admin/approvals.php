@@ -46,6 +46,10 @@
                         <label class="form-label">Action Type</label>
                         <input type="text" name="action_type" class="form-control" value="<?= htmlspecialchars((string) ($filters['action_type'] ?? '')) ?>" placeholder="change_user_status">
                     </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Project UUID</label>
+                        <input type="text" name="project_uuid" class="form-control" value="<?= htmlspecialchars((string) ($filters['project_uuid'] ?? '')) ?>" placeholder="Project UUID">
+                    </div>
                     <?php if (($currentAdminRole ?? '') === 'super_admin'): ?>
                         <div class="col-md-3">
                             <label class="form-label">Requester UUID</label>
@@ -76,13 +80,14 @@
                     <div class="table-responsive">
                         <table class="table table-dark table-hover mb-0 align-middle">
                             <thead>
-                                <tr>
-                                    <th>ID</th>
-                                    <th>Status</th>
-                                    <th>Action</th>
-                                    <th>Requested By</th>
-                                    <th>Created</th>
-                                    <th>Payload</th>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Status</th>
+                                        <th>Action</th>
+                                        <th>Project</th>
+                                        <th>Requested By</th>
+                                        <th>Created</th>
+                                        <th>Payload</th>
                                     <th>Decision</th>
                                 </tr>
                             </thead>
@@ -99,6 +104,10 @@
                                         <td><code><?= (int) $approval['id'] ?></code></td>
                                         <td><span class="badge <?= $badge ?>"><?= htmlspecialchars($status) ?></span></td>
                                         <td><code><?= htmlspecialchars((string) $approval['action_type']) ?></code></td>
+                                        <td>
+                                            <?= htmlspecialchars((string) ($approval['project_name'] ?? '-')) ?>
+                                            <div><code class="small"><?= htmlspecialchars((string) ($approval['project_uuid'] ?? '-')) ?></code></div>
+                                        </td>
                                         <td>
                                             <?= htmlspecialchars((string) ($approval['requested_by_display_label'] ?? '-')) ?>
                                             <div><code class="small"><?= htmlspecialchars((string) ($approval['requested_by_uuid'] ?? '-')) ?></code></div>

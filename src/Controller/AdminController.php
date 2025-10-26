@@ -616,10 +616,14 @@ class AdminController
         $filters = [
             'status' => $params['status'] ?? '',
             'action_type' => $params['action_type'] ?? '',
+            'project_uuid' => $params['project_uuid'] ?? '',
             'requested_by_uuid' => $params['requested_by_uuid'] ?? '',
             'date_from' => $params['date_from'] ?? '',
             'date_to' => $params['date_to'] ?? '',
         ];
+        if (!$includeAll && !empty($filters['project_uuid']) && !$this->canAccessProjectUuid((string) $filters['project_uuid'])) {
+            $filters['project_uuid'] = '__no_access__';
+        }
         $page = max(1, (int) ($params['page'] ?? 1));
         $perPage = 50;
         $offset = ($page - 1) * $perPage;

@@ -44,6 +44,7 @@ Export filtered audit logs (CSV): https://blackwall.cx/admin/audit/export
 - Approval visibility:
   - `super_admin`: full queue and decision controls
   - `operator`/`auditor`: requests in their scoped projects, plus their own unscoped requests
+  - queue supports filtering by `project_uuid` for scoped drill-down
 - High-risk operator action currently gated by approval:
   - User credential deletion (`delete_user_credential`)
   - User enable/disable (`change_user_status`)
