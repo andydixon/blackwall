@@ -404,6 +404,14 @@ class AdminController
         $myPendingApprovals = $this->hasCapability('view_approvals')
             ? $this->approvalService->listPendingByRequester($actorUserId, 6)
             : [];
+        $approvalStats = $this->hasCapability('view_approvals')
+            ? $this->approvalService->summariseVisibleToUser($actorUserId, $scope['is_super_admin'], $scope['project_ids'])
+            : [
+                'pending' => ['today' => 0, 'week' => 0, 'month' => 0],
+                'approved' => ['today' => 0, 'week' => 0, 'month' => 0],
+                'rejected' => ['today' => 0, 'week' => 0, 'month' => 0],
+                'cancelled' => ['today' => 0, 'week' => 0, 'month' => 0],
+            ];
 
         return $this->renderWithLayout($response, 'admin/dashboard.php', [
             'title' => 'Dashboard',
@@ -413,6 +421,7 @@ class AdminController
             'successBreakdown' => $successBreakdown,
             'failBreakdown' => $failBreakdown,
             'myPendingApprovals' => $myPendingApprovals,
+            'approvalStats' => $approvalStats,
             'csrfToken' => CSRFProtection::generateToken(),
         ]);
     }
@@ -654,14 +663,21 @@ class AdminController
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
-        if (($deny = $this->requireCapability($response, 'decide_approvals')) !== null) {
-            return $deny;
-        }
-
-        $body = $request->getParsedBody();
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $actorUserId = (int) SessionManager::get('user_id');
+        if (!$this->hasCapability('decide_approvals')) {
+            $audit->logFail('admin.approval.decision.denied', [
+                'actor_user_id' => $actorUserId,
+                'target_type' => 'approval_request',
+                'target_id' => (string) ($args['id'] ?? ''),
+                'failure_reason' => 'missing_capability',
+                'message' => 'Approval decision denied: missing capability',
+            ]);
+            return $response->withStatus(403);
+        }
+
+        $body = $request->getParsedBody();
         if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'approval_approve', '/admin/approvals')) !== null) {
             return $limited;
         }
@@ -676,8 +692,28 @@ class AdminController
         if (!$approval || $approval['status'] !== 'pending') {
             return $response->withHeader('Location', '/admin/approvals?error=not_pending')->withStatus(302);
         }
+        $scope = $this->getAdminScope($actorUserId);
+        if (!$this->isApprovalVisibleToActor($approval, $scope, $actorUserId)) {
+            $audit->logFail('admin.approval.decision.denied', [
+                'actor_user_id' => $actorUserId,
+                'project_id' => $approval['project_id'] ?? null,
+                'target_type' => 'approval_request',
+                'target_id' => (string) $approvalId,
+                'failure_reason' => 'out_of_scope',
+                'message' => 'Approval decision denied: out of scope',
+            ]);
+            return $response->withStatus(403);
+        }
 
         if ((int) $approval['requested_by_user_id'] === $actorUserId) {
+            $audit->logFail('admin.approval.decision.denied', [
+                'actor_user_id' => $actorUserId,
+                'project_id' => $approval['project_id'] ?? null,
+                'target_type' => 'approval_request',
+                'target_id' => (string) $approvalId,
+                'failure_reason' => 'self_decision',
+                'message' => 'Approval decision denied: self decision',
+            ]);
             return $response->withHeader('Location', '/admin/approvals?error=self_decide')->withStatus(302);
         }
 
@@ -687,6 +723,14 @@ class AdminController
         $executed = $this->executeApprovalAction((string) $approval['action_type'], $payload, $actorUserId);
         if (!$executed) {
             $this->approvalService->decide($approvalId, 'rejected', $actorUserId, 'Execution failed');
+            $audit->logFail('admin.approval.execution.fail', [
+                'actor_user_id' => $actorUserId,
+                'project_id' => $approval['project_id'] ?? null,
+                'target_type' => 'approval_request',
+                'target_id' => (string) $approvalId,
+                'failure_reason' => 'execution_failed',
+                'message' => 'Approval execution failed',
+            ]);
             return $response->withHeader('Location', '/admin/approvals?error=execution_failed')->withStatus(302);
         }
 
@@ -695,6 +739,7 @@ class AdminController
         }
         $audit->logSuccess('admin.approval.approve', [
             'actor_user_id' => $actorUserId,
+            'project_id' => $approval['project_id'] ?? null,
             'target_type' => 'approval_request',
             'target_id' => (string) $approvalId,
             'message' => 'Approved request',
@@ -708,14 +753,21 @@ class AdminController
         if (!$this->checkAuth()) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
-        if (($deny = $this->requireCapability($response, 'decide_approvals')) !== null) {
-            return $deny;
-        }
-
-        $body = $request->getParsedBody();
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $actorUserId = (int) SessionManager::get('user_id');
+        if (!$this->hasCapability('decide_approvals')) {
+            $audit->logFail('admin.approval.decision.denied', [
+                'actor_user_id' => $actorUserId,
+                'target_type' => 'approval_request',
+                'target_id' => (string) ($args['id'] ?? ''),
+                'failure_reason' => 'missing_capability',
+                'message' => 'Approval decision denied: missing capability',
+            ]);
+            return $response->withStatus(403);
+        }
+
+        $body = $request->getParsedBody();
         if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'approval_reject', '/admin/approvals')) !== null) {
             return $limited;
         }
@@ -726,6 +778,34 @@ class AdminController
         }
 
         $approvalId = (int) ($args['id'] ?? 0);
+        $approval = $this->approvalService->getById($approvalId);
+        if (!$approval || $approval['status'] !== 'pending') {
+            return $response->withHeader('Location', '/admin/approvals?error=not_pending')->withStatus(302);
+        }
+        $scope = $this->getAdminScope($actorUserId);
+        if (!$this->isApprovalVisibleToActor($approval, $scope, $actorUserId)) {
+            $audit->logFail('admin.approval.decision.denied', [
+                'actor_user_id' => $actorUserId,
+                'project_id' => $approval['project_id'] ?? null,
+                'target_type' => 'approval_request',
+                'target_id' => (string) $approvalId,
+                'failure_reason' => 'out_of_scope',
+                'message' => 'Approval rejection denied: out of scope',
+            ]);
+            return $response->withStatus(403);
+        }
+        if ((int) $approval['requested_by_user_id'] === $actorUserId) {
+            $audit->logFail('admin.approval.decision.denied', [
+                'actor_user_id' => $actorUserId,
+                'project_id' => $approval['project_id'] ?? null,
+                'target_type' => 'approval_request',
+                'target_id' => (string) $approvalId,
+                'failure_reason' => 'self_decision',
+                'message' => 'Approval rejection denied: self decision',
+            ]);
+            return $response->withHeader('Location', '/admin/approvals?error=self_decide')->withStatus(302);
+        }
+
         $decided = $this->approvalService->decide(
             $approvalId,
             'rejected',
@@ -737,6 +817,7 @@ class AdminController
         }
         $audit->logInfo('admin.approval.reject', [
             'actor_user_id' => $actorUserId,
+            'project_id' => $approval['project_id'] ?? null,
             'target_type' => 'approval_request',
             'target_id' => (string) $approvalId,
             'message' => 'Rejected request',
@@ -774,6 +855,13 @@ class AdminController
             trim((string) ($body['note'] ?? 'Cancelled by requester'))
         );
         if (!$cancelled) {
+            $audit->logFail('admin.approval.cancel.denied', [
+                'actor_user_id' => $actorUserId,
+                'target_type' => 'approval_request',
+                'target_id' => (string) $approvalId,
+                'failure_reason' => 'not_pending_or_not_requester',
+                'message' => 'Approval cancellation denied',
+            ]);
             return $response->withHeader('Location', '/admin/approvals?error=not_pending')->withStatus(302);
         }
 
@@ -2797,6 +2885,24 @@ class AdminController
     {
         $separator = str_contains($url, '?') ? '&' : '?';
         return $url . $separator . rawurlencode($key) . '=' . rawurlencode($value);
+    }
+
+    private function isApprovalVisibleToActor(array $approval, array $scope, int $actorUserId): bool
+    {
+        if ($scope['is_super_admin']) {
+            return true;
+        }
+
+        if ((int) ($approval['requested_by_user_id'] ?? 0) === $actorUserId) {
+            return true;
+        }
+
+        $projectId = (int) ($approval['project_id'] ?? 0);
+        if ($projectId < 1) {
+            return false;
+        }
+
+        return in_array($projectId, $scope['project_ids'], true);
     }
 
     private function checkAuth(): bool

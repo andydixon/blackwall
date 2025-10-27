@@ -62,6 +62,59 @@ class ApprovalService
         return $this->searchVisibleToUser($userId, $includeAll, [], $limit, 0);
     }
 
+    public function summariseVisibleToUser(int $userId, bool $includeAll, array $visibleProjectIds = []): array
+    {
+        $conditions = [];
+        $params = [];
+
+        if (!$includeAll) {
+            if (empty($visibleProjectIds)) {
+                $conditions[] = 'requested_by_user_id = ?';
+                $params[] = $userId;
+            } else {
+                $placeholders = implode(',', array_fill(0, count($visibleProjectIds), '?'));
+                $conditions[] = "(requested_by_user_id = ? OR project_id IN ({$placeholders}))";
+                $params[] = $userId;
+                $params = array_merge($params, $visibleProjectIds);
+            }
+        }
+
+        $where = !empty($conditions) ? 'WHERE ' . implode(' AND ', $conditions) : '';
+        $stmt = $this->db->prepare(
+            "SELECT
+                status,
+                SUM(created_at >= CURDATE()) AS today_count,
+                SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS week_count,
+                SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS month_count
+             FROM approval_requests
+             {$where}
+             GROUP BY status"
+        );
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll();
+
+        $summary = [
+            'pending' => ['today' => 0, 'week' => 0, 'month' => 0],
+            'approved' => ['today' => 0, 'week' => 0, 'month' => 0],
+            'rejected' => ['today' => 0, 'week' => 0, 'month' => 0],
+            'cancelled' => ['today' => 0, 'week' => 0, 'month' => 0],
+        ];
+
+        foreach ($rows as $row) {
+            $status = (string) ($row['status'] ?? '');
+            if (!isset($summary[$status])) {
+                continue;
+            }
+            $summary[$status] = [
+                'today' => (int) ($row['today_count'] ?? 0),
+                'week' => (int) ($row['week_count'] ?? 0),
+                'month' => (int) ($row['month_count'] ?? 0),
+            ];
+        }
+
+        return $summary;
+    }
+
     public function searchVisibleToUser(
         int $userId,
         bool $includeAll,

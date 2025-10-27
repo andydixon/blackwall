@@ -428,7 +428,7 @@ Clients **must** validate `project_id` matches their registered project and enfo
 ✅ Token revocation works  
 ✅ Audit log records all events  
 ✅ Audit log UI is searchable by all criteria  
-✅ Unauthorized project_id is rejected  
+✅ Unauthorised project_id is rejected  
 ✅ Rate limiting blocks excessive requests  
 ✅ CSRF protection blocks invalid tokens  
 

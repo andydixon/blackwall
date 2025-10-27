@@ -45,6 +45,10 @@ Export filtered audit logs (CSV): https://blackwall.cx/admin/audit/export
   - `super_admin`: full queue and decision controls
   - `operator`/`auditor`: requests in their scoped projects, plus their own unscoped requests
   - queue supports filtering by `project_uuid` for scoped drill-down
+- Approval decision auditability:
+  - denied decisions are logged with explicit reasons (`missing_capability`, `out_of_scope`, `self_decision`)
+  - failed executions are logged as `admin.approval.execution.fail`
+- Dashboard includes scoped approval KPI tiles for `pending`, `approved`, `rejected`, and `cancelled` counts over today/week/month windows
 - High-risk operator action currently gated by approval:
   - User credential deletion (`delete_user_credential`)
   - User enable/disable (`change_user_status`)
@@ -64,9 +68,11 @@ Admin mutation throttling defaults:
 
 **Look for:**
 - Multiple failed authentication attempts from same IP
-- Unauthorized access attempts (invalid project_id, privilege escalation)
+- Unauthorised access attempts (invalid project_id, privilege escalation)
 - Rate limit hits
 - CSRF validation failures
+- Approval decision denials (`admin.approval.decision.denied`)
+- Approval execution failures (`admin.approval.execution.fail`)
 
 **Alert thresholds:**
 - 5+ failed WebAuthn authentications from same IP in 10 minutes
@@ -438,7 +444,7 @@ DELETE FROM rate_limits WHERE identifier = 'IP_ADDRESS' AND action = 'oauth.toke
 
 1. **Authentication success rate**: `webauthn.authentication.success` / total attempts
 2. **Token issuance rate**: `oauth.token.issue` per hour
-3. **Failed authorizations**: `oauth.authorize.fail` count
+3. **Failed authorisation attempts**: `oauth.authorize.fail` count
 4. **Rate limit hits**: `security.ratelimit.hit` count
 5. **Database query time**: Monitor slow_query_log
 6. **Disk usage**: /home/andy/domains/blackwall.cx

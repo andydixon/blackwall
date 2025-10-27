@@ -88,6 +88,108 @@
         </div>
 
         <div class="row g-4 mb-4">
+            <div class="col-md-6 col-lg-3">
+                <div class="card stat-card h-100" style="border-left-color: #f59e0b;">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0 text-muted">Pending Approvals</h6>
+                            <a href="/admin/approvals?status=pending" class="btn btn-sm btn-outline-light">View</a>
+                        </div>
+                        <div class="row text-center g-2">
+                            <div class="col-4">
+                                <div class="small text-muted text-uppercase">Today</div>
+                                <div class="fs-5 fw-bold" style="color: #f59e0b;"><?= (int) ($approvalStats['pending']['today'] ?? 0) ?></div>
+                            </div>
+                            <div class="col-4">
+                                <div class="small text-muted text-uppercase">Week</div>
+                                <div class="fs-5 fw-bold" style="color: #f59e0b;"><?= (int) ($approvalStats['pending']['week'] ?? 0) ?></div>
+                            </div>
+                            <div class="col-4">
+                                <div class="small text-muted text-uppercase">Month</div>
+                                <div class="fs-5 fw-bold" style="color: #f59e0b;"><?= (int) ($approvalStats['pending']['month'] ?? 0) ?></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6 col-lg-3">
+                <div class="card stat-card h-100" style="border-left-color: #10b981;">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0 text-muted">Approved</h6>
+                            <a href="/admin/approvals?status=approved" class="btn btn-sm btn-outline-light">View</a>
+                        </div>
+                        <div class="row text-center g-2">
+                            <div class="col-4">
+                                <div class="small text-muted text-uppercase">Today</div>
+                                <div class="fs-5 fw-bold" style="color: #10b981;"><?= (int) ($approvalStats['approved']['today'] ?? 0) ?></div>
+                            </div>
+                            <div class="col-4">
+                                <div class="small text-muted text-uppercase">Week</div>
+                                <div class="fs-5 fw-bold" style="color: #10b981;"><?= (int) ($approvalStats['approved']['week'] ?? 0) ?></div>
+                            </div>
+                            <div class="col-4">
+                                <div class="small text-muted text-uppercase">Month</div>
+                                <div class="fs-5 fw-bold" style="color: #10b981;"><?= (int) ($approvalStats['approved']['month'] ?? 0) ?></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6 col-lg-3">
+                <div class="card stat-card h-100" style="border-left-color: #ef4444;">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0 text-muted">Rejected</h6>
+                            <a href="/admin/approvals?status=rejected" class="btn btn-sm btn-outline-light">View</a>
+                        </div>
+                        <div class="row text-center g-2">
+                            <div class="col-4">
+                                <div class="small text-muted text-uppercase">Today</div>
+                                <div class="fs-5 fw-bold" style="color: #ef4444;"><?= (int) ($approvalStats['rejected']['today'] ?? 0) ?></div>
+                            </div>
+                            <div class="col-4">
+                                <div class="small text-muted text-uppercase">Week</div>
+                                <div class="fs-5 fw-bold" style="color: #ef4444;"><?= (int) ($approvalStats['rejected']['week'] ?? 0) ?></div>
+                            </div>
+                            <div class="col-4">
+                                <div class="small text-muted text-uppercase">Month</div>
+                                <div class="fs-5 fw-bold" style="color: #ef4444;"><?= (int) ($approvalStats['rejected']['month'] ?? 0) ?></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-6 col-lg-3">
+                <div class="card stat-card h-100" style="border-left-color: #6b7280;">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <h6 class="mb-0 text-muted">Cancelled</h6>
+                            <a href="/admin/approvals?status=cancelled" class="btn btn-sm btn-outline-light">View</a>
+                        </div>
+                        <div class="row text-center g-2">
+                            <div class="col-4">
+                                <div class="small text-muted text-uppercase">Today</div>
+                                <div class="fs-5 fw-bold" style="color: #9ca3af;"><?= (int) ($approvalStats['cancelled']['today'] ?? 0) ?></div>
+                            </div>
+                            <div class="col-4">
+                                <div class="small text-muted text-uppercase">Week</div>
+                                <div class="fs-5 fw-bold" style="color: #9ca3af;"><?= (int) ($approvalStats['cancelled']['week'] ?? 0) ?></div>
+                            </div>
+                            <div class="col-4">
+                                <div class="small text-muted text-uppercase">Month</div>
+                                <div class="fs-5 fw-bold" style="color: #9ca3af;"><?= (int) ($approvalStats['cancelled']['month'] ?? 0) ?></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-4">
             <div class="col-lg-6">
                 <div class="card stat-card h-100" style="border-left-color: #10b981;">
                     <div class="card-body">
