@@ -319,6 +319,12 @@ Response:
 
 See `IMPLEMENTATION_PROMPT.md` for comprehensive integration guide.
 
+## Documentation
+
+- User manual (UK English): `docs/USER_MANUAL.md`
+- Operational runbook: `docs/RUNBOOK.md`
+- Documentation index: `docs/README.md`
+
 ## Audit Logging
 
 All security and auth events are logged to the `audit_log` table.

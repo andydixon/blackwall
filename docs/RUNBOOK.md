@@ -45,10 +45,15 @@ Export filtered audit logs (CSV): https://blackwall.cx/admin/audit/export
   - `super_admin`: full queue and decision controls
   - `operator`/`auditor`: requests in their scoped projects, plus their own unscoped requests
   - queue supports filtering by `project_uuid` for scoped drill-down
+  - queue supports filtering by denial `failure_reason` (`missing_capability`, `out_of_scope`, `self_decision`)
 - Approval decision auditability:
   - denied decisions are logged with explicit reasons (`missing_capability`, `out_of_scope`, `self_decision`)
   - failed executions are logged as `admin.approval.execution.fail`
 - Dashboard includes scoped approval KPI tiles for `pending`, `approved`, `rejected`, and `cancelled` counts over today/week/month windows
+  - dashboard includes approval decision SLA metrics (median and P95 decision latency)
+  - dashboard includes scoped CSRF and admin mutation rate-limit widgets with per-project 30-day breakdowns
+- Scope diagnostics:
+  - `/admin/scope` shows the active admin scope, project UUID set, and super-admin matching inputs
 - High-risk operator action currently gated by approval:
   - User credential deletion (`delete_user_credential`)
   - User enable/disable (`change_user_status`)
@@ -78,6 +83,31 @@ Admin mutation throttling defaults:
 - 5+ failed WebAuthn authentications from same IP in 10 minutes
 - 10+ oauth.authorize.fail events per hour
 - Any security.csrf.fail events
+- Any `admin.approval.decision.denied` spikes above baseline
+
+### Admin Scope Acceptance Checklist
+
+Use this checklist after changing scope, role, or assignment logic:
+
+1. Login as a project admin and open `/admin/scope`; confirm `is_super_admin` is `No` and project UUIDs match expected assignments.
+2. Verify the project admin can access only scoped project pages:
+   - `/admin/projects`
+   - `/admin/projects/{scoped-project-uuid}`
+   - `/admin/projects/{out-of-scope-project-uuid}` should return `403`.
+3. Verify user visibility is scoped:
+   - `/admin/users` should list only users assigned to scoped projects.
+   - direct navigation to `/admin/users/{out-of-scope-user-uuid}` should return `403`.
+4. Verify client visibility is scoped:
+   - `/admin/projects/{scoped-project-uuid}/clients` should load.
+   - `/admin/clients/{out-of-scope-client-public-id}` should return `403`.
+5. Verify audit scope:
+   - `/admin/audit` should contain only scoped project audit rows.
+   - filtering with an out-of-scope `project_uuid` should return no rows.
+6. Verify approval scope:
+   - `/admin/approvals` should show in-scope requests and the actor’s own unscoped requests.
+   - denial filters (`failure_reason`) should work and return relevant entries.
+7. Verify super-admin bypass:
+   - a super admin should see all projects/users/clients/audit rows and all approvals.
 
 ### Verify Audit Integrity
 

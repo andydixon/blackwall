@@ -1,8 +1,25 @@
-# Blackwall SSO
+# BlackWall Documentation Index
 
-PSR-4 PHP SSO module with project-level privileges under namespace `\\andydixon\\blackwall`.
+Use this index to find the current operating and user guidance for BlackWall.
 
-- OAuth2/OpenID Connect style login, callback, logout
-- Projects table (UUID id), user->project privilege mapping
-- Admin UI gated by membership of project "SSO Administration" with privilege=1
-- Project "SSO Administration" auto-created on first admin access; seed initial admins by inserting into user_projects for that project
+## Core Guides
+
+- `docs/USER_MANUAL.md`: end-user and administrator manual (UK English)
+- `docs/RUNBOOK.md`: operational runbook, monitoring, maintenance, and incident response
+- `docs/DEPLOYMENT.md`: deployment and environment guidance
+
+## OAuth and Client Integration
+
+- `docs/CLIENT_INTEGRATION.md`: client integration examples
+- `docs/OAUTH_IMPLEMENTATION.md`: OAuth/OIDC flow implementation notes
+- `docs/OAUTH_FIXES.md`: implementation change notes for OAuth flow corrections
+
+## Platform Features
+
+- `docs/CRYPTBIN.md`: Cryptbin architecture and usage notes
+- `docs/PROJECT_SUMMARY.md`: consolidated technical summary
+
+## Reference
+
+- `docs/REPOSITORY_TREE.txt`: repository structure snapshot
+- `docs/apache-vhost.conf`: Apache vhost example

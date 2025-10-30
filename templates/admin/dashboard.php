@@ -1,5 +1,16 @@
 <div class="row">
     <div class="col-12">
+        <?php
+        $formatSeconds = static function (int $seconds): string {
+            if ($seconds < 60) {
+                return $seconds . 's';
+            }
+            if ($seconds < 3600) {
+                return (string) round($seconds / 60, 1) . 'm';
+            }
+            return (string) round($seconds / 3600, 1) . 'h';
+        };
+        ?>
         <div class="page-header">
             <h2>Dashboard</h2>
         </div>
@@ -88,6 +99,31 @@
         </div>
 
         <div class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+                        <div>
+                            <h5 class="mb-1">⏱️ Approval Decision SLA</h5>
+                            <p class="text-muted mb-0">
+                                Median decision time: <strong><?= htmlspecialchars($formatSeconds((int) ($approvalSla['median_seconds'] ?? 0))) ?></strong>
+                                · P95: <strong><?= htmlspecialchars($formatSeconds((int) ($approvalSla['p95_seconds'] ?? 0))) ?></strong>
+                                · Decisions analysed: <strong><?= (int) ($approvalSla['decision_count'] ?? 0) ?></strong>
+                            </p>
+                        </div>
+                        <div>
+                            <?php if ((int) ($approvalSla['pending_older_than_threshold'] ?? 0) > 0): ?>
+                                <span class="badge bg-danger fs-6">
+                                    <?= (int) $approvalSla['pending_older_than_threshold'] ?>
+                                    pending older than <?= (int) ($approvalSla['pending_warning_days'] ?? 0) ?> day(s)
+                                </span>
+                            <?php else: ?>
+                                <span class="badge bg-success fs-6">No overdue pending approvals</span>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <div class="col-md-6 col-lg-3">
                 <div class="card stat-card h-100" style="border-left-color: #f59e0b;">
                     <div class="card-body">
@@ -184,6 +220,80 @@
                                 <div class="fs-5 fw-bold" style="color: #9ca3af;"><?= (int) ($approvalStats['cancelled']['month'] ?? 0) ?></div>
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row g-4 mb-4">
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">🛡️ CSRF Failures (Scoped)</h5>
+                        <a href="/admin/audit?event_type=security.csrf.fail" class="btn btn-sm btn-outline-light">View</a>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex gap-4 mb-3">
+                            <div><small class="text-muted">Today</small><div class="fw-bold text-danger"><?= (int) ($csrfSecurityStats['today'] ?? 0) ?></div></div>
+                            <div><small class="text-muted">Week</small><div class="fw-bold text-danger"><?= (int) ($csrfSecurityStats['week'] ?? 0) ?></div></div>
+                            <div><small class="text-muted">Month</small><div class="fw-bold text-danger"><?= (int) ($csrfSecurityStats['month'] ?? 0) ?></div></div>
+                        </div>
+                        <?php if (!empty($csrfTopProjects)): ?>
+                            <div class="table-responsive">
+                                <table class="table table-dark table-sm mb-0">
+                                    <thead><tr><th>Project</th><th class="text-end">30d</th></tr></thead>
+                                    <tbody>
+                                        <?php foreach ($csrfTopProjects as $row): ?>
+                                            <tr>
+                                                <td>
+                                                    <?= htmlspecialchars((string) ($row['project_name'] ?? 'Unscoped')) ?>
+                                                    <div><code class="small"><?= htmlspecialchars((string) ($row['project_uuid'] ?? 'unscoped')) ?></code></div>
+                                                </td>
+                                                <td class="text-end fw-semibold"><?= (int) ($row['month_count'] ?? 0) ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php else: ?>
+                            <p class="text-muted mb-0">No CSRF failures recorded in the last 30 days.</p>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">🚦 Rate-Limit Hits (Scoped)</h5>
+                        <a href="/admin/audit?event_type=security.rate_limit.admin_mutation" class="btn btn-sm btn-outline-light">View</a>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-flex gap-4 mb-3">
+                            <div><small class="text-muted">Today</small><div class="fw-bold text-warning"><?= (int) ($rateLimitSecurityStats['today'] ?? 0) ?></div></div>
+                            <div><small class="text-muted">Week</small><div class="fw-bold text-warning"><?= (int) ($rateLimitSecurityStats['week'] ?? 0) ?></div></div>
+                            <div><small class="text-muted">Month</small><div class="fw-bold text-warning"><?= (int) ($rateLimitSecurityStats['month'] ?? 0) ?></div></div>
+                        </div>
+                        <?php if (!empty($rateLimitTopProjects)): ?>
+                            <div class="table-responsive">
+                                <table class="table table-dark table-sm mb-0">
+                                    <thead><tr><th>Project</th><th class="text-end">30d</th></tr></thead>
+                                    <tbody>
+                                        <?php foreach ($rateLimitTopProjects as $row): ?>
+                                            <tr>
+                                                <td>
+                                                    <?= htmlspecialchars((string) ($row['project_name'] ?? 'Unscoped')) ?>
+                                                    <div><code class="small"><?= htmlspecialchars((string) ($row['project_uuid'] ?? 'unscoped')) ?></code></div>
+                                                </td>
+                                                <td class="text-end fw-semibold"><?= (int) ($row['month_count'] ?? 0) ?></td>
+                                            </tr>
+                                        <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                        <?php else: ?>
+                            <p class="text-muted mb-0">No admin mutation rate-limit hits recorded in the last 30 days.</p>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>

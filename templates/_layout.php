@@ -38,6 +38,9 @@
                     <li class="nav-item">
                         <a class="nav-link" href="/admin/approvals">Approvals</a>
                     </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/admin/scope">Scope</a>
+                    </li>
                     <?php if (($currentAdminRole ?? '') === 'super_admin'): ?>
                         <li class="nav-item">
                             <a class="nav-link" href="/admin/maintenance">Maintenance</a>

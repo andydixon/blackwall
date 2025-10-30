@@ -31,6 +31,21 @@
 
         <div class="card mb-3">
             <div class="card-body">
+                <?php if (!empty($failureReasonOptions)): ?>
+                    <div class="mb-3 d-flex flex-wrap gap-2">
+                        <span class="text-muted small me-2">Decision denial shortcuts:</span>
+                        <?php foreach ($failureReasonOptions as $reason): ?>
+                            <?php $url = '?' . htmlspecialchars(http_build_query(array_merge($filters ?? [], ['failure_reason' => $reason, 'page' => 1]))); ?>
+                            <a class="btn btn-sm <?= (($filters['failure_reason'] ?? '') === $reason) ? 'btn-warning' : 'btn-outline-warning' ?>" href="<?= $url ?>">
+                                <?= htmlspecialchars((string) $reason) ?>
+                            </a>
+                        <?php endforeach; ?>
+                        <a class="btn btn-sm btn-outline-secondary" href="?<?= htmlspecialchars(http_build_query(array_merge($filters ?? [], ['failure_reason' => '', 'page' => 1]))) ?>">
+                            Clear
+                        </a>
+                    </div>
+                <?php endif; ?>
+
                 <form method="GET" action="/admin/approvals" class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label">Status</label>
@@ -49,6 +64,17 @@
                     <div class="col-md-3">
                         <label class="form-label">Project UUID</label>
                         <input type="text" name="project_uuid" class="form-control" value="<?= htmlspecialchars((string) ($filters['project_uuid'] ?? '')) ?>" placeholder="Project UUID">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Failure Reason</label>
+                        <select name="failure_reason" class="form-select">
+                            <option value="">Any</option>
+                            <?php foreach (($failureReasonOptions ?? []) as $reason): ?>
+                                <option value="<?= htmlspecialchars((string) $reason) ?>" <?= (($filters['failure_reason'] ?? '') === $reason) ? 'selected' : '' ?>>
+                                    <?= htmlspecialchars((string) $reason) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
                     </div>
                     <?php if (($currentAdminRole ?? '') === 'super_admin'): ?>
                         <div class="col-md-3">
@@ -87,6 +113,7 @@
                                         <th>Project</th>
                                         <th>Requested By</th>
                                         <th>Created</th>
+                                        <th>Last Denial</th>
                                         <th>Payload</th>
                                     <th>Decision</th>
                                 </tr>
@@ -113,6 +140,13 @@
                                             <div><code class="small"><?= htmlspecialchars((string) ($approval['requested_by_uuid'] ?? '-')) ?></code></div>
                                         </td>
                                         <td class="text-muted"><?= htmlspecialchars((string) $approval['created_at']) ?></td>
+                                        <td>
+                                            <?php if (!empty($approval['latest_denial_reason'])): ?>
+                                                <span class="badge bg-warning text-dark"><?= htmlspecialchars((string) $approval['latest_denial_reason']) ?></span>
+                                            <?php else: ?>
+                                                <span class="text-muted">-</span>
+                                            <?php endif; ?>
+                                        </td>
                                         <td><pre class="mb-0 small"><?= htmlspecialchars((string) $payloadPretty) ?></pre></td>
                                         <td>
                                             <?php if ($status === 'pending' && ($currentAdminRole ?? '') === 'super_admin'): ?>

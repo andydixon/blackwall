@@ -23,6 +23,7 @@ use BlackWall\Security\RateLimiter;
 use BlackWall\Security\AdminMutationPolicy;
 use BlackWall\Security\AuditExportSigner;
 use BlackWall\Security\ApprovalDecisionPolicy;
+use BlackWall\Security\AdminScopedViewPolicy;
 use BlackWall\Config;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
@@ -98,7 +99,7 @@ class AdminController
                 'view_dashboard', 'view_users', 'manage_users', 'view_projects', 'manage_projects',
                 'view_clients', 'manage_clients', 'view_assignments', 'manage_assignments',
                 'view_privileges', 'manage_privileges', 'view_audit', 'view_maintenance',
-                'manage_roles', 'decode_error_trace',
+                'manage_roles', 'decode_error_trace', 'view_scope_debug',
                 'delete_credentials_direct', 'change_user_status_direct', 'delete_privilege_direct',
                 'change_project_status_direct', 'change_client_status_direct',
                 'update_project_settings_direct', 'update_client_settings_direct',
@@ -109,10 +110,10 @@ class AdminController
                 'view_dashboard', 'view_users', 'manage_users', 'view_projects', 'manage_projects',
                 'view_clients', 'manage_clients', 'view_assignments', 'manage_assignments',
                 'view_privileges', 'manage_privileges', 'view_audit',
-                'view_approvals',
+                'view_approvals', 'view_scope_debug',
             ],
             'auditor' => [
-                'view_dashboard', 'view_audit', 'view_maintenance', 'decode_error_trace', 'view_approvals',
+                'view_dashboard', 'view_audit', 'view_maintenance', 'decode_error_trace', 'view_approvals', 'view_scope_debug',
             ],
         ];
 
@@ -413,6 +414,26 @@ class AdminController
                 'rejected' => ['today' => 0, 'week' => 0, 'month' => 0],
                 'cancelled' => ['today' => 0, 'week' => 0, 'month' => 0],
             ];
+        $pendingWarningDays = max(1, Config::getInt('ADMIN_APPROVAL_PENDING_WARNING_DAYS', 3));
+        $approvalSla = $this->hasCapability('view_approvals')
+            ? $this->approvalService->summariseSlaVisibleToUser(
+                $actorUserId,
+                $scope['is_super_admin'],
+                $scope['project_ids'],
+                $pendingWarningDays
+            )
+            : [
+                'decision_count' => 0,
+                'median_seconds' => 0,
+                'p95_seconds' => 0,
+                'pending_older_than_threshold' => 0,
+                'pending_warning_days' => $pendingWarningDays,
+                'oldest_pending_created_at' => null,
+            ];
+        $csrfSecurityStats = $this->dashboardSecurityEventStats($db, 'security.csrf.fail', $scope['is_super_admin'], $projectIds);
+        $rateLimitSecurityStats = $this->dashboardSecurityEventStats($db, 'security.rate_limit.admin_mutation', $scope['is_super_admin'], $projectIds);
+        $csrfTopProjects = $this->dashboardSecurityTopProjects($db, 'security.csrf.fail', $scope['is_super_admin'], $projectIds);
+        $rateLimitTopProjects = $this->dashboardSecurityTopProjects($db, 'security.rate_limit.admin_mutation', $scope['is_super_admin'], $projectIds);
 
         return $this->renderWithLayout($response, 'admin/dashboard.php', [
             'title' => 'Dashboard',
@@ -423,6 +444,11 @@ class AdminController
             'failBreakdown' => $failBreakdown,
             'myPendingApprovals' => $myPendingApprovals,
             'approvalStats' => $approvalStats,
+            'approvalSla' => $approvalSla,
+            'csrfSecurityStats' => $csrfSecurityStats,
+            'rateLimitSecurityStats' => $rateLimitSecurityStats,
+            'csrfTopProjects' => $csrfTopProjects,
+            'rateLimitTopProjects' => $rateLimitTopProjects,
             'csrfToken' => CSRFProtection::generateToken(),
         ]);
     }
@@ -627,6 +653,7 @@ class AdminController
             'status' => $params['status'] ?? '',
             'action_type' => $params['action_type'] ?? '',
             'project_uuid' => $params['project_uuid'] ?? '',
+            'failure_reason' => $params['failure_reason'] ?? '',
             'requested_by_uuid' => $params['requested_by_uuid'] ?? '',
             'date_from' => $params['date_from'] ?? '',
             'date_to' => $params['date_to'] ?? '',
@@ -651,6 +678,7 @@ class AdminController
             'title' => 'Approvals',
             'approvals' => $approvals,
             'filters' => $filters,
+            'failureReasonOptions' => ['missing_capability', 'out_of_scope', 'self_decision'],
             'page' => $page,
             'perPage' => $perPage,
             'total' => $total,
@@ -863,6 +891,29 @@ class AdminController
         return $this->renderWithLayout($response, 'admin/maintenance.php', [
             'title' => 'Maintenance',
             'runs' => $runs,
+        ]);
+    }
+
+    public function scopeDebug(Request $request, Response $response): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'view_scope_debug')) !== null) {
+            return $deny;
+        }
+
+        $userId = (int) SessionManager::get('user_id');
+        $scope = $this->getAdminScope($userId);
+        $superProjectName = (string) Config::get('ADMIN_SUPER_PROJECT_NAME', 'BlackWall Admin');
+        $superProjectUuid = (string) Config::get('ADMIN_SUPER_PROJECT_UUID', '');
+
+        return $this->renderWithLayout($response, 'admin/scope_debug.php', [
+            'title' => 'Scope Debug',
+            'scope' => $scope,
+            'userId' => $userId,
+            'superProjectName' => $superProjectName,
+            'superProjectUuid' => $superProjectUuid,
         ]);
     }
 
@@ -2861,6 +2912,96 @@ class AdminController
         return $url . $separator . rawurlencode($key) . '=' . rawurlencode($value);
     }
 
+    private function dashboardSecurityEventStats(
+        \PDO $db,
+        string $eventType,
+        bool $isSuperAdmin,
+        array $projectIds
+    ): array {
+        if (!$isSuperAdmin && empty($projectIds)) {
+            return ['today' => 0, 'week' => 0, 'month' => 0];
+        }
+
+        if ($isSuperAdmin) {
+            $stmt = $db->prepare(
+                "SELECT
+                    SUM(created_at >= CURDATE()) AS today_count,
+                    SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS week_count,
+                    SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS month_count
+                 FROM audit_log
+                 WHERE event_type = ?"
+            );
+            $stmt->execute([$eventType]);
+        } else {
+            $placeholders = implode(',', array_fill(0, count($projectIds), '?'));
+            $stmt = $db->prepare(
+                "SELECT
+                    SUM(created_at >= CURDATE()) AS today_count,
+                    SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS week_count,
+                    SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)) AS month_count
+                 FROM audit_log
+                 WHERE event_type = ?
+                   AND project_id IN ({$placeholders})"
+            );
+            $stmt->execute(array_merge([$eventType], $projectIds));
+        }
+
+        $row = $stmt->fetch() ?: [];
+        return [
+            'today' => (int) ($row['today_count'] ?? 0),
+            'week' => (int) ($row['week_count'] ?? 0),
+            'month' => (int) ($row['month_count'] ?? 0),
+        ];
+    }
+
+    private function dashboardSecurityTopProjects(
+        \PDO $db,
+        string $eventType,
+        bool $isSuperAdmin,
+        array $projectIds,
+        int $limit = 5
+    ): array {
+        if (!$isSuperAdmin && empty($projectIds)) {
+            return [];
+        }
+
+        if ($isSuperAdmin) {
+            $stmt = $db->prepare(
+                "SELECT
+                    COALESCE(MAX(p.uuid), 'unscoped') AS project_uuid,
+                    COALESCE(MAX(p.name), 'Unscoped') AS project_name,
+                    COUNT(*) AS month_count
+                 FROM audit_log a
+                 LEFT JOIN projects p ON p.id = a.project_id
+                 WHERE a.event_type = ?
+                   AND a.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                 GROUP BY COALESCE(a.project_id, 0)
+                 ORDER BY month_count DESC
+                 LIMIT {$limit}"
+            );
+            $stmt->execute([$eventType]);
+        } else {
+            $placeholders = implode(',', array_fill(0, count($projectIds), '?'));
+            $stmt = $db->prepare(
+                "SELECT
+                    p.uuid AS project_uuid,
+                    p.name AS project_name,
+                    COUNT(*) AS month_count
+                 FROM audit_log a
+                 JOIN projects p ON p.id = a.project_id
+                 WHERE a.event_type = ?
+                   AND a.created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                   AND a.project_id IN ({$placeholders})
+                 GROUP BY p.uuid, p.name
+                 ORDER BY month_count DESC
+                 LIMIT {$limit}"
+            );
+            $stmt->execute(array_merge([$eventType], $projectIds));
+        }
+
+        return $stmt->fetchAll();
+    }
+
     private function checkAuth(): bool
     {
         SessionManager::start();
@@ -2932,31 +3073,23 @@ class AdminController
     private function canAccessProjectId(int $projectId): bool
     {
         $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
-        return $scope['is_super_admin'] || in_array($projectId, $scope['project_ids'], true);
+        return AdminScopedViewPolicy::canAccessProjectId($scope, $projectId);
     }
 
     private function canAccessProjectUuid(string $projectUuid): bool
     {
         $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
-        return $scope['is_super_admin'] || isset($scope['project_uuid_set'][$projectUuid]);
+        return AdminScopedViewPolicy::canAccessProjectUuid($scope, $projectUuid);
     }
 
     private function canAccessUserId(int $userId): bool
     {
         $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
-        if ($scope['is_super_admin']) {
-            return true;
-        }
-        if (empty($scope['project_ids'])) {
-            return false;
-        }
-
         $db = \BlackWall\Database::getInstance();
-        $placeholders = implode(',', array_fill(0, count($scope['project_ids']), '?'));
-        $sql = "SELECT COUNT(*) FROM user_project_roles WHERE user_id = ? AND project_id IN ({$placeholders})";
-        $stmt = $db->prepare($sql);
-        $stmt->execute(array_merge([$userId], $scope['project_ids']));
-        return (int) $stmt->fetchColumn() > 0;
+        $stmt = $db->prepare('SELECT DISTINCT project_id FROM user_project_roles WHERE user_id = ?');
+        $stmt->execute([$userId]);
+        $userProjectIds = array_map(static fn(array $row): int => (int) $row['project_id'], $stmt->fetchAll());
+        return AdminScopedViewPolicy::canAccessUserByProjects($scope, $userProjectIds);
     }
 
     private function isUserScopedSuperAdmin(int $userId): bool
