@@ -20,6 +20,19 @@ This manual covers day-to-day use for:
 - Error trace decoder (authorised admins only): `/admin/error-trace`
 - Scope diagnostics (authorised admins only): `/admin/scope`
 
+## 2.1 Administrator Quick Start (First 15 Minutes)
+
+1. Sign in at `/admin/login` with your WebAuthn authenticator.
+2. Open `/admin/scope` and confirm your scope is correct.
+3. Review `/admin/dashboard` for:
+   - approval backlog
+   - security widgets (CSRF and rate-limit hits)
+4. Open `/admin/approvals` and check:
+   - pending requests
+   - denied decision reasons (`missing_capability`, `out_of_scope`, `self_decision`)
+5. Open `/admin/audit` and verify recent login and admin activity entries.
+6. If you are super admin, confirm at least one additional active super-admin path exists to avoid lockout risk.
+
 ## 3. Roles and Scope
 
 ### 3.1 Project Privilege Levels

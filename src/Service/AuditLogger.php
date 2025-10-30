@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace BlackWall\Service;
 
+use BlackWall\Service\EventMetricPusher;
 use BlackWall\Database;
 use PDO;
 
@@ -13,10 +14,12 @@ class AuditLogger
     private ?string $correlationId = null;
     private ?string $ipAddress = null;
     private ?string $userAgent = null;
+    private EventMetricPusher $eventMetricPusher;
 
     public function __construct()
     {
         $this->db = Database::getInstance();
+        $this->eventMetricPusher = new EventMetricPusher();
     }
 
     public function setRequestContext(string $correlationId, string $ipAddress, ?string $userAgent): void
@@ -149,6 +152,7 @@ class AuditLogger
             ]);
 
             $this->db->commit();
+            $this->eventMetricPusher->pushEvent($eventType, $outcome);
         } catch (\Throwable $e) {
             $this->db->rollBack();
             throw $e;

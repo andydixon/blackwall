@@ -31,6 +31,18 @@
 
         <div class="card mb-3">
             <div class="card-body">
+                <h6 class="mb-2">Why was a decision denied?</h6>
+                <p class="text-muted small mb-2">Use the quick filters below to find denied items by reason.</p>
+                <ul class="mb-0 small">
+                    <li><code>missing_capability</code>: your current admin role cannot decide approvals. Use a super-admin account.</li>
+                    <li><code>out_of_scope</code>: the approval belongs to a project outside your scope. Switch to an account that administers that project.</li>
+                    <li><code>self_decision</code>: you requested the action yourself. Another eligible approver must decide it.</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-body">
                 <?php if (!empty($failureReasonOptions)): ?>
                     <div class="mb-3 d-flex flex-wrap gap-2">
                         <span class="text-muted small me-2">Decision denial shortcuts:</span>

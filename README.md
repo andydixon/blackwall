@@ -398,6 +398,23 @@ Default limits:
 - `/oauth/authorize`: 30 per minute
 - WebAuthn endpoints: 10 per minute
 
+### Optional vmagent Event Push
+
+BlackWall can push a Prometheus exposition line per audit event to vmagent.
+
+Configure in `.env`:
+
+```ini
+EVENT_METRICS_PUSH_ENABLED=true
+EVENT_METRICS_PUSH_URL=http://127.0.0.1:8429/api/v1/import/prometheus
+EVENT_METRICS_PUSH_METRIC_NAME=blackwall_event
+EVENT_METRICS_PUSH_INCLUDE_OUTCOME=true
+EVENT_METRICS_PUSH_STATIC_LABELS=environment=production,instance=blackwall-1
+EVENT_METRICS_PUSH_TIMEOUT_MS=250
+```
+
+Each pushed sample has metric value `1` with at least `event_name` label (and optionally `outcome` plus static labels).
+
 ## Troubleshooting
 
 ### Bootstrap Token Expired

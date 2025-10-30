@@ -25,6 +25,12 @@ Session hardening defaults:
 - `SESSION_IDLE_TIMEOUT=1800` (idle logout after 30 minutes)
 - `SESSION_BIND_USER_AGENT=true` (invalidate session if user-agent changes)
 
+Optional real-time event metric push (to vmagent Prometheus importer):
+- `EVENT_METRICS_PUSH_ENABLED=true`
+- `EVENT_METRICS_PUSH_URL=http://127.0.0.1:8429/api/v1/import/prometheus`
+- `EVENT_METRICS_PUSH_METRIC_NAME=blackwall_event`
+- `EVENT_METRICS_PUSH_STATIC_LABELS=environment=production,instance=blackwall-1`
+
 ### Review Audit Logs
 
 Access admin panel: https://blackwall.cx/admin/audit
