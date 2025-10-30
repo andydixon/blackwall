@@ -15,6 +15,7 @@ This manual covers day-to-day use for:
 - Home: `/`
 - Admin sign-in: `/admin/login`
 - Admin dashboard: `/admin/dashboard`
+- Admin documentation centre: `/admin/docs/`
 - User portal sign-in: `/portal/login`
 - User portal dashboard: `/portal`
 - Error trace decoder (authorised admins only): `/admin/error-trace`

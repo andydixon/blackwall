@@ -99,7 +99,7 @@ class AdminController
                 'view_dashboard', 'view_users', 'manage_users', 'view_projects', 'manage_projects',
                 'view_clients', 'manage_clients', 'view_assignments', 'manage_assignments',
                 'view_privileges', 'manage_privileges', 'view_audit', 'view_maintenance',
-                'manage_roles', 'decode_error_trace', 'view_scope_debug',
+                'manage_roles', 'decode_error_trace', 'view_scope_debug', 'view_docs',
                 'delete_credentials_direct', 'change_user_status_direct', 'delete_privilege_direct',
                 'change_project_status_direct', 'change_client_status_direct',
                 'update_project_settings_direct', 'update_client_settings_direct',
@@ -109,11 +109,11 @@ class AdminController
             'operator' => [
                 'view_dashboard', 'view_users', 'manage_users', 'view_projects', 'manage_projects',
                 'view_clients', 'manage_clients', 'view_assignments', 'manage_assignments',
-                'view_privileges', 'manage_privileges', 'view_audit',
+                'view_privileges', 'manage_privileges', 'view_audit', 'view_docs',
                 'view_approvals', 'view_scope_debug',
             ],
             'auditor' => [
-                'view_dashboard', 'view_audit', 'view_maintenance', 'decode_error_trace', 'view_approvals', 'view_scope_debug',
+                'view_dashboard', 'view_audit', 'view_maintenance', 'decode_error_trace', 'view_approvals', 'view_scope_debug', 'view_docs',
             ],
         ];
 
@@ -892,6 +892,16 @@ class AdminController
             'title' => 'Maintenance',
             'runs' => $runs,
         ]);
+    }
+
+    public function docsHome(Request $request, Response $response): Response
+    {
+        return $this->renderDocsPage($response, 'overview');
+    }
+
+    public function docsPage(Request $request, Response $response, array $args): Response
+    {
+        return $this->renderDocsPage($response, (string) ($args['page'] ?? 'overview'));
     }
 
     public function scopeDebug(Request $request, Response $response): Response
@@ -2910,6 +2920,101 @@ class AdminController
     {
         $separator = str_contains($url, '?') ? '&' : '?';
         return $url . $separator . rawurlencode($key) . '=' . rawurlencode($value);
+    }
+
+    private function renderDocsPage(Response $response, string $slug): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'view_docs')) !== null) {
+            return $deny;
+        }
+
+        $pages = $this->docsGuidePages();
+        if (!isset($pages[$slug])) {
+            return $response->withStatus(404);
+        }
+
+        $orderedSlugs = array_keys($pages);
+        $currentIndex = array_search($slug, $orderedSlugs, true);
+        $previousSlug = ($currentIndex !== false && $currentIndex > 0) ? $orderedSlugs[$currentIndex - 1] : null;
+        $nextSlug = ($currentIndex !== false && $currentIndex < count($orderedSlugs) - 1) ? $orderedSlugs[$currentIndex + 1] : null;
+
+        return $this->renderWithLayout($response, 'admin/docs/guide.php', [
+            'title' => 'Documentation',
+            'docsPages' => $pages,
+            'currentSlug' => $slug,
+            'currentPage' => $pages[$slug],
+            'previousSlug' => $previousSlug,
+            'nextSlug' => $nextSlug,
+        ]);
+    }
+
+    private function docsGuidePages(): array
+    {
+        return [
+            'overview' => [
+                'title' => 'Overview',
+                'summary' => 'Platform purpose, capability model, and documentation map.',
+                'template' => 'overview.php',
+            ],
+            'quick-start' => [
+                'title' => 'Administrator Quick Start',
+                'summary' => 'First-session steps and immediate safety checks.',
+                'template' => 'quick_start.php',
+            ],
+            'access-model' => [
+                'title' => 'Access Model and Scope',
+                'summary' => 'How admin scope, super admin rules, and visibility boundaries work.',
+                'template' => 'access_model.php',
+            ],
+            'users-and-enrolment' => [
+                'title' => 'Users and Enrolment',
+                'summary' => 'User lifecycle, enrolment links, WebAuthn credentials, and status control.',
+                'template' => 'users_and_enrolment.php',
+            ],
+            'projects-and-privileges' => [
+                'title' => 'Projects, Privileges, and Assignments',
+                'summary' => 'Project governance, privilege levels, and assignment administration.',
+                'template' => 'projects_and_privileges.php',
+            ],
+            'oauth-clients' => [
+                'title' => 'OAuth Clients and Authorisation Flows',
+                'summary' => 'Client configuration, security posture, and flow expectations.',
+                'template' => 'oauth_clients.php',
+            ],
+            'approvals' => [
+                'title' => 'Approvals Workflow',
+                'summary' => 'Submission, decisioning, denial reasons, and operational handling.',
+                'template' => 'approvals.php',
+            ],
+            'audit-and-security' => [
+                'title' => 'Audit and Security Operations',
+                'summary' => 'Audit search/export, security indicators, and response actions.',
+                'template' => 'audit_and_security.php',
+            ],
+            'metrics-and-vmagent' => [
+                'title' => 'Metrics and vmagent Event Push',
+                'summary' => 'Dashboard metrics, event push configuration, and validation.',
+                'template' => 'metrics_and_vmagent.php',
+            ],
+            'maintenance-and-dr' => [
+                'title' => 'Maintenance, Backup, and Recovery',
+                'summary' => 'Routine maintenance, backup standards, and recovery rehearsal.',
+                'template' => 'maintenance_and_dr.php',
+            ],
+            'troubleshooting' => [
+                'title' => 'Troubleshooting and Diagnostics',
+                'summary' => 'Common faults, diagnostic sequence, and corrective actions.',
+                'template' => 'troubleshooting.php',
+            ],
+            'reference' => [
+                'title' => 'Reference and Glossary',
+                'summary' => 'Environment variable reference, route index, and glossary.',
+                'template' => 'reference.php',
+            ],
+        ];
     }
 
     private function dashboardSecurityEventStats(

@@ -78,6 +78,10 @@ $app->group('/admin', function (RouteCollectorProxy $group) {
     $group->get('', [AdminController::class, 'dashboard']);
     $group->get('/dashboard', [AdminController::class, 'dashboard']);
     $group->get('/maintenance', [AdminController::class, 'maintenance']);
+    $group->get('/docs', [AdminController::class, 'docsHome']);
+    $group->get('/docs/', [AdminController::class, 'docsHome']);
+    $group->get('/docs/{page}', [AdminController::class, 'docsPage']);
+    $group->get('/docs/{page}/', [AdminController::class, 'docsPage']);
     $group->get('/scope', [AdminController::class, 'scopeDebug']);
     $group->get('/error-trace', [AdminController::class, 'errorTraceDecodeForm']);
     $group->post('/error-trace', [AdminController::class, 'errorTraceDecode']);

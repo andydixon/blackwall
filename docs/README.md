@@ -4,6 +4,7 @@ Use this index to find the current operating and user guidance for BlackWall.
 
 ## Core Guides
 
+- In-admin guide centre: `/admin/docs/`
 - `docs/USER_MANUAL.md`: end-user and administrator manual (UK English)
 - `docs/RUNBOOK.md`: operational runbook, monitoring, maintenance, and incident response
 - `docs/DEPLOYMENT.md`: deployment and environment guidance
