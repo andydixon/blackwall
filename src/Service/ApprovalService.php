@@ -188,7 +188,7 @@ class ApprovalService
                            FROM audit_log al
                            WHERE al.event_type = 'admin.approval.decision.denied'
                              AND al.target_type = 'approval_request'
-                             AND al.target_id = CAST(ar.id AS CHAR)
+                             AND CAST(al.target_id AS UNSIGNED) = ar.id
                            ORDER BY al.id DESC
                            LIMIT 1
                        ) AS latest_denial_reason
@@ -325,7 +325,7 @@ class ApprovalService
                 FROM audit_log al
                 WHERE al.event_type = 'admin.approval.decision.denied'
                   AND al.target_type = 'approval_request'
-                  AND al.target_id = CAST({$approvalAlias}.id AS CHAR)
+                  AND CAST(al.target_id AS UNSIGNED) = {$approvalAlias}.id
                   AND JSON_UNQUOTE(JSON_EXTRACT(al.metadata_json, '$.failure_reason')) = ?
             )";
             $params[] = (string) $filters['failure_reason'];
