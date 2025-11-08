@@ -16,7 +16,7 @@
 
             <?php if (!empty($tracePayload)): ?>
                 <div class="trace-wrap text-start mt-4">
-                    Debug Information:
+                    Debug Information (compressed + encrypted + base64):
                     <pre class="error-trace mb-0"><?= htmlspecialchars($tracePayload) ?></pre>
                 </div>
             <?php endif; ?>

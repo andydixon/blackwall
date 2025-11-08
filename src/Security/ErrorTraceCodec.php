@@ -12,12 +12,17 @@ class ErrorTraceCodec
 
     public static function encode(string $plaintext): string
     {
+        $compressed = gzencode($plaintext, 6);
+        if ($compressed === false) {
+            throw new \RuntimeException('Failed to compress trace payload');
+        }
+
         $key = self::getKey();
         $iv = random_bytes(12);
         $tag = '';
 
         $ciphertext = openssl_encrypt(
-            $plaintext,
+            $compressed,
             self::CIPHER,
             $key,
             OPENSSL_RAW_DATA,
@@ -30,7 +35,8 @@ class ErrorTraceCodec
         }
 
         $payload = [
-            'v' => 1,
+            'v' => 2,
+            'cmp' => 'gzip',
             'iv' => base64_encode($iv),
             'tag' => base64_encode($tag),
             'ct' => base64_encode($ciphertext),
@@ -47,7 +53,7 @@ class ErrorTraceCodec
         }
 
         $payload = json_decode($decoded, true);
-        if (!is_array($payload) || ($payload['v'] ?? null) !== 1) {
+        if (!is_array($payload) || !in_array(($payload['v'] ?? null), [1, 2], true)) {
             throw new \RuntimeException('Payload format is invalid');
         }
 
@@ -72,7 +78,21 @@ class ErrorTraceCodec
             throw new \RuntimeException('Failed to decrypt payload');
         }
 
-        return $plaintext;
+        if ((int) ($payload['v'] ?? 1) === 1) {
+            return $plaintext;
+        }
+
+        $compression = (string) ($payload['cmp'] ?? '');
+        if ($compression !== 'gzip') {
+            throw new \RuntimeException('Unsupported payload compression');
+        }
+
+        $decompressed = gzdecode($plaintext);
+        if ($decompressed === false) {
+            throw new \RuntimeException('Failed to decompress payload');
+        }
+
+        return $decompressed;
     }
 
     private static function getKey(): string

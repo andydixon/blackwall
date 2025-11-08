@@ -2,7 +2,7 @@
     <div class="col-12">
         <div class="page-header">
             <h2>🔎 Decode Error Trace</h2>
-            <p class="text-muted mb-0">Paste encrypted+base64 payload from the error page to decode it server-side.</p>
+            <p class="text-muted mb-0">Paste compressed+encrypted+base64 payload from the error page to decode it server-side.</p>
         </div>
 
         <div class="card mb-4">
