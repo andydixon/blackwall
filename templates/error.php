@@ -13,10 +13,10 @@
             <div class="error-code"><?= (int) ($statusCode ?? 500) ?></div>
             <h1 class="error-headline"><?= htmlspecialchars($headline ?? 'Application Error') ?></h1>
             <h2 class="error-detail text-muted"><?= htmlspecialchars($detail ?? 'An unexpected error occurred.') ?></h2>
-
+            <h2 class="error-detail text-muted"><a href="/admin">Return to Admin</a></h2>    
             <?php if (!empty($tracePayload)): ?>
                 <div class="trace-wrap text-start mt-4">
-                    Debug Information (compressed + encrypted + base64):
+                    Debug Payload:
                     <pre class="error-trace mb-0"><?= htmlspecialchars($tracePayload) ?></pre>
                 </div>
             <?php endif; ?>
