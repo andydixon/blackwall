@@ -259,21 +259,36 @@ class OAuthService
         return $response;
     }
 
-    public function introspectToken(string $token): ?array
+    public function introspectToken(string $token, ?int $requestingClientId = null): array
     {
         $tokenHash = $this->hasher->hash($token);
 
-        $stmt = $this->db->prepare(
-            'SELECT t.*, u.uuid as user_uuid, p.uuid as project_uuid, c.client_id, pl.name as privilege_name
-            FROM oauth_access_tokens t
-            JOIN users u ON u.id = t.user_id
-            JOIN projects p ON p.id = t.project_id
-            JOIN oauth_clients c ON c.id = t.client_id
-            LEFT JOIN project_privilege_levels pl ON pl.project_id = t.project_id AND pl.level = t.privilege_level
-            WHERE t.token_hash = ? AND t.revoked_at IS NULL'
-        );
+        $sql = 'SELECT
+                    t.id,
+                    t.client_id AS token_client_id,
+                    t.user_id,
+                    t.project_id,
+                    t.scopes,
+                    t.privilege_level,
+                    t.expires_at,
+                    u.uuid AS user_uuid,
+                    p.uuid AS project_uuid,
+                    c.client_id AS token_client_public_id,
+                    pl.name AS privilege_name
+                FROM oauth_access_tokens t
+                JOIN users u ON u.id = t.user_id
+                JOIN projects p ON p.id = t.project_id
+                JOIN oauth_clients c ON c.id = t.client_id
+                LEFT JOIN project_privilege_levels pl ON pl.project_id = t.project_id AND pl.level = t.privilege_level
+                WHERE t.token_hash = ? AND t.revoked_at IS NULL';
+        $params = [$tokenHash];
+        if ($requestingClientId !== null) {
+            $sql .= ' AND t.client_id = ?';
+            $params[] = $requestingClientId;
+        }
 
-        $stmt->execute([$tokenHash]);
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
         $tokenData = $stmt->fetch();
 
         if (!$tokenData) {
@@ -288,11 +303,11 @@ class OAuthService
         return [
             'active' => true,
             'scope' => implode(' ', json_decode($tokenData['scopes'], true) ?: []),
-            'client_id' => $tokenData['client_id'],
+            'client_id' => $tokenData['token_client_public_id'],
             'token_type' => 'Bearer',
             'exp' => $expiresAt->getTimestamp(),
             'sub' => $tokenData['user_uuid'],
-            'aud' => $tokenData['client_id'],
+            'aud' => $tokenData['token_client_public_id'],
             'iss' => \BlackWall\Config::get('APP_URL'),
             'project_id' => $tokenData['project_uuid'],
             'privilege_level' => (int) $tokenData['privilege_level'],
@@ -303,23 +318,33 @@ class OAuthService
         ];
     }
 
-    public function revokeToken(string $token): bool
+    public function revokeToken(string $token, ?int $requestingClientId = null): bool
     {
         $tokenHash = $this->hasher->hash($token);
 
-        $stmt = $this->db->prepare(
-            'UPDATE oauth_access_tokens SET revoked_at = NOW() WHERE token_hash = ?'
-        );
-        $stmt->execute([$tokenHash]);
+        $accessSql = 'UPDATE oauth_access_tokens SET revoked_at = NOW() WHERE token_hash = ?';
+        $accessParams = [$tokenHash];
+        if ($requestingClientId !== null) {
+            $accessSql .= ' AND client_id = ?';
+            $accessParams[] = $requestingClientId;
+        }
+
+        $stmt = $this->db->prepare($accessSql);
+        $stmt->execute($accessParams);
 
         if ($stmt->rowCount() > 0) {
             return true;
         }
 
-        $stmt = $this->db->prepare(
-            'UPDATE oauth_refresh_tokens SET revoked_at = NOW() WHERE token_hash = ?'
-        );
-        $stmt->execute([$tokenHash]);
+        $refreshSql = 'UPDATE oauth_refresh_tokens SET revoked_at = NOW() WHERE token_hash = ?';
+        $refreshParams = [$tokenHash];
+        if ($requestingClientId !== null) {
+            $refreshSql .= ' AND client_id = ?';
+            $refreshParams[] = $requestingClientId;
+        }
+
+        $stmt = $this->db->prepare($refreshSql);
+        $stmt->execute($refreshParams);
 
         return $stmt->rowCount() > 0;
     }

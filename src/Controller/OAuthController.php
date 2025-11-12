@@ -8,6 +8,7 @@ use BlackWall\Config;
 use BlackWall\Domain\PrivilegeLabelResolver;
 use BlackWall\Repository\OAuthClientRepository;
 use BlackWall\Repository\ProjectRepository;
+use BlackWall\Repository\OrganizationRepository;
 use BlackWall\Repository\UserProjectRoleRepository;
 use BlackWall\Repository\PrivilegeLevelRepository;
 use BlackWall\Service\OAuthService;
@@ -15,6 +16,7 @@ use BlackWall\Service\AuditLogger;
 use BlackWall\Security\SessionManager;
 use BlackWall\Security\CSRFProtection;
 use BlackWall\Security\JWTManager;
+use BlackWall\Security\OAuthClientAuthenticator;
 use BlackWall\Security\RateLimiter;
 use BlackWall\Security\TokenHasher;
 use BlackWall\Database;
@@ -27,21 +29,25 @@ class OAuthController
     private OAuthClientRepository $clientRepo;
     private ProjectRepository $projectRepo;
     private UserProjectRoleRepository $roleRepo;
+    private OrganizationRepository $organizationRepo;
     private PrivilegeLevelRepository $privilegeRepo;
     private OAuthService $oauthService;
     private JWTManager $jwtManager;
     private RateLimiter $rateLimiter;
+    private OAuthClientAuthenticator $clientAuthenticator;
     private PhpRenderer $renderer;
 
     public function __construct()
     {
         $this->clientRepo = new OAuthClientRepository();
         $this->projectRepo = new ProjectRepository();
+        $this->organizationRepo = new OrganizationRepository();
         $this->roleRepo = new UserProjectRoleRepository();
         $this->privilegeRepo = new PrivilegeLevelRepository();
         $this->oauthService = new OAuthService();
         $this->jwtManager = new JWTManager();
         $this->rateLimiter = new RateLimiter();
+        $this->clientAuthenticator = new OAuthClientAuthenticator(new TokenHasher());
         $this->renderer = new PhpRenderer(__DIR__ . '/../../templates');
     }
 
@@ -194,6 +200,7 @@ class OAuthController
             return $this->renderer->render($response, 'oauth/login.php', [
                 'clientName' => $client->name,
                 'returnUrl' => $params['redirect_uri'],
+                'organization' => $this->organizationRepo->findById($project->organizationId),
             ]);
         }
 
@@ -340,8 +347,22 @@ class OAuthController
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
 
+        $auth = $this->authenticateClient($request, (array) $body);
+        if (!$auth['ok']) {
+            $audit->logFail('oauth.token.fail', ['error_code' => 'invalid_client']);
+            $response->getBody()->write(json_encode(['error' => 'invalid_client']));
+            return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+        }
+        $client = $auth['client'];
+
+        if (!$client->supportsGrant((string) $body['grant_type'])) {
+            $audit->logFail('oauth.token.fail', ['error_code' => 'unauthorized_client']);
+            $response->getBody()->write(json_encode(['error' => 'unauthorized_client']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
         if ($body['grant_type'] === 'authorization_code') {
-            return $this->handleAuthorizationCodeGrant($request, $response, $body, $audit);
+            return $this->handleAuthorizationCodeGrant($request, $response, (array) $body, $audit, $client);
         }
 
         $audit->logFail('oauth.token.fail', ['error_code' => 'unsupported_grant_type']);
@@ -349,32 +370,38 @@ class OAuthController
         return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
     }
 
-    private function handleAuthorizationCodeGrant(Request $request, Response $response, array $body, AuditLogger $audit): Response
+    private function handleAuthorizationCodeGrant(
+        Request $request,
+        Response $response,
+        array $body,
+        AuditLogger $audit,
+        \BlackWall\Model\OAuthClient $client
+    ): Response
     {
-        if (empty($body['code']) || empty($body['client_id']) || empty($body['redirect_uri']) || empty($body['code_verifier'])) {
+        if (empty($body['code']) || empty($body['redirect_uri']) || empty($body['code_verifier'])) {
             $audit->logFail('oauth.token.fail', ['error_code' => 'invalid_request']);
             $response->getBody()->write(json_encode(['error' => 'invalid_request']));
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
 
         $tokenData = $this->oauthService->exchangeAuthorizationCode(
-            $body['code'],
-            $body['client_id'],
-            $body['redirect_uri'],
-            $body['code_verifier']
+            (string) $body['code'],
+            $client->clientId,
+            (string) $body['redirect_uri'],
+            (string) $body['code_verifier']
         );
 
         if (!$tokenData) {
             $audit->logFail('oauth.token.fail', [
                 'error_code' => 'invalid_grant',
-                'oauth_client_public_id' => $body['client_id'],
+                'oauth_client_public_id' => $client->clientId,
             ]);
             $response->getBody()->write(json_encode(['error' => 'invalid_grant']));
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
 
         $audit->logSuccess('oauth.token.issue', [
-            'oauth_client_public_id' => $body['client_id'],
+            'oauth_client_public_id' => $client->clientId,
             'grant_type' => 'authorization_code',
         ]);
 
@@ -394,10 +421,16 @@ class OAuthController
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
 
-        $revoked = $this->oauthService->revokeToken($body['token']);
+        $auth = $this->authenticateClient($request, (array) $body);
+        if (!$auth['ok']) {
+            $response->getBody()->write(json_encode(['error' => 'invalid_client']));
+            return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+        }
+        $client = $auth['client'];
+        $this->oauthService->revokeToken((string) $body['token'], $client->id);
 
         $audit->logSuccess('oauth.token.revoke', [
-            'oauth_client_public_id' => $body['client_id'] ?? null,
+            'oauth_client_public_id' => $client->clientId,
         ]);
 
         return $response->withStatus(200);
@@ -410,19 +443,35 @@ class OAuthController
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
 
+        $auth = $this->authenticateClient($request, (array) $body);
+        if (!$auth['ok']) {
+            $response->getBody()->write(json_encode(['active' => false]));
+            return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+        }
+        $client = $auth['client'];
+
         if (empty($body['token'])) {
             $response->getBody()->write(json_encode(['active' => false]));
             return $response->withHeader('Content-Type', 'application/json');
         }
 
-        $introspection = $this->oauthService->introspectToken($body['token']);
+        $introspection = $this->oauthService->introspectToken((string) $body['token'], $client->id);
 
         $audit->logInfo('oauth.token.introspect', [
-            'oauth_client_public_id' => $body['client_id'] ?? null,
+            'oauth_client_public_id' => $client->clientId,
         ]);
 
         $response->getBody()->write(json_encode($introspection));
         return $response->withHeader('Content-Type', 'application/json');
+    }
+
+    private function authenticateClient(Request $request, array $body): array
+    {
+        return $this->clientAuthenticator->authenticate(
+            $request->getHeaderLine('Authorization'),
+            $body,
+            fn(string $clientId) => $this->clientRepo->findByClientId($clientId)
+        );
     }
 
     public function userinfo(Request $request, Response $response): Response
