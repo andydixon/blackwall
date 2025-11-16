@@ -5,21 +5,83 @@ declare(strict_types=1);
 namespace BlackWall\Controller;
 
 use BlackWall\Database;
+use BlackWall\Config;
+use BlackWall\Repository\OrganizationRepository;
+use BlackWall\Repository\UserRepository;
+use BlackWall\Security\EnrollmentTokenExpiryValidator;
 use BlackWall\Service\WebAuthnService;
 use BlackWall\Service\AuditLogger;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use Slim\Views\PhpRenderer;
+use Ramsey\Uuid\Uuid;
 
 class BootstrapController
 {
     private WebAuthnService $webauthn;
+    private OrganizationRepository $organizationRepo;
+    private UserRepository $userRepo;
     private PhpRenderer $renderer;
 
     public function __construct()
     {
         $this->webauthn = new WebAuthnService();
+        $this->organizationRepo = new OrganizationRepository();
+        $this->userRepo = new UserRepository();
         $this->renderer = new PhpRenderer(__DIR__ . '/../../templates');
+    }
+
+    public function organizationSignupForm(Request $request, Response $response): Response
+    {
+        return $this->renderer->render($response, 'organizations/signup.php', [
+            'csrfToken' => \BlackWall\Security\CSRFProtection::generateToken(),
+        ]);
+    }
+
+    public function organizationSignup(Request $request, Response $response): Response
+    {
+        $body = $request->getParsedBody();
+        if (!\BlackWall\Security\CSRFProtection::validateToken((string) ($body['csrf_token'] ?? ''))) {
+            return $response->withHeader('Location', '/organisations/signup?error=csrf')->withStatus(302);
+        }
+
+        $name = trim((string) ($body['name'] ?? ''));
+        $slug = trim((string) ($body['slug'] ?? ''));
+        $adminLabel = trim((string) ($body['admin_display_label'] ?? ''));
+        if ($name === '' || $slug === '' || $adminLabel === '') {
+            return $response->withHeader('Location', '/organisations/signup?error=invalid')->withStatus(302);
+        }
+        if (!preg_match('/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/', $slug)) {
+            return $response->withHeader('Location', '/organisations/signup?error=slug')->withStatus(302);
+        }
+
+        try {
+            $organization = $this->organizationRepo->create(Uuid::uuid4()->toString(), $name, $slug, null, null);
+        } catch (\Throwable $e) {
+            return $response->withHeader('Location', '/organisations/signup?error=duplicate')->withStatus(302);
+        }
+
+        $adminUser = $this->userRepo->create($organization->id, Uuid::uuid4()->toString(), $adminLabel, 'active');
+        $this->organizationRepo->setAdminUser($organization->id, $adminUser->id);
+
+        $db = Database::getInstance();
+        $token = bin2hex(random_bytes(32));
+        $expiry = (new \DateTimeImmutable('+24 hours'))->format('Y-m-d H:i:s');
+        $stmt = $db->prepare(
+            "INSERT INTO system_config (config_key, config_value)
+             VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE config_value = VALUES(config_value)"
+        );
+        $stmt->execute(['enrollment_token_' . $token, (string) $adminUser->id]);
+        $stmt->execute(['enrollment_expiry_' . $token, $expiry]);
+        $enrollmentLink = rtrim((string) Config::get('APP_URL'), '/') . '/enroll?token=' . urlencode($token);
+
+        return $this->renderer->render($response, 'organizations/signup.php', [
+            'csrfToken' => \BlackWall\Security\CSRFProtection::generateToken(),
+            'success' => true,
+            'enrollmentLink' => $enrollmentLink,
+            'organizationName' => $organization->name,
+        ]);
     }
 
     public function showBootstrapForm(Request $request, Response $response): Response
@@ -58,7 +120,7 @@ class BootstrapController
         $stmt->execute();
         $expiry = $stmt->fetch();
 
-        if ($expiry && new \DateTimeImmutable($expiry['config_value']) < new \DateTimeImmutable()) {
+        if (!$expiry || !EnrollmentTokenExpiryValidator::isValid((string) ($expiry['config_value'] ?? null))) {
             $response->getBody()->write('Bootstrap token expired');
             return $response->withStatus(400);
         }
@@ -75,7 +137,12 @@ class BootstrapController
         }
 
         // Generate WebAuthn registration options
-        $stmt = $db->prepare("SELECT uuid, display_label FROM users WHERE id = ?");
+        $stmt = $db->prepare(
+            "SELECT u.uuid, u.display_label, o.name AS organization_name, o.logo_url AS organization_logo_url
+             FROM users u
+             LEFT JOIN organizations o ON o.id = u.organization_id
+             WHERE u.id = ?"
+        );
         $stmt->execute([$userId]);
         $user = $stmt->fetch();
 
@@ -85,6 +152,10 @@ class BootstrapController
             'token' => $token,
             'options' => $options,
             'user' => $user,
+            'organization' => [
+                'name' => $user['organization_name'] ?? null,
+                'logo_url' => $user['organization_logo_url'] ?? null,
+            ],
         ]);
     }
 
@@ -111,6 +182,15 @@ class BootstrapController
         if (!$storedToken || $storedToken['config_value'] !== $token) {
             $audit->logFail('webauthn.registration.fail', ['failure_reason' => 'Invalid token']);
             $response->getBody()->write(json_encode(['error' => 'Invalid token']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        $stmt = $db->prepare("SELECT config_value FROM system_config WHERE config_key = 'bootstrap_expiry'");
+        $stmt->execute();
+        $expiry = $stmt->fetch();
+        if (!$expiry || !EnrollmentTokenExpiryValidator::isValid((string) ($expiry['config_value'] ?? null))) {
+            $audit->logFail('webauthn.registration.fail', ['failure_reason' => 'Bootstrap token expired']);
+            $response->getBody()->write(json_encode(['error' => 'Token expired']));
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
 
@@ -205,13 +285,18 @@ class BootstrapController
         $stmt->execute(['enrollment_expiry_' . $token]);
         $expiry = $stmt->fetch();
 
-        if ($expiry && new \DateTimeImmutable($expiry['config_value']) < new \DateTimeImmutable()) {
+        if (!$expiry || !EnrollmentTokenExpiryValidator::isValid((string) ($expiry['config_value'] ?? null))) {
             $response->getBody()->write('Enrollment token expired');
             return $response->withStatus(400);
         }
 
         // Get user info
-        $stmt = $db->prepare("SELECT uuid, display_label FROM users WHERE id = ?");
+        $stmt = $db->prepare(
+            "SELECT u.uuid, u.display_label, o.name AS organization_name, o.logo_url AS organization_logo_url
+             FROM users u
+             LEFT JOIN organizations o ON o.id = u.organization_id
+             WHERE u.id = ?"
+        );
         $stmt->execute([$userId]);
         $user = $stmt->fetch();
 
@@ -227,6 +312,10 @@ class BootstrapController
             'token' => $token,
             'options' => $options,
             'user' => $user,
+            'organization' => [
+                'name' => $user['organization_name'] ?? null,
+                'logo_url' => $user['organization_logo_url'] ?? null,
+            ],
         ]);
     }
 
@@ -259,6 +348,15 @@ class BootstrapController
         }
 
         $userId = (int) $userIdRow['config_value'];
+
+        $stmt = $db->prepare("SELECT config_value FROM system_config WHERE config_key = ?");
+        $stmt->execute(['enrollment_expiry_' . $token]);
+        $expiry = $stmt->fetch();
+        if (!$expiry || !EnrollmentTokenExpiryValidator::isValid((string) ($expiry['config_value'] ?? null))) {
+            $audit->logFail('webauthn.registration.fail', ['failure_reason' => 'Enrollment token expired']);
+            $response->getBody()->write(json_encode(['error' => 'Token expired']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
 
         // Extract credential data from WebAuthn response
         $credentialId = $body['id'] ?? null;
