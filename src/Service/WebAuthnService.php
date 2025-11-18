@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace BlackWall\Service;
 
 use BlackWall\Database;
+use BlackWall\Security\WebAuthnAssertionPolicy;
 use Webauthn\PublicKeyCredentialCreationOptions;
 use Webauthn\PublicKeyCredentialRequestOptions;
 use Webauthn\PublicKeyCredentialSource;
@@ -336,6 +337,11 @@ class WebAuthnService
                 return false;
             }
 
+            if (!WebAuthnAssertionPolicy::hasValidRpIdHash($authDataBinary, $this->rpId)) {
+                error_log('verifyAssertion: rpId hash mismatch');
+                return false;
+            }
+
             // Check the User Present (UP) flag (bit 0 of flags byte at offset 32)
             $flags = ord($authDataBinary[32]);
             $userPresent = ($flags & 0x01) !== 0;
@@ -395,6 +401,12 @@ class WebAuthnService
             
             // Update sign counter if verification succeeded
             $signCounter = unpack('N', substr($authDataBinary, 33, 4))[1];
+            $storedSignCounter = (int) ($credential['sign_counter'] ?? 0);
+            if (!WebAuthnAssertionPolicy::hasValidSignCounter($storedSignCounter, (int) $signCounter)) {
+                error_log('verifyAssertion: sign counter regression detected');
+                return false;
+            }
+
             $this->updateSignCounter((int)$credential['id'], $signCounter);
 
             return true;
