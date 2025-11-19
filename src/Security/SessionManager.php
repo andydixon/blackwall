@@ -99,7 +99,7 @@ class SessionManager
     public static function regenerateId(): void
     {
         self::start();
-        // Keep old session data temporarily to avoid losing pending OAuth params
-        session_regenerate_id(false);
+        // Rotate and invalidate old session ID to reduce fixation risk.
+        session_regenerate_id(true);
     }
 }
