@@ -494,11 +494,6 @@ class OAuthController
 
         // Try to parse as JWT first
         $jwtToken = $this->jwtManager->parse($accessToken);
-        error_log("JWT parse result: " . ($jwtToken ? "success" : "null"));
-        if ($jwtToken) {
-            $isValid = $this->jwtManager->validate($jwtToken);
-            error_log("JWT validation result: " . ($isValid ? "valid" : "invalid"));
-        }
         if ($jwtToken && $this->jwtManager->validate($jwtToken)) {
             // JWT token - extract claims
             $claims = $jwtToken->claims();
