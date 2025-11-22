@@ -17,6 +17,8 @@ use BlackWall\Security\SessionManager;
 use BlackWall\Security\CSRFProtection;
 use BlackWall\Security\JWTManager;
 use BlackWall\Security\OAuthClientAuthenticator;
+use BlackWall\Security\OAuthAuthorizationRequestValidator;
+use BlackWall\Security\OidcNonceReplayGuard;
 use BlackWall\Security\RateLimiter;
 use BlackWall\Security\TokenHasher;
 use BlackWall\Database;
@@ -35,6 +37,8 @@ class OAuthController
     private JWTManager $jwtManager;
     private RateLimiter $rateLimiter;
     private OAuthClientAuthenticator $clientAuthenticator;
+    private OAuthAuthorizationRequestValidator $authRequestValidator;
+    private OidcNonceReplayGuard $nonceReplayGuard;
     private PhpRenderer $renderer;
 
     public function __construct()
@@ -48,6 +52,8 @@ class OAuthController
         $this->jwtManager = new JWTManager();
         $this->rateLimiter = new RateLimiter();
         $this->clientAuthenticator = new OAuthClientAuthenticator(new TokenHasher());
+        $this->authRequestValidator = new OAuthAuthorizationRequestValidator();
+        $this->nonceReplayGuard = new OidcNonceReplayGuard();
         $this->renderer = new PhpRenderer(__DIR__ . '/../../templates');
     }
 
@@ -101,24 +107,12 @@ class OAuthController
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
 
-        // Validate required parameters
-        $requiredParams = ['client_id', 'redirect_uri', 'response_type', 'code_challenge'];
-        foreach ($requiredParams as $param) {
-            if (empty($params[$param])) {
-                $audit->logFail('oauth.authorize.fail', [
-                    'message' => "Missing required parameter: {$param}",
-                    'error_code' => 'invalid_request',
-                ]);
-                return $this->errorResponse($response, 'invalid_request', "Missing parameter: {$param}");
-            }
-        }
-
-        if ($params['response_type'] !== 'code') {
+        if (empty($params['client_id']) || empty($params['redirect_uri'])) {
             $audit->logFail('oauth.authorize.fail', [
-                'message' => 'Unsupported response_type',
-                'error_code' => 'unsupported_response_type',
+                'message' => 'Missing client_id or redirect_uri',
+                'error_code' => 'invalid_request',
             ]);
-            return $this->errorResponse($response, 'unsupported_response_type');
+            return $this->errorResponse($response, 'invalid_request', 'Missing client_id or redirect_uri');
         }
 
         // Find client
@@ -168,28 +162,32 @@ class OAuthController
             return $this->redirectError($response, $params['redirect_uri'], 'unauthorized_client', null, $params['state'] ?? null);
         }
 
-        // Validate PKCE
-        if (empty($params['code_challenge']) || empty($params['code_challenge_method'])) {
-            $audit->logFail('oauth.authorize.fail', [
-                'message' => 'Missing PKCE parameters',
-                'error_code' => 'invalid_request',
-                'oauth_client_id' => $client->id,
-            ]);
-            return $this->redirectError($response, $params['redirect_uri'], 'invalid_request', 'PKCE required', $params['state'] ?? null);
-        }
-
-        if ($params['code_challenge_method'] !== 'S256') {
-            $audit->logFail('oauth.authorize.fail', [
-                'message' => 'Unsupported code_challenge_method',
-                'error_code' => 'invalid_request',
-                'oauth_client_id' => $client->id,
-                'pkce_method' => $params['code_challenge_method'],
-            ]);
-            return $this->redirectError($response, $params['redirect_uri'], 'invalid_request', 'Only S256 supported', $params['state'] ?? null);
-        }
-
         // Parse scopes
         $requestedScopes = isset($params['scope']) ? explode(' ', $params['scope']) : [];
+        $isOidcRequest = in_array('openid', $requestedScopes, true);
+
+        $validation = $this->authRequestValidator->validate(
+            $params,
+            $isOidcRequest,
+            $isOidcRequest
+                ? fn(string $nonce): bool => $this->nonceReplayGuard->isReplayAndRemember($client->clientId, $nonce)
+                : null
+        );
+        if (!$validation['ok']) {
+            $audit->logFail('oauth.authorize.fail', [
+                'message' => (string) ($validation['description'] ?? $validation['error'] ?? 'Invalid authorization request'),
+                'error_code' => (string) ($validation['error'] ?? 'invalid_request'),
+                'oauth_client_id' => $client->id,
+                'oauth_client_public_id' => $client->clientId,
+            ]);
+            return $this->redirectError(
+                $response,
+                $params['redirect_uri'],
+                (string) ($validation['error'] ?? 'invalid_request'),
+                $validation['description'],
+                $params['state'] ?? null
+            );
+        }
         
         // Check if user is logged in
         $userId = SessionManager::get('user_id');
