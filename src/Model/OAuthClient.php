@@ -38,13 +38,8 @@ class OAuthClient
 
     public function hasRedirectUri(string $uri): bool
     {
-        // Normalize URIs to avoid trivial mismatches (e.g., trailing slash)
-        $normalize = function (string $u): string {
-            return rtrim($u, '/');
-        };
-        $needle = $normalize($uri);
         foreach ($this->redirectUris as $allowed) {
-            if ($needle === $normalize($allowed)) {
+            if (is_string($allowed) && hash_equals($allowed, $uri)) {
                 return true;
             }
         }
