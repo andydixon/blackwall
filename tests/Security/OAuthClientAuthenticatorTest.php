@@ -34,6 +34,7 @@ class OAuthClientAuthenticatorTest extends TestCase
 
         $this->assertTrue($result['ok']);
         $this->assertInstanceOf(OAuthClient::class, $result['client']);
+        $this->assertSame('client_secret_basic', $result['auth_method']);
     }
 
     public function testConfidentialClientRejectsWrongSecret(): void
@@ -58,6 +59,7 @@ class OAuthClientAuthenticatorTest extends TestCase
 
         $this->assertTrue($result['ok']);
         $this->assertInstanceOf(OAuthClient::class, $result['client']);
+        $this->assertSame('none', $result['auth_method']);
     }
 
     public function testMismatchedBasicAndBodyClientIdIsRejected(): void
@@ -71,6 +73,47 @@ class OAuthClientAuthenticatorTest extends TestCase
 
         $this->assertFalse($result['ok']);
         $this->assertSame('invalid_client', $result['error']);
+    }
+
+    public function testConfidentialClientAcceptsClientSecretPost(): void
+    {
+        $hasher = new TokenHasher();
+        $client = $this->makeClient('confidential-client', $hasher->hash('expected-secret'));
+        $authenticator = new OAuthClientAuthenticator($hasher);
+
+        $result = $authenticator->authenticate('', [
+            'client_id' => 'confidential-client',
+            'client_secret' => 'expected-secret',
+        ], fn(string $id) => $client);
+
+        $this->assertTrue($result['ok']);
+        $this->assertSame('client_secret_post', $result['auth_method']);
+    }
+
+    public function testPublicClientRejectsBasicAuthentication(): void
+    {
+        $client = $this->makeClient('public-client', null);
+        $authenticator = new OAuthClientAuthenticator(new TokenHasher());
+        $header = 'Basic ' . base64_encode('public-client:');
+
+        $result = $authenticator->authenticate($header, [], fn(string $id) => $client);
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame('unauthorized_client', $result['error']);
+    }
+
+    public function testPublicClientRejectsClientSecretPost(): void
+    {
+        $client = $this->makeClient('public-client', null);
+        $authenticator = new OAuthClientAuthenticator(new TokenHasher());
+
+        $result = $authenticator->authenticate('', [
+            'client_id' => 'public-client',
+            'client_secret' => 'should-not-be-here',
+        ], fn(string $id) => $client);
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame('unauthorized_client', $result['error']);
     }
 
     private function makeClient(string $clientId, ?string $clientSecretHash): OAuthClient

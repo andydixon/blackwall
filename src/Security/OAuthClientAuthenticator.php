@@ -17,19 +17,20 @@ class OAuthClientAuthenticator
 
     /**
      * @param callable(string): ?OAuthClient $findClientById
-     * @return array{ok:bool,client:?OAuthClient,error:?string}
+     * @return array{ok:bool,client:?OAuthClient,error:?string,auth_method:?string}
      */
     public function authenticate(string $authorizationHeader, array $body, callable $findClientById): array
     {
         $basic = $this->parseBasicAuthorizationHeader($authorizationHeader);
         if ($basic['present'] && $basic['client_id'] === null) {
-            return ['ok' => false, 'client' => null, 'error' => 'invalid_client'];
+            return ['ok' => false, 'client' => null, 'error' => 'invalid_client', 'auth_method' => null];
         }
 
         $bodyClientId = trim((string) ($body['client_id'] ?? ''));
+        $bodySecret = array_key_exists('client_secret', $body) ? (string) $body['client_secret'] : null;
         $clientId = $basic['client_id'] ?? $bodyClientId;
         if ($clientId === '') {
-            return ['ok' => false, 'client' => null, 'error' => 'invalid_client'];
+            return ['ok' => false, 'client' => null, 'error' => 'invalid_client', 'auth_method' => null];
         }
 
         if (
@@ -37,30 +38,48 @@ class OAuthClientAuthenticator
             && $bodyClientId !== ''
             && !hash_equals($basic['client_id'], $bodyClientId)
         ) {
-            return ['ok' => false, 'client' => null, 'error' => 'invalid_client'];
+            return ['ok' => false, 'client' => null, 'error' => 'invalid_client', 'auth_method' => null];
         }
 
         $client = $findClientById($clientId);
         if (!$client || !$client->isActive()) {
-            return ['ok' => false, 'client' => null, 'error' => 'invalid_client'];
+            return ['ok' => false, 'client' => null, 'error' => 'invalid_client', 'auth_method' => null];
+        }
+
+        $method = 'none';
+        if ($basic['client_id'] !== null) {
+            $method = 'client_secret_basic';
+        } elseif ($bodySecret !== null && $bodySecret !== '') {
+            $method = 'client_secret_post';
         }
 
         if ($client->isConfidential()) {
             $providedSecret = $basic['client_secret'];
-            if ($providedSecret === null && array_key_exists('client_secret', $body)) {
-                $providedSecret = (string) $body['client_secret'];
+            if ($providedSecret === null && $bodySecret !== null) {
+                $providedSecret = $bodySecret;
             }
 
             if ($providedSecret === null || $providedSecret === '') {
-                return ['ok' => false, 'client' => null, 'error' => 'invalid_client'];
+                return ['ok' => false, 'client' => null, 'error' => 'invalid_client', 'auth_method' => null];
             }
 
             if (!$this->hasher->verify($providedSecret, (string) $client->clientSecretHash)) {
-                return ['ok' => false, 'client' => null, 'error' => 'invalid_client'];
+                return ['ok' => false, 'client' => null, 'error' => 'invalid_client', 'auth_method' => null];
+            }
+        } else {
+            // Public clients must use "none" at token endpoint auth.
+            if ($basic['present']) {
+                return ['ok' => false, 'client' => null, 'error' => 'unauthorized_client', 'auth_method' => null];
+            }
+            if ($bodySecret !== null && $bodySecret !== '') {
+                return ['ok' => false, 'client' => null, 'error' => 'unauthorized_client', 'auth_method' => null];
+            }
+            if ($bodyClientId === '') {
+                return ['ok' => false, 'client' => null, 'error' => 'invalid_client', 'auth_method' => null];
             }
         }
 
-        return ['ok' => true, 'client' => $client, 'error' => null];
+        return ['ok' => true, 'client' => $client, 'error' => null, 'auth_method' => $method];
     }
 
     /**

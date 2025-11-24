@@ -347,9 +347,11 @@ class OAuthController
 
         $auth = $this->authenticateClient($request, (array) $body);
         if (!$auth['ok']) {
-            $audit->logFail('oauth.token.fail', ['error_code' => 'invalid_client']);
-            $response->getBody()->write(json_encode(['error' => 'invalid_client']));
-            return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+            $error = (string) ($auth['error'] ?? 'invalid_client');
+            $status = $error === 'unauthorized_client' ? 400 : 401;
+            $audit->logFail('oauth.token.fail', ['error_code' => $error]);
+            $response->getBody()->write(json_encode(['error' => $error]));
+            return $response->withStatus($status)->withHeader('Content-Type', 'application/json');
         }
         $client = $auth['client'];
 
@@ -421,8 +423,10 @@ class OAuthController
 
         $auth = $this->authenticateClient($request, (array) $body);
         if (!$auth['ok']) {
-            $response->getBody()->write(json_encode(['error' => 'invalid_client']));
-            return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+            $error = (string) ($auth['error'] ?? 'invalid_client');
+            $status = $error === 'unauthorized_client' ? 400 : 401;
+            $response->getBody()->write(json_encode(['error' => $error]));
+            return $response->withStatus($status)->withHeader('Content-Type', 'application/json');
         }
         $client = $auth['client'];
         $this->oauthService->revokeToken((string) $body['token'], $client->id);
@@ -444,7 +448,8 @@ class OAuthController
         $auth = $this->authenticateClient($request, (array) $body);
         if (!$auth['ok']) {
             $response->getBody()->write(json_encode(['active' => false]));
-            return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+            $status = (string) ($auth['error'] ?? 'invalid_client') === 'unauthorized_client' ? 400 : 401;
+            return $response->withStatus($status)->withHeader('Content-Type', 'application/json');
         }
         $client = $auth['client'];
 
