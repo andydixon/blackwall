@@ -12,6 +12,7 @@ use BlackWall\Repository\PrivilegeLevelRepository;
 use BlackWall\Security\TokenHasher;
 use BlackWall\Security\PKCEValidator;
 use BlackWall\Security\JWTManager;
+use BlackWall\Security\RefreshTokenStatePolicy;
 use PDO;
 
 class OAuthService
@@ -147,6 +148,102 @@ class OAuthService
             nonce: $authCode['nonce'],
             oidcEnabled: (bool) $authCode['oidc_enabled']
         );
+    }
+
+    public function exchangeRefreshToken(string $refreshToken, string $clientPublicId): ?array
+    {
+        $refreshTokenHash = $this->hasher->hash($refreshToken);
+
+        $stmt = $this->db->prepare(
+            'SELECT
+                rt.*,
+                c.client_id AS oauth_client_public_id,
+                c.access_token_type,
+                c.access_token_lifetime,
+                c.refresh_token_lifetime,
+                c.oidc_enabled,
+                c.status AS client_status
+             FROM oauth_refresh_tokens rt
+             JOIN oauth_clients c ON c.id = rt.client_id
+             WHERE rt.token_hash = ? AND c.client_id = ?
+             LIMIT 1'
+        );
+        $stmt->execute([$refreshTokenHash, $clientPublicId]);
+        $row = $stmt->fetch();
+        if (!$row) {
+            return null;
+        }
+
+        if ((string) ($row['client_status'] ?? '') !== 'active') {
+            return null;
+        }
+
+        $state = RefreshTokenStatePolicy::classify(
+            $row['revoked_at'] ?? null,
+            $row['expires_at'] ?? null
+        );
+        if ($state === RefreshTokenStatePolicy::STATE_REUSED) {
+            $this->revokeTokenFamily((int) $row['client_id'], (int) $row['user_id'], (int) $row['project_id']);
+            return null;
+        }
+        if ($state !== RefreshTokenStatePolicy::STATE_VALID) {
+            return null;
+        }
+
+        $this->db->beginTransaction();
+        try {
+            $revokeCurrentStmt = $this->db->prepare(
+                'UPDATE oauth_refresh_tokens SET revoked_at = NOW() WHERE id = ? AND revoked_at IS NULL'
+            );
+            $revokeCurrentStmt->execute([(int) $row['id']]);
+            if ($revokeCurrentStmt->rowCount() !== 1) {
+                $this->db->rollBack();
+                $this->revokeTokenFamily((int) $row['client_id'], (int) $row['user_id'], (int) $row['project_id']);
+                return null;
+            }
+
+            $role = $this->roleRepo->findByUserAndProject(
+                (int) $row['user_id'],
+                (int) $row['project_id']
+            );
+            if (!$role) {
+                $this->db->rollBack();
+                return null;
+            }
+
+            $privilegeLevel = $this->privilegeRepo->findByProjectAndLevel(
+                (int) $row['project_id'],
+                $role->privilegeLevel
+            );
+
+            $scopes = json_decode((string) ($row['scopes'] ?? '[]'), true);
+            $scopes = is_array($scopes) ? $scopes : [];
+
+            $tokens = $this->issueTokens(
+                clientId: (int) $row['client_id'],
+                userId: (int) $row['user_id'],
+                projectId: (int) $row['project_id'],
+                scopes: $scopes,
+                privilegeLevel: $role->privilegeLevel,
+                privilegeName: PrivilegeLabelResolver::resolve(
+                    $role->privilegeLevel,
+                    $privilegeLevel?->name
+                ),
+                tokenType: (string) $row['access_token_type'],
+                accessTokenLifetime: (int) $row['access_token_lifetime'],
+                refreshTokenLifetime: (int) $row['refresh_token_lifetime'],
+                nonce: null,
+                oidcEnabled: (bool) $row['oidc_enabled']
+            );
+
+            $this->db->commit();
+            return $tokens;
+        } catch (\Throwable $e) {
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
+            return null;
+        }
     }
 
     private function issueTokens(
@@ -347,5 +444,22 @@ class OAuthService
         $stmt->execute($refreshParams);
 
         return $stmt->rowCount() > 0;
+    }
+
+    private function revokeTokenFamily(int $clientId, int $userId, int $projectId): void
+    {
+        $refreshStmt = $this->db->prepare(
+            'UPDATE oauth_refresh_tokens
+             SET revoked_at = NOW()
+             WHERE client_id = ? AND user_id = ? AND project_id = ? AND revoked_at IS NULL'
+        );
+        $refreshStmt->execute([$clientId, $userId, $projectId]);
+
+        $accessStmt = $this->db->prepare(
+            'UPDATE oauth_access_tokens
+             SET revoked_at = NOW()
+             WHERE client_id = ? AND user_id = ? AND project_id = ? AND revoked_at IS NULL'
+        );
+        $accessStmt->execute([$clientId, $userId, $projectId]);
     }
 }

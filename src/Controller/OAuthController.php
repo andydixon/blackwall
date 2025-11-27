@@ -364,6 +364,9 @@ class OAuthController
         if ($body['grant_type'] === 'authorization_code') {
             return $this->handleAuthorizationCodeGrant($request, $response, (array) $body, $audit, $client);
         }
+        if ($body['grant_type'] === 'refresh_token') {
+            return $this->handleRefreshTokenGrant($response, (array) $body, $audit, $client);
+        }
 
         $audit->logFail('oauth.token.fail', ['error_code' => 'unsupported_grant_type']);
         $response->getBody()->write(json_encode(['error' => 'unsupported_grant_type']));
@@ -403,6 +406,41 @@ class OAuthController
         $audit->logSuccess('oauth.token.issue', [
             'oauth_client_public_id' => $client->clientId,
             'grant_type' => 'authorization_code',
+        ]);
+
+        $response->getBody()->write(json_encode($tokenData));
+        return $response->withHeader('Content-Type', 'application/json');
+    }
+
+    private function handleRefreshTokenGrant(
+        Response $response,
+        array $body,
+        AuditLogger $audit,
+        \BlackWall\Model\OAuthClient $client
+    ): Response {
+        if (empty($body['refresh_token'])) {
+            $audit->logFail('oauth.token.fail', ['error_code' => 'invalid_request']);
+            $response->getBody()->write(json_encode(['error' => 'invalid_request']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        $tokenData = $this->oauthService->exchangeRefreshToken(
+            (string) $body['refresh_token'],
+            $client->clientId
+        );
+        if (!$tokenData) {
+            $audit->logFail('oauth.token.fail', [
+                'error_code' => 'invalid_grant',
+                'oauth_client_public_id' => $client->clientId,
+                'grant_type' => 'refresh_token',
+            ]);
+            $response->getBody()->write(json_encode(['error' => 'invalid_grant']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        $audit->logSuccess('oauth.token.issue', [
+            'oauth_client_public_id' => $client->clientId,
+            'grant_type' => 'refresh_token',
         ]);
 
         $response->getBody()->write(json_encode($tokenData));
