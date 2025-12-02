@@ -9,6 +9,7 @@ use BlackWall\Config;
 use BlackWall\Repository\OrganizationRepository;
 use BlackWall\Repository\UserRepository;
 use BlackWall\Security\EnrollmentTokenExpiryValidator;
+use BlackWall\Security\SessionManager;
 use BlackWall\Service\WebAuthnService;
 use BlackWall\Service\AuditLogger;
 use Psr\Http\Message\ResponseInterface as Response;
@@ -147,6 +148,11 @@ class BootstrapController
         $user = $stmt->fetch();
 
         $options = $this->webauthn->generateRegistrationOptions($user['uuid'], $user['display_label'] ?? 'Admin');
+        SessionManager::set('bootstrap_registration_context', [
+            'token' => (string) $token,
+            'user_id' => (int) $userId,
+            'challenge' => (string) $options['challenge'],
+        ]);
 
         return $this->renderer->render($response, 'bootstrap/enroll.php', [
             'token' => $token,
@@ -206,6 +212,12 @@ class BootstrapController
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
 
+        $registrationContext = (array) SessionManager::get('bootstrap_registration_context', []);
+        SessionManager::remove('bootstrap_registration_context');
+        $expectedChallenge = (string) ($registrationContext['challenge'] ?? '');
+        $contextToken = (string) ($registrationContext['token'] ?? '');
+        $contextUserId = (int) ($registrationContext['user_id'] ?? 0);
+
         // Extract credential data from WebAuthn response
         $credentialId = $body['id'] ?? null;
         $rawId = $body['rawId'] ?? null;
@@ -215,6 +227,18 @@ class BootstrapController
         if (!$credentialId || !$rawId || !$attestationObject || !$clientDataJSON) {
             $audit->logFail('webauthn.registration.fail', ['failure_reason' => 'Invalid credential data']);
             $response->getBody()->write(json_encode(['error' => 'Invalid credential data']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        if (
+            $expectedChallenge === ''
+            || $contextToken === ''
+            || !hash_equals($contextToken, (string) $token)
+            || $contextUserId !== (int) $userId
+            || !$this->webauthn->verifyRegistrationResponse((string) $clientDataJSON, $expectedChallenge)
+        ) {
+            $audit->logFail('webauthn.registration.fail', ['failure_reason' => 'Registration challenge or origin validation failed']);
+            $response->getBody()->write(json_encode(['error' => 'Invalid registration response']));
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
 
@@ -307,6 +331,11 @@ class BootstrapController
 
         // Generate WebAuthn registration options
         $options = $this->webauthn->generateRegistrationOptions($user['uuid'], $user['display_label'] ?? 'User');
+        SessionManager::set('enrollment_registration_context', [
+            'token' => (string) $token,
+            'user_id' => (int) $userId,
+            'challenge' => (string) $options['challenge'],
+        ]);
 
         return $this->renderer->render($response, 'enroll.php', [
             'token' => $token,
@@ -358,6 +387,12 @@ class BootstrapController
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
 
+        $registrationContext = (array) SessionManager::get('enrollment_registration_context', []);
+        SessionManager::remove('enrollment_registration_context');
+        $expectedChallenge = (string) ($registrationContext['challenge'] ?? '');
+        $contextToken = (string) ($registrationContext['token'] ?? '');
+        $contextUserId = (int) ($registrationContext['user_id'] ?? 0);
+
         // Extract credential data from WebAuthn response
         $credentialId = $body['id'] ?? null;
         $rawId = $body['rawId'] ?? null;
@@ -367,6 +402,18 @@ class BootstrapController
         if (!$credentialId || !$rawId || !$attestationObject || !$clientDataJSON) {
             $audit->logFail('webauthn.registration.fail', ['failure_reason' => 'Invalid credential data']);
             $response->getBody()->write(json_encode(['error' => 'Invalid credential data']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        if (
+            $expectedChallenge === ''
+            || $contextToken === ''
+            || !hash_equals($contextToken, (string) $token)
+            || $contextUserId !== (int) $userId
+            || !$this->webauthn->verifyRegistrationResponse((string) $clientDataJSON, $expectedChallenge)
+        ) {
+            $audit->logFail('webauthn.registration.fail', ['failure_reason' => 'Registration challenge or origin validation failed']);
+            $response->getBody()->write(json_encode(['error' => 'Invalid registration response']));
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
 

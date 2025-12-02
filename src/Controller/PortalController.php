@@ -234,10 +234,22 @@ class PortalController
 
         $credentialId = $body['id'] ?? null;
         $attestationObject = $body['response']['attestationObject'] ?? null;
+        $clientDataJSON = $body['response']['clientDataJSON'] ?? null;
         $label = $body['label'] ?? 'Unnamed Key';
 
-        if (!$credentialId || !$attestationObject) {
+        if (!$credentialId || !$attestationObject || !$clientDataJSON) {
             $response->getBody()->write(json_encode(['error' => 'Invalid credential data']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+
+        $expectedChallenge = (string) SessionManager::get('portal_registration_challenge', '');
+        SessionManager::remove('portal_registration_challenge');
+        if ($expectedChallenge === '' || !$this->webauthn->verifyRegistrationResponse((string) $clientDataJSON, $expectedChallenge)) {
+            $audit->logFail('webauthn.registration.fail', [
+                'failure_reason' => 'Registration challenge or origin validation failed',
+                'actor_user_id' => $userId,
+            ]);
+            $response->getBody()->write(json_encode(['error' => 'Invalid registration response']));
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
 

@@ -6,6 +6,7 @@ namespace BlackWall\Service;
 
 use BlackWall\Database;
 use BlackWall\Security\WebAuthnAssertionPolicy;
+use BlackWall\Security\WebAuthnRegistrationPolicy;
 use Webauthn\PublicKeyCredentialCreationOptions;
 use Webauthn\PublicKeyCredentialRequestOptions;
 use Webauthn\PublicKeyCredentialSource;
@@ -275,6 +276,15 @@ class WebAuthnService
             error_log("Failed to extract public key: " . $e->getMessage());
             return null;
         }
+    }
+
+    public function verifyRegistrationResponse(string $clientDataJSON, string $expectedChallenge): bool
+    {
+        return WebAuthnRegistrationPolicy::validateClientData(
+            $clientDataJSON,
+            $expectedChallenge,
+            $this->rpId
+        );
     }
 
     /**
