@@ -205,6 +205,12 @@ class PortalController
             return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
         }
 
+        $body = (array) $request->getParsedBody();
+        if (!CSRFProtection::validateToken((string) ($body['csrf_token'] ?? ''))) {
+            $response->getBody()->write(json_encode(['error' => 'Invalid CSRF token']));
+            return $response->withStatus(403)->withHeader('Content-Type', 'application/json');
+        }
+
         $userId = SessionManager::get('user_id');
         $db = Database::getInstance();
 
@@ -230,7 +236,12 @@ class PortalController
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $userId = SessionManager::get('user_id');
-        $body = $request->getParsedBody();
+        $body = (array) $request->getParsedBody();
+        if (!CSRFProtection::validateToken((string) ($body['csrf_token'] ?? ''))) {
+            $audit->logFail('security.csrf.fail', ['failure_reason' => 'portal.add_key_complete']);
+            $response->getBody()->write(json_encode(['error' => 'Invalid CSRF token']));
+            return $response->withStatus(403)->withHeader('Content-Type', 'application/json');
+        }
 
         $credentialId = $body['id'] ?? null;
         $attestationObject = $body['response']['attestationObject'] ?? null;
@@ -283,6 +294,11 @@ class PortalController
             return $response->withHeader('Location', '/portal/login')->withStatus(302);
         }
 
+        $body = (array) $request->getParsedBody();
+        if (!CSRFProtection::validateToken((string) ($body['csrf_token'] ?? ''))) {
+            return $response->withHeader('Location', '/portal?error=csrf')->withStatus(302);
+        }
+
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $userId = SessionManager::get('user_id');
@@ -330,6 +346,11 @@ class PortalController
 
     public function logout(Request $request, Response $response): Response
     {
+        $body = (array) $request->getParsedBody();
+        if (!CSRFProtection::validateToken((string) ($body['csrf_token'] ?? ''))) {
+            return $response->withHeader('Location', '/portal?error=csrf')->withStatus(302);
+        }
+
         SessionManager::destroy();
         return $response->withHeader('Location', '/portal/login')->withStatus(302);
     }

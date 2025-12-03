@@ -8,6 +8,7 @@
                 </div>
                 <div>
                     <form method="POST" action="/portal/logout" class="d-inline">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
                         <button type="submit" class="btn btn-outline-light btn-sm">Logout</button>
                     </form>
                 </div>
@@ -33,6 +34,8 @@
                     ✗ Invalid key reference
                 <?php elseif ($_GET['error'] === 'min_keys'): ?>
                     ✗ You must retain at least <?= (int) \BlackWall\Config::getInt('MIN_WEBAUTHN_KEYS', 1) ?> key(s)
+                <?php elseif ($_GET['error'] === 'csrf'): ?>
+                    ✗ Invalid request token. Please retry.
                 <?php endif; ?>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
@@ -132,6 +135,7 @@
                                             <?php else: ?>
                                                 <form method="POST" action="/portal/keys/<?= urlencode($cred['credential_id']) ?>/delete" class="d-inline" 
                                                       onsubmit="return confirm('Are you sure you want to delete this security key? This action cannot be undone.')">
+                                                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
                                                     <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
                                                 </form>
                                             <?php endif; ?>
@@ -240,7 +244,8 @@
             // Get registration options
             const optionsResp = await fetch('/portal/keys/add/init', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ csrf_token: csrfToken })
             });
 
             const options = await optionsResp.json();
@@ -264,6 +269,7 @@
 
             // Send to server
             const credentialData = {
+                csrf_token: csrfToken,
                 id: credential.id,
                 rawId: arrayBufferToBase64(credential.rawId),
                 type: credential.type,
