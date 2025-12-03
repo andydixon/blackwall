@@ -9,6 +9,7 @@ use BlackWall\Service\AuditLogger;
 use BlackWall\Middleware\CorrelationIdMiddleware;
 use BlackWall\Middleware\IpAddressMiddleware;
 use BlackWall\Middleware\AuditContextMiddleware;
+use BlackWall\Middleware\SecurityHeadersMiddleware;
 use BlackWall\Security\ErrorTraceCodec;
 use Slim\Factory\AppFactory;
 use Slim\Exception\HttpException;
@@ -101,6 +102,7 @@ $app->addBodyParsingMiddleware();
 $app->add(new AuditContextMiddleware(new AuditLogger()));
 $app->add(new IpAddressMiddleware());
 $app->add(new CorrelationIdMiddleware());
+$app->add(new SecurityHeadersMiddleware());
 
 // Health check
 $app->get('/health', function ($request, $response) {
