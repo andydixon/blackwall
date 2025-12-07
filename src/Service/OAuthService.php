@@ -113,8 +113,13 @@ class OAuthService
             return null;
         }
 
-        $updateStmt = $this->db->prepare('UPDATE oauth_auth_codes SET used_at = NOW() WHERE id = ?');
+        $updateStmt = $this->db->prepare(
+            'UPDATE oauth_auth_codes SET used_at = NOW() WHERE id = ? AND used_at IS NULL'
+        );
         $updateStmt->execute([$authCode['id']]);
+        if ($updateStmt->rowCount() !== 1) {
+            return null;
+        }
 
         $role = $this->roleRepo->findByUserAndProject(
             (int) $authCode['user_id'],
