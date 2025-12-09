@@ -21,6 +21,7 @@ use BlackWall\Security\OAuthAuthorizationRequestValidator;
 use BlackWall\Security\OidcNonceReplayGuard;
 use BlackWall\Security\RateLimiter;
 use BlackWall\Security\TokenHasher;
+use BlackWall\Security\UserInfoScopePolicy;
 use BlackWall\Database;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
@@ -541,6 +542,42 @@ class OAuthController
             $userUuid = $claims->get('sub');
             $scopeString = $claims->get('scope', '');
             $scopes = !empty($scopeString) ? explode(' ', $scopeString) : [];
+            if (!UserInfoScopePolicy::hasOpenIdScope($scopes)) {
+                $audit->logFail('oidc.userinfo.fail', ['failure_reason' => 'Missing openid scope']);
+                $response->getBody()->write(json_encode([
+                    'error' => 'insufficient_scope',
+                    'error_description' => 'openid scope required',
+                ]));
+                return $response->withStatus(403)->withHeader('Content-Type', 'application/json');
+            }
+
+            $audClaim = $claims->get('aud', null);
+            $audience = null;
+            if (is_string($audClaim) && $audClaim !== '') {
+                $audience = $audClaim;
+            } elseif (is_array($audClaim) && !empty($audClaim) && is_string($audClaim[0])) {
+                $audience = $audClaim[0];
+            }
+            if ($audience === null) {
+                $audit->logFail('oidc.userinfo.fail', ['failure_reason' => 'Missing audience claim']);
+                $response->getBody()->write(json_encode([
+                    'error' => 'invalid_token',
+                    'error_description' => 'Token audience is missing'
+                ]));
+                return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+            }
+            $clientStmt = Database::getInstance()->prepare(
+                'SELECT id FROM oauth_clients WHERE client_id = ? AND status = ?'
+            );
+            $clientStmt->execute([$audience, 'active']);
+            if (!$clientStmt->fetchColumn()) {
+                $audit->logFail('oidc.userinfo.fail', ['failure_reason' => 'Audience client is invalid or inactive']);
+                $response->getBody()->write(json_encode([
+                    'error' => 'invalid_token',
+                    'error_description' => 'Token audience is invalid'
+                ]));
+                return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+            }
             
             // Get user details from database
             $db = Database::getInstance();
@@ -585,13 +622,14 @@ class OAuthController
         // Not a JWT or invalid JWT - try opaque token lookup
         $db = Database::getInstance();
         $stmt = $db->prepare(
-            'SELECT t.*, u.uuid as user_uuid, u.display_label, p.uuid as project_uuid, p.name as project_name
+            'SELECT t.*, u.uuid as user_uuid, u.display_label, p.uuid as project_uuid, p.name as project_name, c.status as client_status
              FROM oauth_access_tokens t
              JOIN users u ON t.user_id = u.id
              JOIN projects p ON t.project_id = p.id
-             WHERE t.token_hash = ? AND t.revoked_at IS NULL AND t.expires_at > NOW()'
+             JOIN oauth_clients c ON c.id = t.client_id
+             WHERE t.token_hash = ? AND t.revoked_at IS NULL AND t.expires_at > NOW() AND c.status = ?'
         );
-        $stmt->execute([hash('sha256', $accessToken)]);
+        $stmt->execute([hash('sha256', $accessToken), 'active']);
         $token = $stmt->fetch();
 
         if (!$token) {
@@ -609,7 +647,19 @@ class OAuthController
         ];
 
         // Add optional claims based on scopes
-        $scopes = explode(' ', $token['scopes']);
+        $scopeList = json_decode((string) ($token['scopes'] ?? '[]'), true);
+        if (!is_array($scopeList)) {
+            $scopeList = [];
+        }
+        $scopes = array_values(array_filter(array_map('strval', $scopeList)));
+        if (!UserInfoScopePolicy::hasOpenIdScope($scopes)) {
+            $audit->logFail('oidc.userinfo.fail', ['failure_reason' => 'Missing openid scope']);
+            $response->getBody()->write(json_encode([
+                'error' => 'insufficient_scope',
+                'error_description' => 'openid scope required',
+            ]));
+            return $response->withStatus(403)->withHeader('Content-Type', 'application/json');
+        }
         
         if (in_array('profile', $scopes)) {
             $userinfo['name'] = $token['display_label'];
