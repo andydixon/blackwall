@@ -9,6 +9,7 @@ use BlackWall\Domain\PrivilegeLabelResolver;
 use BlackWall\Config;
 use BlackWall\Service\WebAuthnService;
 use BlackWall\Service\AuditLogger;
+use BlackWall\Security\RateLimiter;
 use BlackWall\Security\SessionManager;
 use BlackWall\Security\CSRFProtection;
 use Psr\Http\Message\ResponseInterface as Response;
@@ -73,6 +74,16 @@ class PortalController
         
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
+        $ipAddress = (string) $request->getAttribute('ip_address', '0.0.0.0');
+        $rateLimiter = new RateLimiter();
+        if (!$rateLimiter->check('ip:' . $ipAddress, 'webauthn.login.portal.verify', 20, 300)) {
+            $audit->logFail('security.ratelimit.hit', [
+                'message' => 'Rate limit exceeded for portal login verify',
+                'action' => 'webauthn.login.portal.verify',
+            ]);
+            $response->getBody()->write(json_encode(['error' => 'too_many_requests']));
+            return $response->withStatus(429)->withHeader('Content-Type', 'application/json');
+        }
         
         $body = $request->getParsedBody();
         $credentialId = $body['id'] ?? null;

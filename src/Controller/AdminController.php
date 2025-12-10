@@ -7,6 +7,7 @@ namespace BlackWall\Controller;
 use BlackWall\Domain\PrivilegeLabelResolver;
 use BlackWall\Repository\UserRepository;
 use BlackWall\Repository\ProjectRepository;
+use BlackWall\Repository\OrganizationRepository;
 use BlackWall\Repository\OAuthClientRepository;
 use BlackWall\Repository\PrivilegeLevelRepository;
 use BlackWall\Repository\UserProjectRoleRepository;
@@ -34,6 +35,7 @@ class AdminController
 {
     private UserRepository $userRepo;
     private ProjectRepository $projectRepo;
+    private OrganizationRepository $organizationRepo;
     private OAuthClientRepository $clientRepo;
     private PrivilegeLevelRepository $privilegeRepo;
     private UserProjectRoleRepository $roleRepo;
@@ -49,6 +51,7 @@ class AdminController
     {
         $this->userRepo = new UserRepository();
         $this->projectRepo = new ProjectRepository();
+        $this->organizationRepo = new OrganizationRepository();
         $this->clientRepo = new OAuthClientRepository();
         $this->privilegeRepo = new PrivilegeLevelRepository();
         $this->roleRepo = new UserProjectRoleRepository();
@@ -76,6 +79,7 @@ class AdminController
         } else {
             $data['currentAdminRole'] = null;
         }
+        $data['impersonatorUserId'] = SessionManager::get('impersonator_user_id');
 
         // Render the content template
         $contentRenderer = new PhpRenderer(__DIR__ . '/../../templates');
@@ -100,6 +104,7 @@ class AdminController
                 'view_clients', 'manage_clients', 'view_assignments', 'manage_assignments',
                 'view_privileges', 'manage_privileges', 'view_audit', 'view_maintenance',
                 'manage_roles', 'decode_error_trace', 'view_scope_debug', 'view_docs',
+                'view_organizations', 'manage_organizations', 'switch_organization_admin',
                 'delete_credentials_direct', 'change_user_status_direct', 'delete_privilege_direct',
                 'change_project_status_direct', 'change_client_status_direct',
                 'update_project_settings_direct', 'update_client_settings_direct',
@@ -110,7 +115,7 @@ class AdminController
                 'view_dashboard', 'view_users', 'manage_users', 'view_projects', 'manage_projects',
                 'view_clients', 'manage_clients', 'view_assignments', 'manage_assignments',
                 'view_privileges', 'manage_privileges', 'view_audit', 'view_docs',
-                'view_approvals', 'view_scope_debug',
+                'view_approvals', 'view_scope_debug', 'view_organizations',
             ],
             'auditor' => [
                 'view_dashboard', 'view_audit', 'view_maintenance', 'decode_error_trace', 'view_approvals', 'view_scope_debug', 'view_docs',
@@ -159,6 +164,16 @@ class AdminController
         
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
+        $ipAddress = (string) $request->getAttribute('ip_address', '0.0.0.0');
+        $rateLimiter = new RateLimiter();
+        if (!$rateLimiter->check('ip:' . $ipAddress, 'webauthn.login.admin.verify', 20, 300)) {
+            $audit->logFail('security.ratelimit.hit', [
+                'message' => 'Rate limit exceeded for admin login verify',
+                'action' => 'webauthn.login.admin.verify',
+            ]);
+            $response->getBody()->write(json_encode(['error' => 'too_many_requests']));
+            return $response->withStatus(429)->withHeader('Content-Type', 'application/json');
+        }
         
         $body = $request->getParsedBody();
         $credentialId = $body['id'] ?? null;
@@ -465,21 +480,21 @@ class AdminController
         $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
         if ($scope['is_super_admin']) {
             $users = $this->userRepo->findAll();
-        } elseif (!empty($scope['project_ids'])) {
+        } elseif (!empty($scope['organization_ids'])) {
             $db = \BlackWall\Database::getInstance();
-            $placeholders = implode(',', array_fill(0, count($scope['project_ids']), '?'));
+            $placeholders = implode(',', array_fill(0, count($scope['organization_ids']), '?'));
             $stmt = $db->prepare(
                 "SELECT DISTINCT u.*
                  FROM users u
-                 JOIN user_project_roles upr ON upr.user_id = u.id
-                 WHERE upr.project_id IN ({$placeholders})
+                 WHERE u.organization_id IN ({$placeholders})
                  ORDER BY u.created_at DESC"
             );
-            $stmt->execute($scope['project_ids']);
+            $stmt->execute($scope['organization_ids']);
             $rows = $stmt->fetchAll();
             $users = array_map(
                 static fn(array $row): \BlackWall\Model\User => new \BlackWall\Model\User(
                     id: (int) $row['id'],
+                    organizationId: (int) $row['organization_id'],
                     uuid: (string) $row['uuid'],
                     displayLabel: $row['display_label'],
                     status: (string) $row['status'],
@@ -495,7 +510,7 @@ class AdminController
         return $this->renderWithLayout($response, 'admin/users/list.php', [
             'title' => 'Users',
             'users' => $users,
-            'canCreateUser' => $scope['is_super_admin'],
+            'canCreateUser' => $scope['is_admin'],
         ]);
     }
 
@@ -633,6 +648,365 @@ class AdminController
         ]);
 
         return $response->withHeader('Location', '/admin/roles')->withStatus(302);
+    }
+
+    public function organizationsList(Request $request, Response $response): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'view_organizations')) !== null) {
+            return $deny;
+        }
+
+        $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
+        $organizations = $scope['is_super_admin']
+            ? $this->organizationRepo->findAll(1000, 0)
+            : array_values(array_filter(array_map(
+                fn(int $id) => $this->organizationRepo->findById($id),
+                $scope['organization_ids']
+            )));
+
+        return $this->renderWithLayout($response, 'admin/organizations/list.php', [
+            'title' => 'Organisations',
+            'organizations' => $organizations,
+            'csrfToken' => CSRFProtection::generateToken(),
+            'canManageOrganizations' => $scope['is_super_admin'],
+        ]);
+    }
+
+    public function organizationStore(Request $request, Response $response): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'manage_organizations')) !== null) {
+            return $deny;
+        }
+
+        $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
+        if (!$scope['is_super_admin']) {
+            return $response->withStatus(403);
+        }
+
+        $body = $request->getParsedBody();
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
+            return $response->withHeader('Location', '/admin/organisations?error=csrf')->withStatus(302);
+        }
+
+        $name = trim((string) ($body['name'] ?? ''));
+        $slug = trim((string) ($body['slug'] ?? ''));
+        $adminDisplayLabel = trim((string) ($body['admin_display_label'] ?? ''));
+        $logoUrl = $this->sanitizeLogoUrl((string) ($body['logo_url'] ?? ''));
+
+        if (!$this->isValidOrganizationName($name) || !$this->isValidOrganizationSlug($slug) || $adminDisplayLabel === '') {
+            return $response->withHeader('Location', '/admin/organisations?error=invalid')->withStatus(302);
+        }
+        if ((string) ($body['logo_url'] ?? '') !== '' && $logoUrl === null) {
+            return $response->withHeader('Location', '/admin/organisations?error=logo')->withStatus(302);
+        }
+
+        try {
+            $organization = $this->organizationRepo->create(
+                Uuid::uuid4()->toString(),
+                $name,
+                $slug,
+                $logoUrl,
+                null
+            );
+        } catch (\Throwable $e) {
+            return $response->withHeader('Location', '/admin/organisations?error=duplicate')->withStatus(302);
+        }
+
+        $adminUser = $this->userRepo->create($organization->id, Uuid::uuid4()->toString(), $adminDisplayLabel, 'active');
+        $this->organizationRepo->setAdminUser($organization->id, $adminUser->id);
+
+        $audit->logSuccess('admin.organization.create', [
+            'actor_user_id' => (int) SessionManager::get('user_id'),
+            'organization_id' => $organization->id,
+            'organization_uuid' => $organization->uuid,
+            'target_type' => 'organization',
+            'target_id' => $organization->uuid,
+            'message' => 'Organization created and admin enrolled',
+        ]);
+
+        $enrollmentLink = $this->createEnrollmentLinkForUser($adminUser->id);
+        return $response->withHeader(
+            'Location',
+            '/admin/organisations/' . $organization->uuid . '?success=created&enrollment_link=' . urlencode($enrollmentLink)
+        )->withStatus(302);
+    }
+
+    public function organizationDetail(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'view_organizations')) !== null) {
+            return $deny;
+        }
+
+        $organization = $this->organizationRepo->findByUuid((string) ($args['organizationUuid'] ?? ''));
+        if ($organization === null) {
+            return $response->withStatus(404);
+        }
+        if (!$this->canAccessOrganizationId($organization->id)) {
+            return $response->withStatus(403);
+        }
+
+        $adminUser = $organization->adminUserId ? $this->userRepo->findById($organization->adminUserId) : null;
+        $users = $this->userRepo->findByOrganization($organization->id);
+        $projects = $this->projectRepo->findByOrganization($organization->id);
+
+        return $this->renderWithLayout($response, 'admin/organizations/detail.php', [
+            'title' => 'Organisation',
+            'organization' => $organization,
+            'adminUser' => $adminUser,
+            'users' => $users,
+            'projects' => $projects,
+            'canManageOrganizations' => $this->getAdminScope((int) SessionManager::get('user_id'))['is_super_admin'],
+            'csrfToken' => CSRFProtection::generateToken(),
+            'enrollmentLink' => $request->getQueryParams()['enrollment_link'] ?? null,
+        ]);
+    }
+
+    public function organizationUpdate(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'manage_organizations')) !== null) {
+            return $deny;
+        }
+
+        $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
+        if (!$scope['is_super_admin']) {
+            return $response->withStatus(403);
+        }
+
+        $organization = $this->organizationRepo->findByUuid((string) ($args['organizationUuid'] ?? ''));
+        if ($organization === null) {
+            return $response->withStatus(404);
+        }
+
+        $body = $request->getParsedBody();
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
+            return $response->withHeader('Location', '/admin/organisations/' . $organization->uuid . '?error=csrf')->withStatus(302);
+        }
+
+        $name = trim((string) ($body['name'] ?? ''));
+        $slug = trim((string) ($body['slug'] ?? ''));
+        $logoUrl = $this->sanitizeLogoUrl((string) ($body['logo_url'] ?? ''));
+        $status = (string) ($body['status'] ?? 'active');
+        $adminUserUuid = trim((string) ($body['admin_user_uuid'] ?? ''));
+
+        if (!$this->isValidOrganizationName($name) || !$this->isValidOrganizationSlug($slug) || !in_array($status, ['active', 'disabled'], true)) {
+            return $response->withHeader('Location', '/admin/organisations/' . $organization->uuid . '?error=invalid')->withStatus(302);
+        }
+        if ((string) ($body['logo_url'] ?? '') !== '' && $logoUrl === null) {
+            return $response->withHeader('Location', '/admin/organisations/' . $organization->uuid . '?error=logo')->withStatus(302);
+        }
+
+        $adminUserId = $organization->adminUserId;
+        if ($adminUserUuid !== '') {
+            $candidate = $this->userRepo->findByUuid($adminUserUuid);
+            if ($candidate === null || $candidate->organizationId !== $organization->id) {
+                return $response->withHeader('Location', '/admin/organisations/' . $organization->uuid . '?error=admin_user')->withStatus(302);
+            }
+            $adminUserId = $candidate->id;
+        }
+
+        try {
+            $this->organizationRepo->update($organization->id, $name, $slug, $logoUrl, $status, $adminUserId);
+        } catch (\Throwable $e) {
+            return $response->withHeader('Location', '/admin/organisations/' . $organization->uuid . '?error=duplicate')->withStatus(302);
+        }
+
+        $audit->logSuccess('admin.organization.update', [
+            'actor_user_id' => (int) SessionManager::get('user_id'),
+            'organization_id' => $organization->id,
+            'organization_uuid' => $organization->uuid,
+            'target_type' => 'organization',
+            'target_id' => $organization->uuid,
+        ]);
+
+        return $response->withHeader('Location', '/admin/organisations/' . $organization->uuid . '?success=updated')->withStatus(302);
+    }
+
+    public function organizationSwitchAdmin(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'switch_organization_admin')) !== null) {
+            return $deny;
+        }
+
+        $actorId = (int) SessionManager::get('user_id');
+        $scope = $this->getAdminScope($actorId);
+        if (!$scope['is_super_admin']) {
+            return $response->withStatus(403);
+        }
+        $body = $request->getParsedBody();
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            return $response->withHeader('Location', '/admin/organisations?error=csrf')->withStatus(302);
+        }
+
+        $organization = $this->organizationRepo->findByUuid((string) ($args['organizationUuid'] ?? ''));
+        if ($organization === null || $organization->adminUserId === null) {
+            return $response->withHeader('Location', '/admin/organisations?error=no_admin')->withStatus(302);
+        }
+
+        SessionManager::set('impersonator_user_id', $actorId);
+        SessionManager::set('user_id', $organization->adminUserId);
+        SessionManager::regenerateId();
+        $this->cachedScope = null;
+
+        return $response->withHeader('Location', '/admin/dashboard?switched=1')->withStatus(302);
+    }
+
+    public function organizationImportUsers(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'manage_users')) !== null) {
+            return $deny;
+        }
+
+        $organization = $this->organizationRepo->findByUuid((string) ($args['organizationUuid'] ?? ''));
+        if ($organization === null || !$this->canAccessOrganizationId($organization->id)) {
+            return $response->withStatus(403);
+        }
+
+        $body = $request->getParsedBody();
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            return $response->withHeader('Location', '/admin/organisations/' . ($organization->uuid ?? '') . '?error=csrf')->withStatus(302);
+        }
+
+        $uploadedFiles = $request->getUploadedFiles();
+        $csvFile = $uploadedFiles['csv_file'] ?? null;
+        if ($csvFile === null || $csvFile->getError() !== UPLOAD_ERR_OK) {
+            return $response->withHeader('Location', '/admin/organisations/' . $organization->uuid . '?error=csv')->withStatus(302);
+        }
+
+        $stream = $csvFile->getStream();
+        $stream->rewind();
+        $content = $stream->getContents();
+        $rows = preg_split('/\r\n|\n|\r/', (string) $content) ?: [];
+
+        $created = [];
+        foreach ($rows as $index => $line) {
+            if (trim($line) === '') {
+                continue;
+            }
+            $columns = str_getcsv($line);
+            if ($index === 0 && isset($columns[0]) && strtolower(trim((string) $columns[0])) === 'display_label') {
+                continue;
+            }
+            $displayLabel = trim((string) ($columns[0] ?? ''));
+            if ($displayLabel === '') {
+                continue;
+            }
+            $status = strtolower(trim((string) ($columns[1] ?? 'active')));
+            $status = in_array($status, ['active', 'disabled'], true) ? $status : 'active';
+            $user = $this->userRepo->create($organization->id, Uuid::uuid4()->toString(), $displayLabel, $status);
+            $created[] = [
+                'display_label' => $displayLabel,
+                'user_uuid' => $user->uuid,
+                'status' => $status,
+                'enrollment_url' => $this->createEnrollmentLinkForUser($user->id),
+            ];
+        }
+
+        $handle = fopen('php://temp', 'r+');
+        if ($handle === false) {
+            return $response->withStatus(500);
+        }
+        fputcsv($handle, ['display_label', 'user_uuid', 'status', 'enrollment_url']);
+        foreach ($created as $row) {
+            fputcsv($handle, [$row['display_label'], $row['user_uuid'], $row['status'], $row['enrollment_url']]);
+        }
+        rewind($handle);
+        $csv = stream_get_contents($handle);
+        fclose($handle);
+        if ($csv === false) {
+            return $response->withStatus(500);
+        }
+
+        $filename = 'organization_user_import_' . $organization->slug . '_' . gmdate('Ymd_His') . '.csv';
+        $response->getBody()->write($csv);
+        return $response
+            ->withHeader('Content-Type', 'text/csv; charset=utf-8')
+            ->withHeader('Content-Disposition', 'attachment; filename="' . $filename . '"');
+    }
+
+    public function organizationExportEnrollmentUrls(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'manage_users')) !== null) {
+            return $deny;
+        }
+
+        $organization = $this->organizationRepo->findByUuid((string) ($args['organizationUuid'] ?? ''));
+        if ($organization === null || !$this->canAccessOrganizationId($organization->id)) {
+            return $response->withStatus(403);
+        }
+
+        $users = $this->userRepo->findByOrganization($organization->id, 5000, 0);
+        $handle = fopen('php://temp', 'r+');
+        if ($handle === false) {
+            return $response->withStatus(500);
+        }
+        fputcsv($handle, ['display_label', 'user_uuid', 'status', 'enrollment_url']);
+        foreach ($users as $user) {
+            fputcsv($handle, [
+                $user->displayLabel ?? '',
+                $user->uuid,
+                $user->status,
+                $this->createEnrollmentLinkForUser($user->id),
+            ]);
+        }
+        rewind($handle);
+        $csv = stream_get_contents($handle);
+        fclose($handle);
+        if ($csv === false) {
+            return $response->withStatus(500);
+        }
+
+        $filename = 'organization_enrollment_urls_' . $organization->slug . '_' . gmdate('Ymd_His') . '.csv';
+        $response->getBody()->write($csv);
+        return $response
+            ->withHeader('Content-Type', 'text/csv; charset=utf-8')
+            ->withHeader('Content-Disposition', 'attachment; filename="' . $filename . '"');
+    }
+
+    public function switchRestore(Request $request, Response $response): Response
+    {
+        SessionManager::start();
+        $body = $request->getParsedBody();
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            return $response->withHeader('Location', '/admin/dashboard?error=csrf')->withStatus(302);
+        }
+        $impersonatorId = (int) SessionManager::get('impersonator_user_id');
+        if ($impersonatorId < 1) {
+            return $response->withHeader('Location', '/admin/dashboard')->withStatus(302);
+        }
+
+        SessionManager::set('user_id', $impersonatorId);
+        SessionManager::remove('impersonator_user_id');
+        SessionManager::regenerateId();
+        $this->cachedScope = null;
+
+        return $response->withHeader('Location', '/admin/organisations?switched_back=1')->withStatus(302);
     }
 
     public function approvalsList(Request $request, Response $response): Response
@@ -1002,13 +1376,20 @@ class AdminController
         }
 
         $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
-        if (!$scope['is_super_admin']) {
+        if (!$scope['is_admin']) {
             return $response->withStatus(403);
         }
 
         return $this->renderWithLayout($response, 'admin/users/create.php', [
             'title' => 'Create User',
             'csrfToken' => CSRFProtection::generateToken(),
+            'scope' => $scope,
+            'organizations' => $scope['is_super_admin']
+                ? $this->organizationRepo->findAll(500, 0)
+                : array_values(array_filter(array_map(
+                    fn(int $id) => $this->organizationRepo->findById($id),
+                    $scope['organization_ids']
+                ))),
         ]);
     }
 
@@ -1022,7 +1403,7 @@ class AdminController
         }
 
         $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
-        if (!$scope['is_super_admin']) {
+        if (!$scope['is_admin']) {
             return $response->withStatus(403);
         }
 
@@ -1040,8 +1421,13 @@ class AdminController
             return $response->withHeader('Location', '/admin/users')->withStatus(302);
         }
 
+        $targetOrgId = $this->resolveTargetOrganizationId($scope, (string) ($body['organization_uuid'] ?? ''));
+        if ($targetOrgId === null) {
+            return $response->withHeader('Location', '/admin/users?error=org')->withStatus(302);
+        }
+
         $uuid = Uuid::uuid4()->toString();
-        $user = $this->userRepo->create($uuid, $body['display_label'] ?? null, 'active');
+        $user = $this->userRepo->create($targetOrgId, $uuid, $body['display_label'] ?? null, 'active');
 
         $audit->logSuccess('admin.user.create', [
             'actor_user_id' => $userId,
@@ -1064,19 +1450,20 @@ class AdminController
         $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
         if ($scope['is_super_admin']) {
             $projects = $this->projectRepo->findAll();
-        } elseif (!empty($scope['project_ids'])) {
+        } elseif (!empty($scope['organization_ids'])) {
             $db = \BlackWall\Database::getInstance();
-            $placeholders = implode(',', array_fill(0, count($scope['project_ids']), '?'));
+            $placeholders = implode(',', array_fill(0, count($scope['organization_ids']), '?'));
             $stmt = $db->prepare(
                 "SELECT * FROM projects
-                 WHERE id IN ({$placeholders})
+                 WHERE organization_id IN ({$placeholders})
                  ORDER BY created_at DESC"
             );
-            $stmt->execute($scope['project_ids']);
+            $stmt->execute($scope['organization_ids']);
             $rows = $stmt->fetchAll();
             $projects = array_map(
                 static fn(array $row): \BlackWall\Model\Project => new \BlackWall\Model\Project(
                     id: (int) $row['id'],
+                    organizationId: (int) $row['organization_id'],
                     uuid: (string) $row['uuid'],
                     name: (string) $row['name'],
                     ownerUserId: !empty($row['owner_user_id']) ? (int) $row['owner_user_id'] : null,
@@ -1093,7 +1480,7 @@ class AdminController
         return $this->renderWithLayout($response, 'admin/projects/list.php', [
             'title' => 'Projects',
             'projects' => $projects,
-            'canCreateProject' => $scope['is_super_admin'],
+            'canCreateProject' => $scope['is_admin'],
         ]);
     }
 
@@ -1107,13 +1494,20 @@ class AdminController
         }
 
         $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
-        if (!$scope['is_super_admin']) {
+        if (!$scope['is_admin']) {
             return $response->withStatus(403);
         }
 
         return $this->renderWithLayout($response, 'admin/projects/create.php', [
             'title' => 'Create Project',
             'csrfToken' => CSRFProtection::generateToken(),
+            'scope' => $scope,
+            'organizations' => $scope['is_super_admin']
+                ? $this->organizationRepo->findAll(500, 0)
+                : array_values(array_filter(array_map(
+                    fn(int $id) => $this->organizationRepo->findById($id),
+                    $scope['organization_ids']
+                ))),
         ]);
     }
 
@@ -1127,7 +1521,7 @@ class AdminController
         }
 
         $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
-        if (!$scope['is_super_admin']) {
+        if (!$scope['is_admin']) {
             return $response->withStatus(403);
         }
 
@@ -1145,8 +1539,13 @@ class AdminController
             return $response->withHeader('Location', '/admin/projects')->withStatus(302);
         }
 
+        $targetOrgId = $this->resolveTargetOrganizationId($scope, (string) ($body['organization_uuid'] ?? ''));
+        if ($targetOrgId === null) {
+            return $response->withHeader('Location', '/admin/projects?error=org')->withStatus(302);
+        }
+
         $uuid = Uuid::uuid4()->toString();
-        $project = $this->projectRepo->create($uuid, $body['name'], $userId, 'active');
+        $project = $this->projectRepo->create($targetOrgId, $uuid, $body['name'], $userId, 'active');
 
         // Create default privilege levels
         $this->privilegeRepo->create($project->id, 1, 'Admin', 'Project administrator');
@@ -1209,7 +1608,7 @@ class AdminController
             if (!empty($filters['project_uuid']) && !$this->canAccessProjectUuid((string) $filters['project_uuid'])) {
                 $filters['project_uuid'] = '__no_access__';
             } else {
-                $filters['project_ids'] = $scope['project_ids'];
+                $filters['organization_ids'] = $scope['organization_ids'];
             }
         }
 
@@ -1249,7 +1648,7 @@ class AdminController
             if (!empty($filters['project_uuid']) && !$this->canAccessProjectUuid((string) $filters['project_uuid'])) {
                 $filters['project_uuid'] = '__no_access__';
             } else {
-                $filters['project_ids'] = $scope['project_ids'];
+                $filters['organization_ids'] = $scope['organization_ids'];
             }
         }
 
@@ -1381,6 +1780,18 @@ class AdminController
             );
             $stmt->execute([$userId]);
         } else {
+            if (empty($scope['project_ids'])) {
+                $assignments = [];
+                $enrollmentLink = $request->getQueryParams()['enrollment_link'] ?? null;
+                return $this->renderWithLayout($response, 'admin/users/detail.php', [
+                    'title' => 'User Details',
+                    'user' => $user,
+                    'credentials' => $credentials,
+                    'assignments' => $assignments,
+                    'csrfToken' => CSRFProtection::generateToken(),
+                    'enrollmentLink' => $enrollmentLink,
+                ]);
+            }
             $placeholders = implode(',', array_fill(0, count($scope['project_ids']), '?'));
             $stmt = $db->prepare(
                 "SELECT upr.*, p.uuid AS project_uuid, p.name as project_name, ppl.name AS privilege_name
@@ -1856,20 +2267,20 @@ class AdminController
         $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
         if ($scope['is_super_admin']) {
             $allUsers = $this->userRepo->findAll();
-        } else {
-            $placeholders = implode(',', array_fill(0, count($scope['project_ids']), '?'));
+        } elseif (!empty($scope['organization_ids'])) {
+            $placeholders = implode(',', array_fill(0, count($scope['organization_ids']), '?'));
             $stmt = $db->prepare(
                 "SELECT DISTINCT u.*
                  FROM users u
-                 JOIN user_project_roles upr ON upr.user_id = u.id
-                 WHERE upr.project_id IN ({$placeholders})
+                 WHERE u.organization_id IN ({$placeholders})
                  ORDER BY u.created_at DESC"
             );
-            $stmt->execute($scope['project_ids']);
+            $stmt->execute($scope['organization_ids']);
             $rows = $stmt->fetchAll();
             $allUsers = array_map(
                 static fn(array $row): \BlackWall\Model\User => new \BlackWall\Model\User(
                     id: (int) $row['id'],
+                    organizationId: (int) $row['organization_id'],
                     uuid: (string) $row['uuid'],
                     displayLabel: $row['display_label'],
                     status: (string) $row['status'],
@@ -1878,6 +2289,8 @@ class AdminController
                 ),
                 $rows
             );
+        } else {
+            $allUsers = [];
         }
 
         // Get privilege levels for this project (or create default ones)
@@ -1937,6 +2350,10 @@ class AdminController
             return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments?error=invalid")->withStatus(302);
         }
         if (!$this->canAccessUserId($userId)) {
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments?error=user_out_of_scope")->withStatus(302);
+        }
+        $targetUser = $this->userRepo->findById($userId);
+        if ($targetUser === null || $targetUser->organizationId !== $project->organizationId) {
             return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments?error=user_out_of_scope")->withStatus(302);
         }
 
@@ -2407,31 +2824,13 @@ class AdminController
             return $response->withStatus(403);
         }
 
-        // Generate a secure enrollment token
-        $token = bin2hex(random_bytes(32));
-        $expiry = (new \DateTime())->add(new \DateInterval('P1D'))->format('Y-m-d H:i:s');
-
-        $db = \BlackWall\Database::getInstance();
-        
-        // Store token in system_config with user_id embedded in the key
-        $stmt = $db->prepare(
-            "INSERT INTO system_config (config_key, config_value) VALUES (?, ?)
-             ON DUPLICATE KEY UPDATE config_value = ?"
-        );
-        $stmt->execute(['enrollment_token_' . $token, (string) $userId, (string) $userId]);
-        $stmt->execute(['enrollment_expiry_' . $token, $expiry, $expiry]);
-
         $audit->logSuccess('admin.user.enrollment_link', [
             'actor_user_id' => $actorUserId,
             'target_type' => 'user',
             'target_id' => $user->uuid,
         ]);
 
-        // Generate the enrollment URL
-        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
-        $host = $_SERVER['HTTP_HOST'] ?? 'blackwall.cx';
-        $baseUrl = $scheme . '://' . $host;
-        $enrollmentLink = $baseUrl . '/enroll?token=' . urlencode($token);
+        $enrollmentLink = $this->createEnrollmentLinkForUser($userId);
 
         return $response->withHeader(
             'Location',
@@ -3124,6 +3523,9 @@ class AdminController
             return [
                 'is_admin' => false,
                 'is_super_admin' => false,
+                'organization_ids' => [],
+                'organization_uuids' => [],
+                'organization_uuid_set' => [],
                 'project_ids' => [],
                 'project_uuids' => [],
                 'project_uuid_set' => [],
@@ -3135,38 +3537,65 @@ class AdminController
         }
 
         $db = \BlackWall\Database::getInstance();
-        $stmt = $db->prepare(
+        $superStmt = $db->prepare(
             "SELECT p.id, p.uuid, p.name
              FROM user_project_roles upr
              JOIN projects p ON p.id = upr.project_id
              WHERE upr.user_id = ? AND upr.privilege_level = 1"
         );
-        $stmt->execute([$userId]);
-        $rows = $stmt->fetchAll();
+        $superStmt->execute([$userId]);
+        $rows = $superStmt->fetchAll();
 
-        $isAdmin = !empty($rows);
         $isSuperAdmin = false;
-        $projectIds = [];
-        $projectUuids = [];
-
         foreach ($rows as $row) {
-            $projectIds[] = (int) $row['id'];
-            $projectUuids[] = (string) $row['uuid'];
             if ($this->isSuperProject((string) $row['uuid'], (string) ($row['name'] ?? ''))) {
                 $isSuperAdmin = true;
+                break;
             }
         }
 
         if ($isSuperAdmin) {
-            $all = $db->query('SELECT id, uuid FROM projects')->fetchAll();
-            $projectIds = array_map(static fn(array $r): int => (int) $r['id'], $all);
-            $projectUuids = array_map(static fn(array $r): string => (string) $r['uuid'], $all);
+            $orgRows = $db->query('SELECT id, uuid FROM organizations')->fetchAll();
+            $projectRows = $db->query('SELECT id, uuid FROM projects')->fetchAll();
+            $organizationIds = array_map(static fn(array $r): int => (int) $r['id'], $orgRows);
+            $organizationUuids = array_map(static fn(array $r): string => (string) $r['uuid'], $orgRows);
+            $projectIds = array_map(static fn(array $r): int => (int) $r['id'], $projectRows);
+            $projectUuids = array_map(static fn(array $r): string => (string) $r['uuid'], $projectRows);
+        } else {
+            $orgStmt = $db->prepare(
+                "SELECT id, uuid
+                 FROM organizations
+                 WHERE admin_user_id = ?"
+            );
+            $orgStmt->execute([$userId]);
+            $orgRows = $orgStmt->fetchAll();
+
+            $organizationIds = array_map(static fn(array $r): int => (int) $r['id'], $orgRows);
+            $organizationUuids = array_map(static fn(array $r): string => (string) $r['uuid'], $orgRows);
+
+            $projectIds = [];
+            $projectUuids = [];
+            if (!empty($organizationIds)) {
+                $placeholders = implode(',', array_fill(0, count($organizationIds), '?'));
+                $projectStmt = $db->prepare(
+                    "SELECT id, uuid
+                     FROM projects
+                     WHERE organization_id IN ({$placeholders})"
+                );
+                $projectStmt->execute($organizationIds);
+                $projectRows = $projectStmt->fetchAll();
+                $projectIds = array_map(static fn(array $r): int => (int) $r['id'], $projectRows);
+                $projectUuids = array_map(static fn(array $r): string => (string) $r['uuid'], $projectRows);
+            }
         }
 
         $scope = [
             'user_id' => $userId,
-            'is_admin' => $isAdmin,
+            'is_admin' => $isSuperAdmin || !empty($organizationIds),
             'is_super_admin' => $isSuperAdmin,
+            'organization_ids' => array_values(array_unique($organizationIds)),
+            'organization_uuids' => array_values(array_unique($organizationUuids)),
+            'organization_uuid_set' => array_fill_keys(array_values(array_unique($organizationUuids)), true),
             'project_ids' => array_values(array_unique($projectIds)),
             'project_uuids' => array_values(array_unique($projectUuids)),
             'project_uuid_set' => array_fill_keys(array_values(array_unique($projectUuids)), true),
@@ -3191,10 +3620,44 @@ class AdminController
     {
         $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
         $db = \BlackWall\Database::getInstance();
-        $stmt = $db->prepare('SELECT DISTINCT project_id FROM user_project_roles WHERE user_id = ?');
+        if ($scope['is_super_admin']) {
+            return true;
+        }
+        if (empty($scope['organization_ids'])) {
+            return false;
+        }
+
+        $stmt = $db->prepare('SELECT organization_id FROM users WHERE id = ?');
         $stmt->execute([$userId]);
-        $userProjectIds = array_map(static fn(array $row): int => (int) $row['project_id'], $stmt->fetchAll());
-        return AdminScopedViewPolicy::canAccessUserByProjects($scope, $userProjectIds);
+        $orgId = (int) ($stmt->fetchColumn() ?: 0);
+        return $orgId > 0 && in_array($orgId, $scope['organization_ids'], true);
+    }
+
+    private function canAccessOrganizationId(int $organizationId): bool
+    {
+        $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
+        if ($scope['is_super_admin']) {
+            return true;
+        }
+        return in_array($organizationId, $scope['organization_ids'] ?? [], true);
+    }
+
+    private function resolveTargetOrganizationId(array $scope, string $requestedOrganizationUuid): ?int
+    {
+        if ($scope['is_super_admin']) {
+            if ($requestedOrganizationUuid !== '') {
+                $org = $this->organizationRepo->findByUuid($requestedOrganizationUuid);
+                return $org?->id;
+            }
+            $default = $this->organizationRepo->findDefault();
+            return $default?->id;
+        }
+
+        if (!empty($scope['organization_ids'])) {
+            return (int) $scope['organization_ids'][0];
+        }
+
+        return null;
     }
 
     private function isUserScopedSuperAdmin(int $userId): bool
@@ -3253,12 +3716,64 @@ class AdminController
         return ($adminProjectUuid !== '' && $projectUuid === $adminProjectUuid) || $rowName === $adminProjectName;
     }
 
+    private function isValidOrganizationName(string $name): bool
+    {
+        $length = strlen(trim($name));
+        return $length >= 3 && $length <= 120;
+    }
+
+    private function isValidOrganizationSlug(string $slug): bool
+    {
+        return (bool) preg_match('/^[a-z0-9][a-z0-9-]{1,38}[a-z0-9]$/', $slug);
+    }
+
+    private function sanitizeLogoUrl(string $logoUrl): ?string
+    {
+        $logoUrl = trim($logoUrl);
+        if ($logoUrl === '') {
+            return null;
+        }
+        if (strlen($logoUrl) > 300) {
+            return null;
+        }
+        if (!filter_var($logoUrl, FILTER_VALIDATE_URL)) {
+            return null;
+        }
+        $parts = parse_url($logoUrl);
+        if (!is_array($parts) || strtolower((string) ($parts['scheme'] ?? '')) !== 'https') {
+            return null;
+        }
+        $path = strtolower((string) ($parts['path'] ?? ''));
+        if ($path !== '' && !preg_match('/\.(png|jpe?g|svg|webp)$/', $path)) {
+            return null;
+        }
+        return $logoUrl;
+    }
+
+    private function createEnrollmentLinkForUser(int $userId): string
+    {
+        $db = \BlackWall\Database::getInstance();
+        $token = bin2hex(random_bytes(32));
+        $expiry = (new \DateTimeImmutable('+24 hours'))->format('Y-m-d H:i:s');
+        $stmt = $db->prepare(
+            "INSERT INTO system_config (config_key, config_value)
+             VALUES (?, ?)
+             ON DUPLICATE KEY UPDATE config_value = VALUES(config_value)"
+        );
+        $stmt->execute(['enrollment_token_' . $token, (string) $userId]);
+        $stmt->execute(['enrollment_expiry_' . $token, $expiry]);
+
+        $baseUrl = rtrim((string) Config::get('APP_URL'), '/');
+        return $baseUrl . '/enroll?token=' . urlencode($token);
+    }
+
     private function extractAuditFilters(array $params): array
     {
         return [
             'date_from' => $params['date_from'] ?? null,
             'date_to' => $params['date_to'] ?? null,
             'project_uuid' => $params['project_uuid'] ?? null,
+            'organization_uuid' => $params['organization_uuid'] ?? null,
             'ip_address' => $params['ip_address'] ?? null,
             'event_type' => $params['event_type'] ?? null,
             'outcome' => $params['outcome'] ?? null,

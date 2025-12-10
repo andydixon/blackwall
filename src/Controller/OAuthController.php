@@ -722,6 +722,18 @@ class OAuthController
     public function loginVerify(Request $request, Response $response): Response
     {
         SessionManager::start();
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $ipAddress = (string) $request->getAttribute('ip_address', '0.0.0.0');
+        if (!$this->rateLimiter->check('ip:' . $ipAddress, 'webauthn.login.oauth.verify', 20, 300)) {
+            $audit->logFail('security.ratelimit.hit', [
+                'message' => 'Rate limit exceeded for OAuth login verify',
+                'action' => 'webauthn.login.oauth.verify',
+            ]);
+            $response->getBody()->write(json_encode(['error' => 'too_many_requests']));
+            return $response->withStatus(429)->withHeader('Content-Type', 'application/json');
+        }
+
         $body = $request->getParsedBody();
         
         $webauthn = new \BlackWall\Service\WebAuthnService();
