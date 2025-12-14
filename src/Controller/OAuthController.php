@@ -325,6 +325,10 @@ class OAuthController
 
     public function token(Request $request, Response $response): Response
     {
+        $response = $response
+            ->withHeader('Cache-Control', 'no-store')
+            ->withHeader('Pragma', 'no-cache');
+
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $ipAddress = $request->getAttribute('ip_address');
@@ -450,6 +454,10 @@ class OAuthController
 
     public function revoke(Request $request, Response $response): Response
     {
+        $response = $response
+            ->withHeader('Cache-Control', 'no-store')
+            ->withHeader('Pragma', 'no-cache');
+
         $body = $request->getParsedBody();
 
         /** @var AuditLogger $audit */
@@ -479,6 +487,10 @@ class OAuthController
 
     public function introspect(Request $request, Response $response): Response
     {
+        $response = $response
+            ->withHeader('Cache-Control', 'no-store')
+            ->withHeader('Pragma', 'no-cache');
+
         $body = $request->getParsedBody();
 
         /** @var AuditLogger $audit */
@@ -518,6 +530,10 @@ class OAuthController
 
     public function userinfo(Request $request, Response $response): Response
     {
+        $response = $response
+            ->withHeader('Cache-Control', 'no-store')
+            ->withHeader('Pragma', 'no-cache');
+
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
 
