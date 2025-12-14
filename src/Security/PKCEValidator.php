@@ -8,7 +8,7 @@ class PKCEValidator
 {
     public function validateChallenge(string $codeVerifier, string $codeChallenge, string $method = 'S256'): bool
     {
-        if ($method !== 'S256' && $method !== 'plain') {
+        if ($method !== 'S256') {
             return false;
         }
 
@@ -23,8 +23,8 @@ class PKCEValidator
 
     public function generateChallenge(string $codeVerifier, string $method = 'S256'): string
     {
-        if ($method === 'plain') {
-            return $codeVerifier;
+        if ($method !== 'S256') {
+            return '';
         }
 
         $hash = hash('sha256', $codeVerifier, true);
