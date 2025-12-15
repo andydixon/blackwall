@@ -30,6 +30,7 @@ class SecurityHeadersMiddlewareTest extends TestCase
         $this->assertSame('DENY', $response->getHeaderLine('X-Frame-Options'));
         $this->assertSame('strict-origin-when-cross-origin', $response->getHeaderLine('Referrer-Policy'));
         $this->assertStringContainsString("default-src 'self'", $response->getHeaderLine('Content-Security-Policy'));
+        $this->assertStringContainsString('https://cdn.jsdelivr.net', $response->getHeaderLine('Content-Security-Policy'));
         $this->assertSame('', $response->getHeaderLine('Strict-Transport-Security'));
     }
 
