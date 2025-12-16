@@ -245,6 +245,11 @@ class AdminController
 
     public function logout(Request $request, Response $response): Response
     {
+        $body = (array) $request->getParsedBody();
+        if (!CSRFProtection::validateToken((string) ($body['csrf_token'] ?? ''))) {
+            return $response->withHeader('Location', '/admin/dashboard?error=csrf')->withStatus(302);
+        }
+
         SessionManager::destroy();
         return $response->withHeader('Location', '/admin/login')->withStatus(302);
     }

@@ -34,6 +34,9 @@
                         <li class="nav-item">
                             <a class="nav-link" href="/admin/roles">Roles</a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/admin/organisations">Organisations</a>
+                        </li>
                     <?php endif; ?>
                     <li class="nav-item">
                         <a class="nav-link" href="/admin/approvals">Approvals</a>
@@ -58,7 +61,14 @@
                 <?php if (!empty($currentAdminRole)): ?>
                     <span class="badge bg-secondary me-3"><?= htmlspecialchars((string) $currentAdminRole) ?></span>
                 <?php endif; ?>
+                <?php if (!empty($impersonatorUserId)): ?>
+                    <form method="POST" action="/admin/switch/restore" class="d-flex me-2">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(\BlackWall\Security\CSRFProtection::token()) ?>">
+                        <button class="btn btn-warning btn-sm" type="submit">Stop Switch</button>
+                    </form>
+                <?php endif; ?>
                 <form method="POST" action="/admin/logout" class="d-flex">
+                    <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(\BlackWall\Security\CSRFProtection::getToken()) ?>">
                     <button class="btn btn-outline-light btn-sm" type="submit">Logout</button>
                 </form>
             </div>
@@ -68,6 +78,9 @@
     <main class="container-fluid py-4">
         <?= $content ?>
     </main>
+    <footer class="container-fluid pb-4">
+        <div class="text-center text-muted small">Powered by BlackWall</div>
+    </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/assets/js/blackwall.js"></script>
