@@ -63,7 +63,7 @@
                 <?php endif; ?>
                 <?php if (!empty($impersonatorUserId)): ?>
                     <form method="POST" action="/admin/switch/restore" class="d-flex me-2">
-                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(\BlackWall\Security\CSRFProtection::token()) ?>">
+                        <input type="hidden" name="csrf_token" value="<?= htmlspecialchars(\BlackWall\Security\CSRFProtection::getToken()) ?>">
                         <button class="btn btn-warning btn-sm" type="submit">Stop Switch</button>
                     </form>
                 <?php endif; ?>
