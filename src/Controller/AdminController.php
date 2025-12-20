@@ -25,6 +25,7 @@ use BlackWall\Security\AdminMutationPolicy;
 use BlackWall\Security\AuditExportSigner;
 use BlackWall\Security\ApprovalDecisionPolicy;
 use BlackWall\Security\AdminScopedViewPolicy;
+use BlackWall\Security\SuperAdminProjectPolicy;
 use BlackWall\Config;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
@@ -3715,10 +3716,8 @@ class AdminController
 
     private function isSuperProject(string $projectUuid, string $projectName): bool
     {
-        $adminProjectName = strtolower(trim((string) Config::get('ADMIN_SUPER_PROJECT_NAME', 'BlackWall Admin')));
         $adminProjectUuid = trim((string) Config::get('ADMIN_SUPER_PROJECT_UUID', ''));
-        $rowName = strtolower(trim($projectName));
-        return ($adminProjectUuid !== '' && $projectUuid === $adminProjectUuid) || $rowName === $adminProjectName;
+        return SuperAdminProjectPolicy::isSuperProject($projectUuid, $adminProjectUuid);
     }
 
     private function isValidOrganizationName(string $name): bool
