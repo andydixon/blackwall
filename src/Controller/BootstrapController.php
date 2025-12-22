@@ -9,6 +9,7 @@ use BlackWall\Config;
 use BlackWall\Repository\OrganizationRepository;
 use BlackWall\Repository\UserRepository;
 use BlackWall\Security\EnrollmentTokenExpiryValidator;
+use BlackWall\Security\RateLimiter;
 use BlackWall\Security\SessionManager;
 use BlackWall\Service\WebAuthnService;
 use BlackWall\Service\AuditLogger;
@@ -41,6 +42,12 @@ class BootstrapController
 
     public function organizationSignup(Request $request, Response $response): Response
     {
+        $ipAddress = (string) $request->getAttribute('ip_address', '0.0.0.0');
+        $limiter = new RateLimiter();
+        if (!$limiter->check('ip:' . $ipAddress, 'organization.signup', 5, 3600)) {
+            return $response->withHeader('Location', '/organisations/signup?error=rate_limited')->withStatus(302);
+        }
+
         $body = $request->getParsedBody();
         if (!\BlackWall\Security\CSRFProtection::validateToken((string) ($body['csrf_token'] ?? ''))) {
             return $response->withHeader('Location', '/organisations/signup?error=csrf')->withStatus(302);
