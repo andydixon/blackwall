@@ -95,6 +95,12 @@ class BootstrapController
     public function showBootstrapForm(Request $request, Response $response): Response
     {
         $db = Database::getInstance();
+        $ipAddress = (string) $request->getAttribute('ip_address', '0.0.0.0');
+        $limiter = new RateLimiter();
+        if (!$limiter->check('ip:' . $ipAddress, 'bootstrap.token.verify', 20, 900)) {
+            $response->getBody()->write('Too many requests');
+            return $response->withStatus(429);
+        }
         
         // Check if bootstrap is complete
         $stmt = $db->query("SELECT config_value FROM system_config WHERE config_key = 'bootstrap_complete'");
@@ -175,6 +181,12 @@ class BootstrapController
     public function enrollWebAuthn(Request $request, Response $response): Response
     {
         $db = Database::getInstance();
+        $ipAddress = (string) $request->getAttribute('ip_address', '0.0.0.0');
+        $limiter = new RateLimiter();
+        if (!$limiter->check('ip:' . $ipAddress, 'bootstrap.token.verify', 20, 900)) {
+            $response->getBody()->write(json_encode(['error' => 'too_many_requests']));
+            return $response->withStatus(429)->withHeader('Content-Type', 'application/json');
+        }
         $body = $request->getParsedBody();
 
         /** @var AuditLogger $audit */
@@ -290,6 +302,12 @@ class BootstrapController
     public function showEnrollmentForm(Request $request, Response $response): Response
     {
         $db = Database::getInstance();
+        $ipAddress = (string) $request->getAttribute('ip_address', '0.0.0.0');
+        $limiter = new RateLimiter();
+        if (!$limiter->check('ip:' . $ipAddress, 'enrollment.token.verify', 20, 900)) {
+            $response->getBody()->write('Too many requests');
+            return $response->withStatus(429);
+        }
         
         $params = $request->getQueryParams();
         $token = $params['token'] ?? null;
@@ -358,6 +376,12 @@ class BootstrapController
     public function enrollKey(Request $request, Response $response): Response
     {
         $db = Database::getInstance();
+        $ipAddress = (string) $request->getAttribute('ip_address', '0.0.0.0');
+        $limiter = new RateLimiter();
+        if (!$limiter->check('ip:' . $ipAddress, 'enrollment.token.verify', 20, 900)) {
+            $response->getBody()->write(json_encode(['error' => 'too_many_requests']));
+            return $response->withStatus(429)->withHeader('Content-Type', 'application/json');
+        }
         $body = $request->getParsedBody();
 
         /** @var AuditLogger $audit */
