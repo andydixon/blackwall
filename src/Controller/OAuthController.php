@@ -476,6 +476,10 @@ class OAuthController
             return $response->withStatus($status)->withHeader('Content-Type', 'application/json');
         }
         $client = $auth['client'];
+        if (!$client->isConfidential()) {
+            $response->getBody()->write(json_encode(['error' => 'unauthorized_client']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
         $this->oauthService->revokeToken((string) $body['token'], $client->id);
 
         $audit->logSuccess('oauth.token.revoke', [
@@ -503,6 +507,10 @@ class OAuthController
             return $response->withStatus($status)->withHeader('Content-Type', 'application/json');
         }
         $client = $auth['client'];
+        if (!$client->isConfidential()) {
+            $response->getBody()->write(json_encode(['active' => false]));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
 
         if (empty($body['token'])) {
             $response->getBody()->write(json_encode(['active' => false]));
