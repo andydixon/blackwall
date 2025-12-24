@@ -748,6 +748,7 @@ class OAuthController
         SessionManager::start();
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
+        /** @var AuditLogger $audit */
         $ipAddress = (string) $request->getAttribute('ip_address', '0.0.0.0');
         if (!$this->rateLimiter->check('ip:' . $ipAddress, 'webauthn.login.oauth.verify', 20, 300)) {
             $audit->logFail('security.ratelimit.hit', [
@@ -759,6 +760,15 @@ class OAuthController
         }
 
         $body = $request->getParsedBody();
+        $credentialId = (string) ($body['id'] ?? '');
+        $clientDataJSON = (string) ($body['response']['clientDataJSON'] ?? '');
+        $authenticatorData = (string) ($body['response']['authenticatorData'] ?? '');
+        $signature = (string) ($body['response']['signature'] ?? '');
+        if ($credentialId === '' || $clientDataJSON === '' || $authenticatorData === '' || $signature === '') {
+            $audit->logFail('oauth.login.fail', ['failure_reason' => 'Missing credential data']);
+            $response->getBody()->write(json_encode(['error' => 'Invalid credential']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
         
         $webauthn = new \BlackWall\Service\WebAuthnService();
         $expectedChallenge = SessionManager::get('oauth_webauthn_challenge');
@@ -769,14 +779,15 @@ class OAuthController
         }
         
         $verified = $webauthn->verifyAssertion(
-            $body['id'],
-            $body['response']['clientDataJSON'],
-            $body['response']['authenticatorData'],
-            $body['response']['signature'],
+            $credentialId,
+            $clientDataJSON,
+            $authenticatorData,
+            $signature,
             $expectedChallenge
         );
         
         if (!$verified) {
+            $audit->logFail('oauth.login.fail', ['failure_reason' => 'Assertion verification failed']);
             $response->getBody()->write(json_encode(['error' => 'Invalid credential']));
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
@@ -786,7 +797,12 @@ class OAuthController
         // Preserve auth request across session ID regeneration
         $authRequest = SessionManager::get('oauth_auth_request');
 
-        $credential = $webauthn->getCredentialById($body['id']);
+        $credential = $webauthn->getCredentialById($credentialId);
+        if (!$credential || !isset($credential['user_id'])) {
+            $audit->logFail('oauth.login.fail', ['failure_reason' => 'Credential not found']);
+            $response->getBody()->write(json_encode(['error' => 'Invalid credential']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
         $userId = (int) $credential['user_id'];
         SessionManager::set('user_id', $userId);
         SessionManager::regenerateId();
@@ -798,6 +814,11 @@ class OAuthController
 
         $returnUrl = '/oauth/authorize?' . http_build_query($authRequest);
         
+        $audit->logSuccess('oauth.login.success', [
+            'actor_user_id' => $userId,
+            'webauthn_credential_public_id' => $credentialId,
+        ]);
+
         $response->getBody()->write(json_encode(['success' => true, 'redirect' => $returnUrl]));
         return $response->withHeader('Content-Type', 'application/json');
     }
