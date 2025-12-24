@@ -20,8 +20,19 @@ class MetricsController
 
     public function index(Request $request, Response $response): Response
     {
+        $response = $response
+            ->withHeader('Cache-Control', 'no-store')
+            ->withHeader('Pragma', 'no-cache');
+
         $expectedToken = trim(Config::get('METRICS_TOKEN', ''));
-        if ($expectedToken !== '') {
+        $allowUnauthenticated = Config::getBool('METRICS_ALLOW_UNAUTHENTICATED', false);
+
+        if (!$allowUnauthenticated) {
+            if ($expectedToken === '') {
+                $response->getBody()->write(json_encode(['error' => 'Metrics authentication is not configured']));
+                return $response->withStatus(503)->withHeader('Content-Type', 'application/json');
+            }
+
             $authHeader = $request->getHeaderLine('Authorization');
             $providedToken = '';
             if (str_starts_with($authHeader, 'Bearer ')) {
