@@ -102,6 +102,17 @@ class OAuthController
     public function authorize(Request $request, Response $response): Response
     {
         SessionManager::start();
+        $ipAddress = (string) $request->getAttribute('ip_address', '0.0.0.0');
+        if (!$this->rateLimiter->check('ip:' . $ipAddress, 'oauth.authorize', 120, 60)) {
+            /** @var AuditLogger $audit */
+            $audit = $request->getAttribute('audit_logger');
+            $audit->logFail('security.ratelimit.hit', [
+                'message' => 'Rate limit exceeded for authorize endpoint',
+                'action' => 'oauth.authorize',
+            ]);
+            $response->getBody()->write(json_encode(['error' => 'too_many_requests']));
+            return $response->withStatus(429)->withHeader('Content-Type', 'application/json');
+        }
         
         $params = $request->getQueryParams();
         
@@ -736,6 +747,18 @@ class OAuthController
     public function loginChallenge(Request $request, Response $response): Response
     {
         SessionManager::start();
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $ipAddress = (string) $request->getAttribute('ip_address', '0.0.0.0');
+        if (!$this->rateLimiter->check('ip:' . $ipAddress, 'webauthn.login.oauth.challenge', 60, 300)) {
+            $audit->logFail('security.ratelimit.hit', [
+                'message' => 'Rate limit exceeded for OAuth login challenge',
+                'action' => 'webauthn.login.oauth.challenge',
+            ]);
+            $response->getBody()->write(json_encode(['error' => 'too_many_requests']));
+            return $response->withStatus(429)->withHeader('Content-Type', 'application/json');
+        }
+
         $challenge = base64_encode(random_bytes(32));
         SessionManager::set('oauth_webauthn_challenge', $challenge);
         
