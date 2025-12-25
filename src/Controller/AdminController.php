@@ -143,6 +143,19 @@ class AdminController
 
     public function loginChallenge(Request $request, Response $response): Response
     {
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $ipAddress = (string) $request->getAttribute('ip_address', '0.0.0.0');
+        $rateLimiter = new RateLimiter();
+        if (!$rateLimiter->check('ip:' . $ipAddress, 'webauthn.login.admin.challenge', 60, 300)) {
+            $audit->logFail('security.ratelimit.hit', [
+                'message' => 'Rate limit exceeded for admin login challenge',
+                'action' => 'webauthn.login.admin.challenge',
+            ]);
+            $response->getBody()->write(json_encode(['error' => 'too_many_requests']));
+            return $response->withStatus(429)->withHeader('Content-Type', 'application/json');
+        }
+
         $challenge = random_bytes(32);
         
         SessionManager::start();
