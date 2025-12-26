@@ -118,6 +118,10 @@ class BootstrapController
             $response->getBody()->write('Invalid bootstrap token');
             return $response->withStatus(400);
         }
+        if (!$this->isValidEnrollmentToken((string) $token)) {
+            $response->getBody()->write('Invalid bootstrap token');
+            return $response->withStatus(400);
+        }
 
         // Verify token
         $stmt = $db->prepare("SELECT config_value FROM system_config WHERE config_key = 'bootstrap_token'");
@@ -196,6 +200,11 @@ class BootstrapController
         $token = $body['token'] ?? null;
         if (!$token) {
             $audit->logFail('webauthn.registration.fail', ['failure_reason' => 'Missing token']);
+            $response->getBody()->write(json_encode(['error' => 'Invalid token']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+        if (!$this->isValidEnrollmentToken((string) $token)) {
+            $audit->logFail('webauthn.registration.fail', ['failure_reason' => 'Invalid token format']);
             $response->getBody()->write(json_encode(['error' => 'Invalid token']));
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
@@ -316,6 +325,10 @@ class BootstrapController
             $response->getBody()->write('Invalid enrollment link');
             return $response->withStatus(400);
         }
+        if (!$this->isValidEnrollmentToken((string) $token)) {
+            $response->getBody()->write('Invalid enrollment link');
+            return $response->withStatus(400);
+        }
 
         // Look up user_id from token
         $stmt = $db->prepare("SELECT config_value FROM system_config WHERE config_key = ?");
@@ -392,6 +405,11 @@ class BootstrapController
         
         if (!$token) {
             $audit->logFail('webauthn.registration.fail', ['failure_reason' => 'Missing token']);
+            $response->getBody()->write(json_encode(['error' => 'Invalid token']));
+            return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
+        }
+        if (!$this->isValidEnrollmentToken((string) $token)) {
+            $audit->logFail('webauthn.registration.fail', ['failure_reason' => 'Invalid token format']);
             $response->getBody()->write(json_encode(['error' => 'Invalid token']));
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
@@ -473,12 +491,21 @@ class BootstrapController
         ]);
 
         // Delete enrollment tokens
-        $db->exec("DELETE FROM system_config WHERE config_key IN ('enrollment_token_{$token}', 'enrollment_expiry_{$token}')");
+        $deleteStmt = $db->prepare("DELETE FROM system_config WHERE config_key IN (?, ?)");
+        $deleteStmt->execute([
+            'enrollment_token_' . $token,
+            'enrollment_expiry_' . $token,
+        ]);
 
         // Determine redirect based on whether this was admin enrollment or portal
         $redirectUrl = '/portal/login';
 
         $response->getBody()->write(json_encode(['success' => true, 'redirect' => $redirectUrl]));
         return $response->withHeader('Content-Type', 'application/json');
+    }
+
+    private function isValidEnrollmentToken(string $token): bool
+    {
+        return (bool) preg_match('/^[a-f0-9]{64}$/', $token);
     }
 }
