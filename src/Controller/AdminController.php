@@ -2421,7 +2421,7 @@ class AdminController
         $body = $request->getParsedBody();
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
-        $referer = $request->getHeaderLine('Referer') ?: '/admin/projects';
+        $referer = $this->safeAdminRedirectTarget($request->getHeaderLine('Referer'), '/admin/projects');
         if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'assignment_update', $referer)) !== null) {
             return $limited;
         }
@@ -2481,7 +2481,7 @@ class AdminController
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $actorUserId = (int) SessionManager::get('user_id');
-        $referer = $request->getHeaderLine('Referer') ?: '/admin/projects';
+        $referer = $this->safeAdminRedirectTarget($request->getHeaderLine('Referer'), '/admin/projects');
         if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'assignment_delete', $referer)) !== null) {
             return $limited;
         }
@@ -3338,6 +3338,38 @@ class AdminController
     {
         $separator = str_contains($url, '?') ? '&' : '?';
         return $url . $separator . rawurlencode($key) . '=' . rawurlencode($value);
+    }
+
+    private function safeAdminRedirectTarget(?string $referer, string $fallback): string
+    {
+        $candidate = trim((string) $referer);
+        if ($candidate === '') {
+            return $fallback;
+        }
+
+        $parts = parse_url($candidate);
+        if ($parts === false) {
+            return $fallback;
+        }
+
+        // If absolute URL is provided, require it to match APP_URL host.
+        if (isset($parts['host'])) {
+            $appUrl = (string) \BlackWall\Config::get('APP_URL');
+            $appParts = parse_url($appUrl);
+            $appHost = is_array($appParts) ? (string) ($appParts['host'] ?? '') : '';
+            if ($appHost === '' || !hash_equals(strtolower($appHost), strtolower((string) $parts['host']))) {
+                return $fallback;
+            }
+        }
+
+        $path = (string) ($parts['path'] ?? '');
+        $query = isset($parts['query']) ? ('?' . $parts['query']) : '';
+        $target = $path . $query;
+        if ($target === '' || $target[0] !== '/' || !str_starts_with($target, '/admin/')) {
+            return $fallback;
+        }
+
+        return $target;
     }
 
     private function renderDocsPage(Response $response, string $slug): Response
