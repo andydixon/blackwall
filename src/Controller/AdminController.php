@@ -143,6 +143,12 @@ class AdminController
 
     public function loginChallenge(Request $request, Response $response): Response
     {
+        $body = (array) $request->getParsedBody();
+        if (!CSRFProtection::validateToken((string) ($body['csrf_token'] ?? ''))) {
+            $response->getBody()->write(json_encode(['error' => 'Invalid CSRF token']));
+            return $response->withStatus(403)->withHeader('Content-Type', 'application/json');
+        }
+
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $ipAddress = (string) $request->getAttribute('ip_address', '0.0.0.0');
@@ -178,6 +184,13 @@ class AdminController
         
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
+        $body = (array) $request->getParsedBody();
+        if (!CSRFProtection::validateToken((string) ($body['csrf_token'] ?? ''))) {
+            $audit->logFail('security.csrf.fail', ['failure_reason' => 'admin.login_verify']);
+            $response->getBody()->write(json_encode(['error' => 'Invalid CSRF token']));
+            return $response->withStatus(403)->withHeader('Content-Type', 'application/json');
+        }
+
         $ipAddress = (string) $request->getAttribute('ip_address', '0.0.0.0');
         $rateLimiter = new RateLimiter();
         if (!$rateLimiter->check('ip:' . $ipAddress, 'webauthn.login.admin.verify', 20, 300)) {
@@ -189,7 +202,6 @@ class AdminController
             return $response->withStatus(429)->withHeader('Content-Type', 'application/json');
         }
         
-        $body = $request->getParsedBody();
         $credentialId = $body['id'] ?? null;
         $rawId = $body['rawId'] ?? null;
         $authenticatorData = $body['response']['authenticatorData'] ?? null;

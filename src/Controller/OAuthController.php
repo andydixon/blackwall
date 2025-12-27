@@ -211,6 +211,7 @@ class OAuthController
                 'clientName' => $client->name,
                 'returnUrl' => $params['redirect_uri'],
                 'organization' => $this->organizationRepo->findById($project->organizationId),
+                'csrfToken' => CSRFProtection::generateToken(),
             ]);
         }
 
@@ -747,6 +748,11 @@ class OAuthController
     public function loginChallenge(Request $request, Response $response): Response
     {
         SessionManager::start();
+        $body = (array) $request->getParsedBody();
+        if (!CSRFProtection::validateToken((string) ($body['csrf_token'] ?? ''))) {
+            $response->getBody()->write(json_encode(['error' => 'Invalid CSRF token']));
+            return $response->withStatus(403)->withHeader('Content-Type', 'application/json');
+        }
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
         $ipAddress = (string) $request->getAttribute('ip_address', '0.0.0.0');
@@ -783,6 +789,11 @@ class OAuthController
         }
 
         $body = $request->getParsedBody();
+        if (!CSRFProtection::validateToken((string) ($body['csrf_token'] ?? ''))) {
+            $audit->logFail('security.csrf.fail', ['failure_reason' => 'oauth.login_verify']);
+            $response->getBody()->write(json_encode(['error' => 'Invalid CSRF token']));
+            return $response->withStatus(403)->withHeader('Content-Type', 'application/json');
+        }
         $credentialId = (string) ($body['id'] ?? '');
         $clientDataJSON = (string) ($body['response']['clientDataJSON'] ?? '');
         $authenticatorData = (string) ($body['response']['authenticatorData'] ?? '');

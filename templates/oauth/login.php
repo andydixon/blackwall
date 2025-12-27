@@ -13,6 +13,9 @@
                 <div class="card bg-dark border-secondary shadow-lg">
                     <div class="card-body p-5">
                         <div class="text-center mb-4">
+                            <?php if (!empty($organization) && !empty($organization->logoUrl)): ?>
+                                <img src="<?= htmlspecialchars($organization->logoUrl) ?>" alt="<?= htmlspecialchars($organization->name) ?>" style="max-height: 56px;" class="mb-3">
+                            <?php endif; ?>
                             <h1 class="h3 fw-bold">Sign in to continue</h1>
                             <p class="text-muted mb-0"><?= htmlspecialchars($clientName) ?> is requesting access</p>
                         </div>
@@ -35,6 +38,9 @@
                 
                 <div class="text-center mt-3">
                     <small class="text-muted">
+                        <?php if (!empty($organization)): ?>
+                            <?= htmlspecialchars($organization->name) ?> ·
+                        <?php endif; ?>
                         Powered by <strong>BlackWall</strong> · 
                         <a href="<?= htmlspecialchars($returnUrl) ?>" class="text-decoration-none">Cancel</a>
                     </small>
@@ -45,6 +51,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        const csrfToken = <?= json_encode($csrfToken ?? '') ?>;
         const loginBtn = document.getElementById('loginBtn');
         const errorDiv = document.getElementById('error');
 
@@ -57,7 +64,8 @@
                 // Get challenge
                 const challengeResp = await fetch('/oauth/login/challenge', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'}
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ csrf_token: csrfToken })
                 });
                 
                 if (!challengeResp.ok) throw new Error('Failed to get challenge');
@@ -83,6 +91,7 @@
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
+                        csrf_token: csrfToken,
                         id: credential.id,
                         rawId: btoa(String.fromCharCode(...new Uint8Array(credential.rawId))),
                         type: credential.type,
