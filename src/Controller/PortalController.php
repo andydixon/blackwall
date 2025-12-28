@@ -143,6 +143,9 @@ class PortalController
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
 
+        // Consume challenge before verification to enforce single-use semantics.
+        SessionManager::remove('portal_webauthn_challenge');
+
         $verified = $this->webauthn->verifyAssertion(
             $credentialId,
             $clientDataJSON,
@@ -159,8 +162,6 @@ class PortalController
             $response->getBody()->write(json_encode(['error' => 'Invalid credential']));
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
-
-        SessionManager::remove('portal_webauthn_challenge');
 
         $userId = (int) $credential['user_id'];
         SessionManager::set('user_id', $userId);

@@ -812,6 +812,9 @@ class OAuthController
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
         
+        // Consume challenge before verification to enforce single-use semantics.
+        SessionManager::remove('oauth_webauthn_challenge');
+
         $verified = $webauthn->verifyAssertion(
             $credentialId,
             $clientDataJSON,
@@ -825,8 +828,6 @@ class OAuthController
             $response->getBody()->write(json_encode(['error' => 'Invalid credential']));
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
-        
-        SessionManager::remove('oauth_webauthn_challenge');
         
         // Preserve auth request across session ID regeneration
         $authRequest = SessionManager::get('oauth_auth_request');

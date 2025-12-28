@@ -235,6 +235,9 @@ class AdminController
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
 
+        // Consume challenge before verification to enforce single-use semantics.
+        SessionManager::remove('webauthn_challenge');
+
         $verified = $this->webauthn->verifyAssertion(
             $credentialId,
             $clientDataJSON,
@@ -251,9 +254,6 @@ class AdminController
             $response->getBody()->write(json_encode(['error' => 'Invalid credential']));
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
-
-        // Clear the challenge from session
-        SessionManager::remove('webauthn_challenge');
 
         $userId = (int) $credential['user_id'];
         SessionManager::set('user_id', $userId);
