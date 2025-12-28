@@ -211,9 +211,14 @@ class CryptbinController
 
     public function metadata(Request $request, Response $response, array $args): Response
     {
+        $audit = $this->audit($request);
         $id = (string) ($args['id'] ?? '');
         if (!CryptbinStorageService::isValidId($id)) {
             return $this->json($response, ['error' => 'Not found'], 404);
+        }
+        if (!$this->checkRateLimits($request, $id, 'cryptbin.metadata', 60, 300)) {
+            $audit->logFail('security.ratelimit.hit', ['target_type' => 'cryptbin', 'target_id' => $id]);
+            return $this->json($response, ['error' => 'Rate limit exceeded'], 429);
         }
 
         $meta = $this->storage->readMetadata($id);
@@ -226,9 +231,14 @@ class CryptbinController
 
     public function ciphertext(Request $request, Response $response, array $args): Response
     {
+        $audit = $this->audit($request);
         $id = (string) ($args['id'] ?? '');
         if (!CryptbinStorageService::isValidId($id)) {
             return $response->withStatus(404);
+        }
+        if (!$this->checkRateLimits($request, $id, 'cryptbin.ciphertext', 60, 300)) {
+            $audit->logFail('security.ratelimit.hit', ['target_type' => 'cryptbin', 'target_id' => $id]);
+            return $this->json($response, ['error' => 'Rate limit exceeded'], 429);
         }
 
         $meta = $this->storage->readMetadata($id);
