@@ -29,6 +29,8 @@ use Slim\Views\PhpRenderer;
 
 class OAuthController
 {
+    private const LOGIN_CHALLENGE_TTL_SECONDS = 120;
+
     private OAuthClientRepository $clientRepo;
     private ProjectRepository $projectRepo;
     private UserProjectRoleRepository $roleRepo;
@@ -766,7 +768,10 @@ class OAuthController
         }
 
         $challenge = base64_encode(random_bytes(32));
-        SessionManager::set('oauth_webauthn_challenge', $challenge);
+        SessionManager::set('oauth_webauthn_challenge', [
+            'value' => $challenge,
+            'expires_at' => time() + self::LOGIN_CHALLENGE_TTL_SECONDS,
+        ]);
         
         $response->getBody()->write(json_encode(['challenge' => $challenge]));
         return $response->withHeader('Content-Type', 'application/json');
@@ -805,9 +810,15 @@ class OAuthController
         }
         
         $webauthn = new \BlackWall\Service\WebAuthnService();
-        $expectedChallenge = SessionManager::get('oauth_webauthn_challenge');
-        
-        if (!$expectedChallenge) {
+        $challengeState = SessionManager::get('oauth_webauthn_challenge');
+        $expectedChallenge = is_array($challengeState)
+            ? (string) ($challengeState['value'] ?? '')
+            : (string) $challengeState;
+        $expiresAt = is_array($challengeState)
+            ? (int) ($challengeState['expires_at'] ?? 0)
+            : 0;
+        if ($expectedChallenge === '' || ($expiresAt > 0 && $expiresAt < time())) {
+            SessionManager::remove('oauth_webauthn_challenge');
             $response->getBody()->write(json_encode(['error' => 'Session expired']));
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }

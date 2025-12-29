@@ -18,6 +18,8 @@ use Slim\Views\PhpRenderer;
 
 class PortalController
 {
+    private const LOGIN_CHALLENGE_TTL_SECONDS = 120;
+
     private WebAuthnService $webauthn;
     private PhpRenderer $renderer;
 
@@ -74,7 +76,10 @@ class PortalController
         $challenge = random_bytes(32);
         
         SessionManager::start();
-        SessionManager::set('portal_webauthn_challenge', base64_encode($challenge));
+        SessionManager::set('portal_webauthn_challenge', [
+            'value' => base64_encode($challenge),
+            'expires_at' => time() + self::LOGIN_CHALLENGE_TTL_SECONDS,
+        ]);
 
         $options = [
             'challenge' => base64_encode($challenge),
@@ -133,10 +138,17 @@ class PortalController
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
 
-        $expectedChallenge = SessionManager::get('portal_webauthn_challenge');
-        if (!$expectedChallenge) {
+        $challengeState = SessionManager::get('portal_webauthn_challenge');
+        $expectedChallenge = is_array($challengeState)
+            ? (string) ($challengeState['value'] ?? '')
+            : (string) $challengeState;
+        $expiresAt = is_array($challengeState)
+            ? (int) ($challengeState['expires_at'] ?? 0)
+            : 0;
+        if ($expectedChallenge === '' || ($expiresAt > 0 && $expiresAt < time())) {
+            SessionManager::remove('portal_webauthn_challenge');
             $audit->logFail('portal.login.fail', [
-                'failure_reason' => 'No challenge in session',
+                'failure_reason' => 'Challenge missing or expired',
                 'webauthn_credential_public_id' => $credentialId,
             ]);
             $response->getBody()->write(json_encode(['error' => 'Session expired']));

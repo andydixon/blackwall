@@ -34,6 +34,8 @@ use Ramsey\Uuid\Uuid;
 
 class AdminController
 {
+    private const LOGIN_CHALLENGE_TTL_SECONDS = 120;
+
     private UserRepository $userRepo;
     private ProjectRepository $projectRepo;
     private OrganizationRepository $organizationRepo;
@@ -165,7 +167,10 @@ class AdminController
         $challenge = random_bytes(32);
         
         SessionManager::start();
-        SessionManager::set('webauthn_challenge', base64_encode($challenge));
+        SessionManager::set('webauthn_challenge', [
+            'value' => base64_encode($challenge),
+            'expires_at' => time() + self::LOGIN_CHALLENGE_TTL_SECONDS,
+        ]);
 
         $options = [
             'challenge' => base64_encode($challenge),
@@ -225,10 +230,17 @@ class AdminController
         }
 
         // Verify the WebAuthn assertion
-        $expectedChallenge = SessionManager::get('webauthn_challenge');
-        if (!$expectedChallenge) {
+        $challengeState = SessionManager::get('webauthn_challenge');
+        $expectedChallenge = is_array($challengeState)
+            ? (string) ($challengeState['value'] ?? '')
+            : (string) $challengeState;
+        $expiresAt = is_array($challengeState)
+            ? (int) ($challengeState['expires_at'] ?? 0)
+            : 0;
+        if ($expectedChallenge === '' || ($expiresAt > 0 && $expiresAt < time())) {
+            SessionManager::remove('webauthn_challenge');
             $audit->logFail('webauthn.authentication.fail', [
-                'failure_reason' => 'No challenge in session',
+                'failure_reason' => 'Challenge missing or expired',
                 'webauthn_credential_public_id' => $credentialId,
             ]);
             $response->getBody()->write(json_encode(['error' => 'Session expired']));
