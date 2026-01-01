@@ -85,7 +85,7 @@ class PortalController
             'challenge' => base64_encode($challenge),
             'timeout' => 60000,
             'rpId' => \BlackWall\Config::get('WEBAUTHN_RP_ID'),
-            'userVerification' => 'preferred',
+            'userVerification' => 'required',
         ];
 
         $response->getBody()->write(json_encode($options));

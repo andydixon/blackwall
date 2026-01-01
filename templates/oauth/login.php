@@ -80,7 +80,7 @@
                         challenge: Uint8Array.from(atob(challengeData.challenge.replace(/-/g, '+').replace(/_/g, '/')), c => c.charCodeAt(0)),
                         timeout: 60000,
                         rpId: window.location.hostname,
-                        userVerification: 'preferred'
+                        userVerification: 'required'
                     }
                 });
 

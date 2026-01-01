@@ -40,4 +40,15 @@ class WebAuthnAssertionPolicyTest extends TestCase
         $this->assertTrue(WebAuthnAssertionPolicy::hasValidSignCounter(0, 0));
         $this->assertTrue(WebAuthnAssertionPolicy::hasValidSignCounter(0, 1));
     }
+
+    public function testDetectsUserVerificationFlag(): void
+    {
+        $prefix = str_repeat("\x00", 32);
+        $withUv = $prefix . chr(0x05) . str_repeat("\x00", 4); // UP + UV
+        $withoutUv = $prefix . chr(0x01) . str_repeat("\x00", 4); // UP only
+
+        $this->assertTrue(WebAuthnAssertionPolicy::hasUserVerificationFlag($withUv));
+        $this->assertFalse(WebAuthnAssertionPolicy::hasUserVerificationFlag($withoutUv));
+        $this->assertFalse(WebAuthnAssertionPolicy::hasUserVerificationFlag('short'));
+    }
 }

@@ -32,4 +32,15 @@ class WebAuthnAssertionPolicy
         // For non-zero counters, require monotonic increase to detect cloned authenticators.
         return $assertedSignCounter > $storedSignCounter;
     }
+
+    public static function hasUserVerificationFlag(string $authenticatorDataBinary): bool
+    {
+        if (strlen($authenticatorDataBinary) < 33) {
+            return false;
+        }
+
+        $flags = ord($authenticatorDataBinary[32]);
+
+        return ($flags & 0x04) !== 0;
+    }
 }

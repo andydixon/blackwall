@@ -359,6 +359,10 @@ class WebAuthnService
                 error_log('verifyAssertion: user not present flag not set');
                 return false;
             }
+            if (!WebAuthnAssertionPolicy::hasUserVerificationFlag($authDataBinary)) {
+                error_log('verifyAssertion: user verification flag not set');
+                return false;
+            }
 
             // Verify the cryptographic signature
             // The signature is over: authenticatorData || hash(clientDataJSON)
