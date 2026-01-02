@@ -272,8 +272,14 @@ class OAuthController
         }
 
         $params = SessionManager::get('oauth_auth_request');
-        if (!$params) {
+        if (!is_array($params)) {
             return $this->errorResponse($response, 'invalid_request', 'No authorization request found');
+        }
+        $clientPublicId = (string) ($params['client_id'] ?? '');
+        $redirectUri = (string) ($params['redirect_uri'] ?? '');
+        if ($clientPublicId === '' || $redirectUri === '') {
+            SessionManager::remove('oauth_auth_request');
+            return $this->errorResponse($response, 'invalid_request', 'Malformed authorization request');
         }
 
         $userId = SessionManager::get('user_id');
@@ -281,8 +287,16 @@ class OAuthController
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
         }
 
-        $client = $this->clientRepo->findByClientId($params['client_id']);
+        $client = $this->clientRepo->findByClientId($clientPublicId);
+        if ($client === null || !$client->isActive() || !$client->hasRedirectUri($redirectUri)) {
+            SessionManager::remove('oauth_auth_request');
+            return $this->errorResponse($response, 'invalid_client', 'Invalid or inactive OAuth client');
+        }
         $project = $this->projectRepo->findById($client->projectId);
+        if ($project === null || !$project->isActive() || $client->projectId !== $project->id) {
+            SessionManager::remove('oauth_auth_request');
+            return $this->redirectError($response, $redirectUri, 'invalid_request', 'Client project invalid', $params['state'] ?? null);
+        }
 
         if (isset($body['deny'])) {
             $audit->logInfo('oauth.authorize.deny', [
@@ -298,19 +312,32 @@ class OAuthController
 
         // User approved - generate authorization code
         $requestedScopes = isset($params['scope']) ? explode(' ', $params['scope']) : [];
+        $role = $this->roleRepo->findByUserAndProject((int) $userId, $project->id);
+        if ($role === null) {
+            $audit->logFail('oauth.authorize.fail', [
+                'message' => 'User not assigned to project at consent submission',
+                'error_code' => 'access_denied',
+                'actor_user_id' => (int) $userId,
+                'project_id' => $project->id,
+                'project_uuid' => $project->uuid,
+                'oauth_client_id' => $client->id,
+                'oauth_client_public_id' => $client->clientId,
+            ]);
+            SessionManager::remove('oauth_auth_request');
+            return $this->redirectError($response, $redirectUri, 'access_denied', 'User not authorized for this project', $params['state'] ?? null);
+        }
         
         $code = $this->oauthService->createAuthorizationCode([
             'client_id' => $client->id,
             'user_id' => $userId,
             'project_id' => $project->id,
-            'redirect_uri' => $params['redirect_uri'],
+            'redirect_uri' => $redirectUri,
             'scopes' => $requestedScopes,
             'code_challenge' => $params['code_challenge'],
             'code_challenge_method' => $params['code_challenge_method'],
             'nonce' => $params['nonce'] ?? null,
         ]);
 
-        $role = $this->roleRepo->findByUserAndProject($userId, $project->id);
         $privilegeLevel = $this->privilegeRepo->findByProjectAndLevel($project->id, $role->privilegeLevel);
 
         $audit->logSuccess('oauth.authorize.approve', [
