@@ -3097,6 +3097,10 @@ class AdminController
                 if (!$this->canAccessUserId($userId)) {
                     return false;
                 }
+                $targetUser = $this->userRepo->findById($userId);
+                if ($targetUser === null || $targetUser->organizationId !== $project->organizationId) {
+                    return false;
+                }
 
                 $existing = $this->roleRepo->findByUserAndProject($userId, $project->id);
                 if ($existing !== null) {
