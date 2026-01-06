@@ -503,6 +503,15 @@ class OAuthController
 
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
+        $ipAddress = (string) $request->getAttribute('ip_address', '0.0.0.0');
+        if (!$this->rateLimiter->check('ip:' . $ipAddress, 'oauth.revoke', 60, 60)) {
+            $audit->logFail('security.ratelimit.hit', [
+                'message' => 'Rate limit exceeded for revoke endpoint',
+                'action' => 'oauth.revoke',
+            ]);
+            $response->getBody()->write(json_encode(['error' => 'too_many_requests']));
+            return $response->withStatus(429)->withHeader('Content-Type', 'application/json');
+        }
 
         if (empty($body['token'])) {
             $response->getBody()->write(json_encode(['error' => 'invalid_request']));
@@ -540,6 +549,15 @@ class OAuthController
 
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
+        $ipAddress = (string) $request->getAttribute('ip_address', '0.0.0.0');
+        if (!$this->rateLimiter->check('ip:' . $ipAddress, 'oauth.introspect', 60, 60)) {
+            $audit->logFail('security.ratelimit.hit', [
+                'message' => 'Rate limit exceeded for introspect endpoint',
+                'action' => 'oauth.introspect',
+            ]);
+            $response->getBody()->write(json_encode(['active' => false]));
+            return $response->withStatus(429)->withHeader('Content-Type', 'application/json');
+        }
 
         $auth = $this->authenticateClient($request, (array) $body);
         if (!$auth['ok']) {
