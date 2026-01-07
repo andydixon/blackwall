@@ -17,13 +17,13 @@ $app->post('/bootstrap/enroll', [BootstrapController::class, 'enrollWebAuthn']);
 // User enrollment routes
 $app->get('/enroll', [BootstrapController::class, 'showEnrollmentForm']);
 $app->post('/enroll/complete', [BootstrapController::class, 'enrollKey']);
+$app->get('/organisations/signup', [BootstrapController::class, 'organizationSignupForm']);
+$app->post('/organisations/signup', [BootstrapController::class, 'organizationSignup']);
 
 // Portal routes
 $app->get('/portal/login', [PortalController::class, 'loginForm']);
 $app->post('/portal/login', [PortalController::class, 'loginChallenge']);
-$app->get('/portal/login/challenge', [PortalController::class, 'loginChallenge']);
 $app->post('/portal/login/challenge', [PortalController::class, 'loginChallenge']);
-$app->get('/portal/login/verify', [PortalController::class, 'loginVerify']);
 $app->post('/portal/login/verify', [PortalController::class, 'loginVerify']);
 $app->get('/portal', [PortalController::class, 'dashboard']);
 $app->post('/portal/keys/add/init', [PortalController::class, 'addKeyInit']);
@@ -69,7 +69,6 @@ $app->get('/oauth/userinfo', [OAuthController::class, 'userinfo']);
 $app->group('/admin', function (RouteCollectorProxy $group) {
     // Auth
     $group->get('/login', [AdminController::class, 'loginForm']);
-    $group->get('/login/challenge', [AdminController::class, 'loginChallenge']);
     $group->post('/login/challenge', [AdminController::class, 'loginChallenge']);
     $group->post('/login/verify', [AdminController::class, 'loginVerify']);
     $group->post('/logout', [AdminController::class, 'logout']);
@@ -88,6 +87,14 @@ $app->group('/admin', function (RouteCollectorProxy $group) {
     $group->get('/roles', [AdminController::class, 'adminRoles']);
     $group->post('/roles', [AdminController::class, 'adminRoleUpsert']);
     $group->post('/roles/{userId}/revoke', [AdminController::class, 'adminRoleRevoke']);
+    $group->get('/organisations', [AdminController::class, 'organizationsList']);
+    $group->post('/organisations/create', [AdminController::class, 'organizationStore']);
+    $group->get('/organisations/{organizationUuid}', [AdminController::class, 'organizationDetail']);
+    $group->post('/organisations/{organizationUuid}/update', [AdminController::class, 'organizationUpdate']);
+    $group->post('/organisations/{organizationUuid}/switch-admin', [AdminController::class, 'organizationSwitchAdmin']);
+    $group->post('/organisations/{organizationUuid}/users/import', [AdminController::class, 'organizationImportUsers']);
+    $group->get('/organisations/{organizationUuid}/enrollment-urls/export', [AdminController::class, 'organizationExportEnrollmentUrls']);
+    $group->post('/switch/restore', [AdminController::class, 'switchRestore']);
     $group->get('/approvals', [AdminController::class, 'approvalsList']);
     $group->post('/approvals/{id}/approve', [AdminController::class, 'approvalApprove']);
     $group->post('/approvals/{id}/reject', [AdminController::class, 'approvalReject']);
