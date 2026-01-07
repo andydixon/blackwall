@@ -2392,6 +2392,9 @@ class AdminController
         if (!$userId || !$privilegeLevel) {
             return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments?error=invalid")->withStatus(302);
         }
+        if ($this->privilegeRepo->findByProjectAndLevel($project->id, $privilegeLevel) === null) {
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments?error=invalid_level")->withStatus(302);
+        }
         if (!$this->canAccessUserId($userId)) {
             return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments?error=user_out_of_scope")->withStatus(302);
         }
@@ -2465,6 +2468,9 @@ class AdminController
         }
         if (!$this->canAccessProjectId($assignment->projectId)) {
             return $response->withStatus(403);
+        }
+        if ($this->privilegeRepo->findByProjectAndLevel($assignment->projectId, $privilegeLevel) === null) {
+            return $response->withHeader('Location', $referer)->withStatus(302);
         }
 
         if (AdminMutationPolicy::shouldRequireAssignmentApproval($this->hasCapability('assignment_mutations_direct'))) {
@@ -3106,6 +3112,9 @@ class AdminController
                 if ($existing !== null) {
                     return false;
                 }
+                if ($this->privilegeRepo->findByProjectAndLevel($project->id, $privilegeLevel) === null) {
+                    return false;
+                }
 
                 $created = $this->roleRepo->create($userId, $project->id, $privilegeLevel);
                 $audit = new AuditLogger();
@@ -3131,6 +3140,9 @@ class AdminController
                     return false;
                 }
                 if (!$this->canAccessProjectId($assignment->projectId)) {
+                    return false;
+                }
+                if ($this->privilegeRepo->findByProjectAndLevel($assignment->projectId, $requestedLevel) === null) {
                     return false;
                 }
 
