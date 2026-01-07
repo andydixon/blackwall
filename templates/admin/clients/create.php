@@ -12,6 +12,10 @@
     </div>
 </div>
 
+<?php if (isset($_GET['error']) && $_GET['error'] === 'invalid_redirect_uri'): ?>
+    <div class="alert alert-danger">Redirect URIs must use HTTPS, or HTTP only for localhost loopback URLs.</div>
+<?php endif; ?>
+
 <div class="row">
     <div class="col-lg-8">
         <div class="card bg-dark border-secondary">

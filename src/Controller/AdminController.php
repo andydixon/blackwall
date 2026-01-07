@@ -25,6 +25,7 @@ use BlackWall\Security\AdminMutationPolicy;
 use BlackWall\Security\AuditExportSigner;
 use BlackWall\Security\ApprovalDecisionPolicy;
 use BlackWall\Security\AdminScopedViewPolicy;
+use BlackWall\Security\OAuthRedirectUriPolicy;
 use BlackWall\Security\SuperAdminProjectPolicy;
 use BlackWall\Config;
 use Psr\Http\Message\ResponseInterface as Response;
@@ -2647,7 +2648,10 @@ class AdminController
         $clientSecret = isset($body['is_confidential']) ? bin2hex(random_bytes(32)) : null;
         $isConfidential = isset($body['is_confidential']);
 
-        $redirectUris = array_filter(array_map('trim', explode("\n", $body['redirect_uris'])));
+        $redirectUris = array_values(array_filter(array_map('trim', preg_split('/\r\n|\r|\n/', (string) ($body['redirect_uris'] ?? '')) ?: [])));
+        if (!OAuthRedirectUriPolicy::allAllowed($redirectUris)) {
+            return $response->withHeader('Location', "/admin/projects/{$project->uuid}/clients/create?error=invalid_redirect_uri")->withStatus(302);
+        }
 
         $db = \BlackWall\Database::getInstance();
         $stmt = $db->prepare(
@@ -2764,6 +2768,7 @@ class AdminController
             $name === ''
             || !in_array($status, ['active', 'disabled'], true)
             || empty($redirectUris)
+            || !OAuthRedirectUriPolicy::allAllowed($redirectUris)
             || !in_array($accessTokenType, ['jwt', 'opaque'], true)
             || $accessTokenLifetime < 60
             || $accessTokenLifetime > 86400
@@ -3230,6 +3235,7 @@ class AdminController
                     $name === ''
                     || !in_array($status, ['active', 'disabled'], true)
                     || empty($redirectUris)
+                    || !OAuthRedirectUriPolicy::allAllowed($redirectUris)
                     || !in_array($accessTokenType, ['jwt', 'opaque'], true)
                     || $accessTokenLifetime < 60
                     || $accessTokenLifetime > 86400

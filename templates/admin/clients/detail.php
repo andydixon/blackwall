@@ -41,6 +41,8 @@
 <?php endif; ?>
 <?php if (isset($_GET['error']) && $_GET['error'] === 'csrf'): ?>
     <div class="alert alert-danger">Security validation failed. Please retry.</div>
+<?php elseif (isset($_GET['error']) && $_GET['error'] === 'invalid_redirect_uri'): ?>
+    <div class="alert alert-danger">Redirect URIs must use HTTPS, or HTTP only for localhost loopback URLs.</div>
 <?php elseif (isset($_GET['error']) && $_GET['error'] === 'invalid'): ?>
     <div class="alert alert-danger">Invalid OAuth client settings.</div>
 <?php elseif (isset($_GET['error']) && $_GET['error'] === 'rate_limited'): ?>
