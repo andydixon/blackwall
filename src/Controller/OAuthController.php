@@ -603,6 +603,18 @@ class OAuthController
 
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
+        $ipAddress = (string) $request->getAttribute('ip_address', '0.0.0.0');
+        if (!$this->rateLimiter->check('ip:' . $ipAddress, 'oauth.userinfo', 120, 60)) {
+            $audit->logFail('security.ratelimit.hit', [
+                'message' => 'Rate limit exceeded for userinfo endpoint',
+                'action' => 'oauth.userinfo',
+            ]);
+            $response->getBody()->write(json_encode([
+                'error' => 'too_many_requests',
+                'error_description' => 'Rate limit exceeded',
+            ]));
+            return $response->withStatus(429)->withHeader('Content-Type', 'application/json');
+        }
 
         // Extract bearer token from Authorization header
         $authHeader = $request->getHeaderLine('Authorization');
