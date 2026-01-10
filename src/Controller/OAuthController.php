@@ -372,7 +372,7 @@ class OAuthController
 
         /** @var AuditLogger $audit */
         $audit = $request->getAttribute('audit_logger');
-        $ipAddress = $request->getAttribute('ip_address');
+        $ipAddress = (string) $request->getAttribute('ip_address', '0.0.0.0');
 
         if (!$this->rateLimiter->check($ipAddress, 'oauth.token', 60, 60)) {
             $audit->logFail('security.ratelimit.hit', [
