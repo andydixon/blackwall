@@ -676,15 +676,24 @@ class OAuthController
             
             // Get user details from database
             $db = Database::getInstance();
-            $stmt = $db->prepare('SELECT id, uuid, display_label FROM users WHERE uuid = ?');
-            $stmt->execute([$userUuid]);
+            $stmt = $db->prepare('SELECT id, uuid, display_label FROM users WHERE uuid = ? AND status = ?');
+            $stmt->execute([$userUuid, 'active']);
             $user = $stmt->fetch();
+
+            $projectUuid = (string) $claims->get('project_id', '');
+            $projectStmt = $db->prepare('SELECT id FROM projects WHERE uuid = ? AND status = ?');
+            $projectStmt->execute([$projectUuid, 'active']);
+            $project = $projectStmt->fetch();
             
-            if (!$user) {
-                $audit->logFail('oidc.userinfo.fail', ['failure_reason' => 'User not found for JWT token', 'user_uuid' => $userUuid]);
+            if (!$user || !$project) {
+                $audit->logFail('oidc.userinfo.fail', [
+                    'failure_reason' => 'User or project inactive for JWT token',
+                    'user_uuid' => $userUuid,
+                    'project_uuid' => $projectUuid,
+                ]);
                 $response->getBody()->write(json_encode([
                     'error' => 'invalid_token',
-                    'error_description' => 'Token user not found'
+                    'error_description' => 'Token subject is inactive'
                 ]));
                 return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
             }
@@ -722,9 +731,9 @@ class OAuthController
              JOIN users u ON t.user_id = u.id
              JOIN projects p ON t.project_id = p.id
              JOIN oauth_clients c ON c.id = t.client_id
-             WHERE t.token_hash = ? AND t.revoked_at IS NULL AND t.expires_at > NOW() AND c.status = ?'
+             WHERE t.token_hash = ? AND t.revoked_at IS NULL AND t.expires_at > NOW() AND c.status = ? AND u.status = ? AND p.status = ?'
         );
-        $stmt->execute([hash('sha256', $accessToken), 'active']);
+        $stmt->execute([hash('sha256', $accessToken), 'active', 'active', 'active']);
         $token = $stmt->fetch();
 
         if (!$token) {
