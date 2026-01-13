@@ -269,6 +269,18 @@ class AdminController
         }
 
         $userId = (int) $credential['user_id'];
+        $adminScope = $this->getAdminScope($userId);
+        if (!$adminScope['is_admin']) {
+            $audit->logFail('admin.login.fail', [
+                'failure_reason' => 'Credential user lacks admin scope',
+                'actor_user_id' => $userId,
+                'webauthn_credential_id' => $credential['id'],
+                'webauthn_credential_public_id' => $credentialId,
+            ]);
+            $response->getBody()->write(json_encode(['error' => 'Invalid credential']));
+            return $response->withStatus(403)->withHeader('Content-Type', 'application/json');
+        }
+
         SessionManager::set('user_id', $userId);
         SessionManager::regenerateId();
 
