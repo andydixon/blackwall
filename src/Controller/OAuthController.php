@@ -374,7 +374,7 @@ class OAuthController
         $audit = $request->getAttribute('audit_logger');
         $ipAddress = (string) $request->getAttribute('ip_address', '0.0.0.0');
 
-        if (!$this->rateLimiter->check($ipAddress, 'oauth.token', 60, 60)) {
+        if (!$this->rateLimiter->check('ip:' . $ipAddress, 'oauth.token', 60, 60)) {
             $audit->logFail('security.ratelimit.hit', [
                 'message' => 'Rate limit exceeded for token endpoint',
                 'action' => 'oauth.token',
