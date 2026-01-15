@@ -2687,7 +2687,11 @@ class AdminController
             'oauth_client_public_id' => $clientId,
         ]);
 
-        return $response->withHeader('Location', "/admin/clients/{$clientId}?secret=" . urlencode($clientSecret ?: ''))->withStatus(302);
+        if ($clientSecret !== null && $clientSecret !== '') {
+            SessionManager::set('oauth_client_secret_flash_' . $clientId, $clientSecret);
+        }
+
+        return $response->withHeader('Location', "/admin/clients/{$clientId}")->withStatus(302);
     }
 
     public function clientDetail(Request $request, Response $response, array $args): Response
@@ -2717,7 +2721,9 @@ class AdminController
             return $response->withStatus(403);
         }
 
-        $secret = $request->getQueryParams()['secret'] ?? null;
+        $secretFlashKey = 'oauth_client_secret_flash_' . $clientPublicId;
+        $secret = SessionManager::get($secretFlashKey);
+        SessionManager::remove($secretFlashKey);
 
         return $this->renderWithLayout($response, 'admin/clients/detail.php', [
             'title' => 'OAuth Client',
