@@ -28,6 +28,9 @@ class OAuthClientAuthenticator
 
         $bodyClientId = trim((string) ($body['client_id'] ?? ''));
         $bodySecret = array_key_exists('client_secret', $body) ? (string) $body['client_secret'] : null;
+        if ($basic['present'] && $bodySecret !== null && $bodySecret !== '') {
+            return ['ok' => false, 'client' => null, 'error' => 'invalid_client', 'auth_method' => null];
+        }
         $clientId = $basic['client_id'] ?? $bodyClientId;
         if ($clientId === '') {
             return ['ok' => false, 'client' => null, 'error' => 'invalid_client', 'auth_method' => null];

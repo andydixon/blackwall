@@ -116,6 +116,37 @@ class OAuthClientAuthenticatorTest extends TestCase
         $this->assertSame('unauthorized_client', $result['error']);
     }
 
+    public function testConfidentialClientRejectsMixedBasicAndBodySecretAuthentication(): void
+    {
+        $hasher = new TokenHasher();
+        $client = $this->makeClient('confidential-client', $hasher->hash('expected-secret'));
+        $authenticator = new OAuthClientAuthenticator($hasher);
+        $header = 'Basic ' . base64_encode('confidential-client:expected-secret');
+
+        $result = $authenticator->authenticate($header, [
+            'client_id' => 'confidential-client',
+            'client_secret' => 'expected-secret',
+        ], fn(string $id) => $client);
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame('invalid_client', $result['error']);
+    }
+
+    public function testPublicClientRejectsMixedBasicAndBodySecretAuthentication(): void
+    {
+        $client = $this->makeClient('public-client', null);
+        $authenticator = new OAuthClientAuthenticator(new TokenHasher());
+        $header = 'Basic ' . base64_encode('public-client:');
+
+        $result = $authenticator->authenticate($header, [
+            'client_id' => 'public-client',
+            'client_secret' => 'unexpected',
+        ], fn(string $id) => $client);
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame('invalid_client', $result['error']);
+    }
+
     private function makeClient(string $clientId, ?string $clientSecretHash): OAuthClient
     {
         return new OAuthClient(
