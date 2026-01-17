@@ -87,10 +87,10 @@ class OAuthService
             c.refresh_token_lifetime, c.oidc_enabled
             FROM oauth_auth_codes ac
             JOIN oauth_clients c ON c.id = ac.client_id
-            WHERE ac.code_hash = ? AND c.client_id = ? AND ac.used_at IS NULL'
+            WHERE ac.code_hash = ? AND c.client_id = ? AND c.status = ? AND ac.used_at IS NULL'
         );
 
-        $stmt->execute([$codeHash, $clientId]);
+        $stmt->execute([$codeHash, $clientId, 'active']);
         $authCode = $stmt->fetch();
 
         if (!$authCode) {
@@ -263,18 +263,27 @@ class OAuthService
         int $refreshTokenLifetime,
         ?string $nonce = null,
         bool $oidcEnabled = true
-    ): array {
-        $userStmt = $this->db->prepare('SELECT uuid, display_label FROM users WHERE id = ?');
+    ): ?array {
+        $userStmt = $this->db->prepare("SELECT uuid, display_label FROM users WHERE id = ? AND status = 'active'");
         $userStmt->execute([$userId]);
         $user = $userStmt->fetch();
+        if (!$user) {
+            return null;
+        }
 
-        $projectStmt = $this->db->prepare('SELECT uuid FROM projects WHERE id = ?');
+        $projectStmt = $this->db->prepare("SELECT uuid FROM projects WHERE id = ? AND status = 'active'");
         $projectStmt->execute([$projectId]);
         $project = $projectStmt->fetch();
+        if (!$project) {
+            return null;
+        }
 
-        $clientStmt = $this->db->prepare('SELECT client_id FROM oauth_clients WHERE id = ?');
+        $clientStmt = $this->db->prepare("SELECT client_id FROM oauth_clients WHERE id = ? AND status = 'active'");
         $clientStmt->execute([$clientId]);
         $client = $clientStmt->fetch();
+        if (!$client) {
+            return null;
+        }
 
         $response = [
             'token_type' => 'Bearer',
