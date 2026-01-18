@@ -3652,6 +3652,24 @@ class AdminController
         }
 
         $db = \BlackWall\Database::getInstance();
+        $activeUserStmt = $db->prepare("SELECT 1 FROM users WHERE id = ? AND status = 'active' LIMIT 1");
+        $activeUserStmt->execute([$userId]);
+        if (!$activeUserStmt->fetchColumn()) {
+            $scope = [
+                'user_id' => $userId,
+                'is_admin' => false,
+                'is_super_admin' => false,
+                'organization_ids' => [],
+                'organization_uuids' => [],
+                'organization_uuid_set' => [],
+                'project_ids' => [],
+                'project_uuids' => [],
+                'project_uuid_set' => [],
+            ];
+            $this->cachedScope = $scope;
+            return $scope;
+        }
+
         $superStmt = $db->prepare(
             "SELECT p.id, p.uuid, p.name
              FROM user_project_roles upr
