@@ -6,6 +6,10 @@ namespace BlackWall\Security;
 
 class OAuthAuthorizationRequestValidator
 {
+    private const STATE_MAX_LENGTH = 512;
+    private const CHALLENGE_PATTERN = '/^[A-Za-z0-9\-\._~]{43,128}$/';
+    private const NONCE_PATTERN = '/^[A-Za-z0-9\-\._~]{8,255}$/';
+
     /**
      * @return array{ok:bool,error:?string,description:?string}
      */
@@ -25,13 +29,22 @@ class OAuthAuthorizationRequestValidator
         if ((string) $params['code_challenge_method'] !== 'S256') {
             return ['ok' => false, 'error' => 'invalid_request', 'description' => 'Only S256 supported'];
         }
+        $state = (string) $params['state'];
+        if (strlen($state) > self::STATE_MAX_LENGTH) {
+            return ['ok' => false, 'error' => 'invalid_request', 'description' => 'Invalid state'];
+        }
+
+        $codeChallenge = (string) $params['code_challenge'];
+        if (preg_match(self::CHALLENGE_PATTERN, $codeChallenge) !== 1) {
+            return ['ok' => false, 'error' => 'invalid_request', 'description' => 'Invalid code_challenge'];
+        }
 
         if ($isOidcRequest) {
             $nonce = trim((string) ($params['nonce'] ?? ''));
             if ($nonce === '') {
                 return ['ok' => false, 'error' => 'invalid_request', 'description' => 'Missing parameter: nonce'];
             }
-            if (strlen($nonce) < 8 || strlen($nonce) > 255) {
+            if (preg_match(self::NONCE_PATTERN, $nonce) !== 1) {
                 return ['ok' => false, 'error' => 'invalid_request', 'description' => 'Invalid nonce'];
             }
 

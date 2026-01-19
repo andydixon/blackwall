@@ -16,7 +16,7 @@ class OAuthAuthorizationRequestValidatorTest extends TestCase
             'client_id' => 'client-a',
             'redirect_uri' => 'https://app.example/callback',
             'response_type' => 'code',
-            'code_challenge' => 'abc',
+            'code_challenge' => str_repeat('a', 43),
             'code_challenge_method' => 'S256',
         ], false, null);
 
@@ -32,7 +32,7 @@ class OAuthAuthorizationRequestValidatorTest extends TestCase
             'client_id' => 'client-a',
             'redirect_uri' => 'https://app.example/callback',
             'response_type' => 'code',
-            'code_challenge' => 'abc',
+            'code_challenge' => str_repeat('a', 43),
             'code_challenge_method' => 'S256',
             'state' => 'state-123',
         ], true, null);
@@ -48,7 +48,7 @@ class OAuthAuthorizationRequestValidatorTest extends TestCase
             'client_id' => 'client-a',
             'redirect_uri' => 'https://app.example/callback',
             'response_type' => 'code',
-            'code_challenge' => 'abc',
+            'code_challenge' => str_repeat('a', 43),
             'code_challenge_method' => 'S256',
             'state' => 'state-123',
             'nonce' => 'nonce-12345',
@@ -65,7 +65,7 @@ class OAuthAuthorizationRequestValidatorTest extends TestCase
             'client_id' => 'client-a',
             'redirect_uri' => 'https://app.example/callback',
             'response_type' => 'code',
-            'code_challenge' => 'abc',
+            'code_challenge' => str_repeat('a', 43),
             'code_challenge_method' => 'S256',
             'state' => 'state-123',
             'nonce' => 'nonce-12345',
@@ -74,5 +74,37 @@ class OAuthAuthorizationRequestValidatorTest extends TestCase
         $this->assertTrue($result['ok']);
         $this->assertNull($result['error']);
         $this->assertNull($result['description']);
+    }
+
+    public function testRejectsInvalidCodeChallengeFormat(): void
+    {
+        $validator = new OAuthAuthorizationRequestValidator();
+        $result = $validator->validate([
+            'client_id' => 'client-a',
+            'redirect_uri' => 'https://app.example/callback',
+            'response_type' => 'code',
+            'code_challenge' => 'abc',
+            'code_challenge_method' => 'S256',
+            'state' => 'state-123',
+        ], false, null);
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame('Invalid code_challenge', $result['description']);
+    }
+
+    public function testRejectsOverlongState(): void
+    {
+        $validator = new OAuthAuthorizationRequestValidator();
+        $result = $validator->validate([
+            'client_id' => 'client-a',
+            'redirect_uri' => 'https://app.example/callback',
+            'response_type' => 'code',
+            'code_challenge' => str_repeat('a', 43),
+            'code_challenge_method' => 'S256',
+            'state' => str_repeat('s', 513),
+        ], false, null);
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame('Invalid state', $result['description']);
     }
 }
