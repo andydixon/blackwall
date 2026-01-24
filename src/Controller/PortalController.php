@@ -176,6 +176,21 @@ class PortalController
         }
 
         $userId = (int) $credential['user_id'];
+        $db = Database::getInstance();
+        $statusStmt = $db->prepare("SELECT status FROM users WHERE id = ? LIMIT 1");
+        $statusStmt->execute([$userId]);
+        $userStatus = (string) ($statusStmt->fetchColumn() ?: '');
+        if ($userStatus !== 'active') {
+            $audit->logFail('portal.login.fail', [
+                'failure_reason' => 'User account inactive',
+                'actor_user_id' => $userId,
+                'webauthn_credential_id' => $credential['id'],
+                'webauthn_credential_public_id' => $credentialId,
+            ]);
+            $response->getBody()->write(json_encode(['error' => 'Invalid credential']));
+            return $response->withStatus(403)->withHeader('Content-Type', 'application/json');
+        }
+
         SessionManager::set('user_id', $userId);
         SessionManager::set('login_credential_id', $credential['id']);
         SessionManager::regenerateId();

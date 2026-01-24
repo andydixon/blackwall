@@ -916,6 +916,19 @@ class OAuthController
             return $response->withStatus(400)->withHeader('Content-Type', 'application/json');
         }
         $userId = (int) $credential['user_id'];
+        $userStatusStmt = Database::getInstance()->prepare("SELECT status FROM users WHERE id = ? LIMIT 1");
+        $userStatusStmt->execute([$userId]);
+        $userStatus = (string) ($userStatusStmt->fetchColumn() ?: '');
+        if ($userStatus !== 'active') {
+            $audit->logFail('oauth.login.fail', [
+                'failure_reason' => 'User account inactive',
+                'actor_user_id' => $userId,
+                'webauthn_credential_public_id' => $credentialId,
+            ]);
+            $response->getBody()->write(json_encode(['error' => 'Invalid credential']));
+            return $response->withStatus(403)->withHeader('Content-Type', 'application/json');
+        }
+
         SessionManager::set('user_id', $userId);
         SessionManager::regenerateId();
 
