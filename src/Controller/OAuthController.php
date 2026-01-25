@@ -205,6 +205,10 @@ class OAuthController
         
         // Check if user is logged in
         $userId = SessionManager::get('user_id');
+        if ($userId !== null && !$this->isActiveUserId((int) $userId)) {
+            SessionManager::remove('user_id');
+            $userId = null;
+        }
         // Always store the authorization request for later use
         SessionManager::set('oauth_auth_request', $params);
         if (!$userId) {
@@ -285,6 +289,11 @@ class OAuthController
         $userId = SessionManager::get('user_id');
         if (!$userId) {
             return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (!$this->isActiveUserId((int) $userId)) {
+            SessionManager::remove('user_id');
+            SessionManager::remove('oauth_auth_request');
+            return $this->redirectError($response, $redirectUri, 'access_denied', 'User account inactive', $params['state'] ?? null);
         }
 
         $client = $this->clientRepo->findByClientId($clientPublicId);
@@ -593,6 +602,17 @@ class OAuthController
             $body,
             fn(string $clientId) => $this->clientRepo->findByClientId($clientId)
         );
+    }
+
+    private function isActiveUserId(int $userId): bool
+    {
+        if ($userId < 1) {
+            return false;
+        }
+
+        $stmt = Database::getInstance()->prepare("SELECT 1 FROM users WHERE id = ? AND status = 'active' LIMIT 1");
+        $stmt->execute([$userId]);
+        return (bool) $stmt->fetchColumn();
     }
 
     public function userinfo(Request $request, Response $response): Response
