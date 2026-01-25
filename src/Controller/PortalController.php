@@ -42,7 +42,15 @@ class PortalController
     private function checkAuth(): bool
     {
         SessionManager::start();
-        return SessionManager::get('user_id') !== null;
+        $userId = (int) SessionManager::get('user_id');
+        if ($userId < 1) {
+            return false;
+        }
+
+        $db = Database::getInstance();
+        $stmt = $db->prepare("SELECT 1 FROM users WHERE id = ? AND status = 'active' LIMIT 1");
+        $stmt->execute([$userId]);
+        return (bool) $stmt->fetchColumn();
     }
 
     public function loginForm(Request $request, Response $response): Response
