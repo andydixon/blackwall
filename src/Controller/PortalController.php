@@ -241,9 +241,10 @@ class PortalController
                 ON ppl.project_id = upr.project_id
                AND ppl.level = upr.privilege_level
              WHERE upr.user_id = ?
+               AND p.status = ?
              ORDER BY p.name'
         );
-        $stmt->execute([$userId]);
+        $stmt->execute([$userId, 'active']);
         $projects = $stmt->fetchAll();
         foreach ($projects as &$project) {
             $project['privilege_label'] = PrivilegeLabelResolver::resolve(
