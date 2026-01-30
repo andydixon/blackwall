@@ -1695,6 +1695,26 @@ class AdminController
             return $deny;
         }
 
+        /** @var AuditLogger|null $requestAudit */
+        $requestAudit = $request->getAttribute('audit_logger');
+        $actorUserId = (int) SessionManager::get('user_id');
+        $ipAddress = (string) ($request->getAttribute('ip_address') ?? '0.0.0.0');
+        $identifier = "admin_user:{$actorUserId}|ip:{$ipAddress}";
+        $maxAttempts = max(1, Config::getInt('ADMIN_AUDIT_EXPORT_RATE_LIMIT_ATTEMPTS', 12));
+        $windowSeconds = max(1, Config::getInt('ADMIN_AUDIT_EXPORT_RATE_LIMIT_WINDOW_SECONDS', 300));
+        $limiter = new RateLimiter();
+        if (!$limiter->check($identifier, 'admin.audit_export', $maxAttempts, $windowSeconds)) {
+            if ($requestAudit instanceof AuditLogger) {
+                $requestAudit->logFail('security.ratelimit.hit', [
+                    'actor_user_id' => $actorUserId,
+                    'message' => 'Rate limit exceeded for audit export endpoint',
+                    'action' => 'admin.audit_export',
+                ]);
+            }
+            $response->getBody()->write((string) json_encode(['error' => 'too_many_requests']));
+            return $response->withStatus(429)->withHeader('Content-Type', 'application/json');
+        }
+
         $params = $request->getQueryParams();
         $filters = $this->extractAuditFilters($params);
         $limit = max(1, min(10000, (int) ($params['limit'] ?? 2000)));
@@ -1751,11 +1771,9 @@ class AdminController
         $sha256 = AuditExportSigner::sha256($csv);
         $signature = AuditExportSigner::signIfConfigured($csv);
 
-        /** @var AuditLogger|null $requestAudit */
-        $requestAudit = $request->getAttribute('audit_logger');
         if ($requestAudit instanceof AuditLogger) {
             $requestAudit->logInfo('admin.audit.export', [
-                'actor_user_id' => (int) SessionManager::get('user_id'),
+                'actor_user_id' => $actorUserId,
                 'message' => 'Exported filtered audit logs (rows=' . count($rows) . ', detached=' . ($detached ? 'yes' : 'no') . ')',
                 'target_type' => 'audit_export',
                 'target_id' => $filename,
