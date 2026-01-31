@@ -386,6 +386,12 @@ class CryptbinController
             return $this->json($response, ['error' => 'Not found'], 404);
         }
 
+        $keyB64 = (string) ($body['key_b64url'] ?? '');
+        if (!$this->verifyKey($meta, $keyB64)) {
+            $audit->logFail('cryptbin.unwrap.fail', ['target_type' => 'cryptbin', 'target_id' => $id, 'failure_reason' => 'Invalid key']);
+            return $this->json($response, ['error' => 'Forbidden'], 403);
+        }
+
         $authResult = $this->verifyOperationAssertion($request, $id, self::OP_UNWRAP_VIEW, $body);
         if ($authResult === null) {
             $audit->logFail('cryptbin.unwrap.fail', ['target_type' => 'cryptbin', 'target_id' => $id, 'failure_reason' => 'WebAuthn verification failed']);

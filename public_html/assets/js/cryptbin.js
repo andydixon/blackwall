@@ -315,6 +315,7 @@
         const unwrap = await postJson('/cryptbin/' + encodeURIComponent(id) + '/unwrap', {
             csrf_token: config.csrfToken,
             op: 'unwrap_view',
+            key_b64url: keyB64,
             nonce: unwrapAssertion.nonce,
             id: unwrapAssertion.id,
             rawId: unwrapAssertion.rawId,
