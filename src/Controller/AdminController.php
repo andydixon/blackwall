@@ -987,7 +987,12 @@ class AdminController
         }
         fputcsv($handle, ['display_label', 'user_uuid', 'status', 'enrollment_url']);
         foreach ($created as $row) {
-            fputcsv($handle, [$row['display_label'], $row['user_uuid'], $row['status'], $row['enrollment_url']]);
+            fputcsv($handle, [
+                $this->sanitizeCsvCell((string) ($row['display_label'] ?? '')),
+                $this->sanitizeCsvCell((string) ($row['user_uuid'] ?? '')),
+                $this->sanitizeCsvCell((string) ($row['status'] ?? '')),
+                $this->sanitizeCsvCell((string) ($row['enrollment_url'] ?? '')),
+            ]);
         }
         rewind($handle);
         $csv = stream_get_contents($handle);
@@ -1033,10 +1038,10 @@ class AdminController
         fputcsv($handle, ['display_label', 'user_uuid', 'status', 'enrollment_url']);
         foreach ($users as $user) {
             fputcsv($handle, [
-                $user->displayLabel ?? '',
-                $user->uuid,
-                $user->status,
-                $this->createEnrollmentLinkForUser($user->id),
+                $this->sanitizeCsvCell((string) ($user->displayLabel ?? '')),
+                $this->sanitizeCsvCell((string) $user->uuid),
+                $this->sanitizeCsvCell((string) $user->status),
+                $this->sanitizeCsvCell($this->createEnrollmentLinkForUser($user->id)),
             ]);
         }
         rewind($handle);
@@ -1752,19 +1757,19 @@ class AdminController
 
         foreach ($rows as $row) {
             fputcsv($handle, [
-                (string) ($row['created_at'] ?? ''),
-                (string) ($row['event_type'] ?? ''),
-                (string) ($row['outcome'] ?? ''),
-                (string) ($row['message'] ?? ''),
-                (string) ($row['correlation_id'] ?? ''),
-                (string) ($row['ip_address'] ?? ''),
-                (string) ($row['actor_user_uuid'] ?? ''),
-                (string) ($row['project_uuid'] ?? ''),
-                (string) ($row['oauth_client_public_id'] ?? ''),
-                (string) ($row['webauthn_credential_public_id'] ?? ''),
-                (string) ($row['target_type'] ?? ''),
-                (string) ($row['target_id'] ?? ''),
-                (string) ($row['metadata_json'] ?? ''),
+                $this->sanitizeCsvCell((string) ($row['created_at'] ?? '')),
+                $this->sanitizeCsvCell((string) ($row['event_type'] ?? '')),
+                $this->sanitizeCsvCell((string) ($row['outcome'] ?? '')),
+                $this->sanitizeCsvCell((string) ($row['message'] ?? '')),
+                $this->sanitizeCsvCell((string) ($row['correlation_id'] ?? '')),
+                $this->sanitizeCsvCell((string) ($row['ip_address'] ?? '')),
+                $this->sanitizeCsvCell((string) ($row['actor_user_uuid'] ?? '')),
+                $this->sanitizeCsvCell((string) ($row['project_uuid'] ?? '')),
+                $this->sanitizeCsvCell((string) ($row['oauth_client_public_id'] ?? '')),
+                $this->sanitizeCsvCell((string) ($row['webauthn_credential_public_id'] ?? '')),
+                $this->sanitizeCsvCell((string) ($row['target_type'] ?? '')),
+                $this->sanitizeCsvCell((string) ($row['target_id'] ?? '')),
+                $this->sanitizeCsvCell((string) ($row['metadata_json'] ?? '')),
             ]);
         }
 
@@ -3922,6 +3927,24 @@ class AdminController
 
         $baseUrl = rtrim((string) Config::get('APP_URL'), '/');
         return $baseUrl . '/enroll?token=' . urlencode($token);
+    }
+
+    private function sanitizeCsvCell(string $value): string
+    {
+        if ($value === '') {
+            return '';
+        }
+
+        if (
+            preg_match('/^[=\+\-@]/', $value) === 1
+            || str_starts_with($value, "\t")
+            || str_starts_with($value, "\r")
+            || str_starts_with($value, "\n")
+        ) {
+            return "'" . $value;
+        }
+
+        return $value;
     }
 
     private function extractAuditFilters(array $params): array
