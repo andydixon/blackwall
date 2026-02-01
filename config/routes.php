@@ -93,7 +93,7 @@ $app->group('/admin', function (RouteCollectorProxy $group) {
     $group->post('/organisations/{organizationUuid}/update', [AdminController::class, 'organizationUpdate']);
     $group->post('/organisations/{organizationUuid}/switch-admin', [AdminController::class, 'organizationSwitchAdmin']);
     $group->post('/organisations/{organizationUuid}/users/import', [AdminController::class, 'organizationImportUsers']);
-    $group->get('/organisations/{organizationUuid}/enrollment-urls/export', [AdminController::class, 'organizationExportEnrollmentUrls']);
+    $group->post('/organisations/{organizationUuid}/enrollment-urls/export', [AdminController::class, 'organizationExportEnrollmentUrls']);
     $group->post('/switch/restore', [AdminController::class, 'switchRestore']);
     $group->get('/approvals', [AdminController::class, 'approvalsList']);
     $group->post('/approvals/{id}/approve', [AdminController::class, 'approvalApprove']);

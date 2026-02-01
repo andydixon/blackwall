@@ -1017,6 +1017,14 @@ class AdminController
             return $response->withStatus(403);
         }
 
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $body = $request->getParsedBody();
+        if (!CSRFProtection::validateToken($body['csrf_token'] ?? '')) {
+            $audit->logFail('security.csrf.fail');
+            return $response->withHeader('Location', '/admin/organisations/' . $organization->uuid . '?error=csrf')->withStatus(302);
+        }
+
         $users = $this->userRepo->findByOrganization($organization->id, 5000, 0);
         $handle = fopen('php://temp', 'r+');
         if ($handle === false) {
