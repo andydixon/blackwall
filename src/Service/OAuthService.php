@@ -391,7 +391,10 @@ class OAuthService
                 JOIN projects p ON p.id = t.project_id
                 JOIN oauth_clients c ON c.id = t.client_id
                 LEFT JOIN project_privilege_levels pl ON pl.project_id = t.project_id AND pl.level = t.privilege_level
-                WHERE t.token_hash = ? AND t.revoked_at IS NULL';
+                WHERE t.token_hash = ? AND t.revoked_at IS NULL
+                  AND u.status = \'active\'
+                  AND p.status = \'active\'
+                  AND c.status = \'active\'';
         $params = [$tokenHash];
         if ($requestingClientId !== null) {
             $sql .= ' AND t.client_id = ?';
