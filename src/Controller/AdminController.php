@@ -790,9 +790,10 @@ class AdminController
         ]);
 
         $enrollmentLink = $this->createEnrollmentLinkForUser($adminUser->id);
+        $this->setEnrollmentLinkFlash($organization->uuid, $enrollmentLink);
         return $response->withHeader(
             'Location',
-            '/admin/organisations/' . $organization->uuid . '?success=created&enrollment_link=' . urlencode($enrollmentLink)
+            '/admin/organisations/' . $organization->uuid . '?success=created'
         )->withStatus(302);
     }
 
@@ -825,7 +826,7 @@ class AdminController
             'projects' => $projects,
             'canManageOrganizations' => $this->getAdminScope((int) SessionManager::get('user_id'))['is_super_admin'],
             'csrfToken' => CSRFProtection::generateToken(),
-            'enrollmentLink' => $request->getQueryParams()['enrollment_link'] ?? null,
+            'enrollmentLink' => $this->consumeEnrollmentLinkFlash($organization->uuid),
         ]);
     }
 
@@ -1869,7 +1870,7 @@ class AdminController
         } else {
             if (empty($scope['project_ids'])) {
                 $assignments = [];
-                $enrollmentLink = $request->getQueryParams()['enrollment_link'] ?? null;
+                $enrollmentLink = $this->consumeEnrollmentLinkFlash($user->uuid);
                 return $this->renderWithLayout($response, 'admin/users/detail.php', [
                     'title' => 'User Details',
                     'user' => $user,
@@ -1902,8 +1903,7 @@ class AdminController
         }
         unset($assignment);
 
-        // Check if there's a new enrollment link in query params
-        $enrollmentLink = $request->getQueryParams()['enrollment_link'] ?? null;
+        $enrollmentLink = $this->consumeEnrollmentLinkFlash($user->uuid);
 
         return $this->renderWithLayout($response, 'admin/users/detail.php', [
             'title' => 'User Details',
@@ -2934,11 +2934,9 @@ class AdminController
         ]);
 
         $enrollmentLink = $this->createEnrollmentLinkForUser($userId);
+        $this->setEnrollmentLinkFlash($user->uuid, $enrollmentLink);
 
-        return $response->withHeader(
-            'Location',
-            '/admin/users/' . $user->uuid . '?enrollment_link=' . urlencode($enrollmentLink)
-        )->withStatus(302);
+        return $response->withHeader('Location', '/admin/users/' . $user->uuid)->withStatus(302);
     }
 
     public function deleteCredential(Request $request, Response $response, array $args): Response
@@ -3945,6 +3943,37 @@ class AdminController
         }
 
         return $value;
+    }
+
+    private function setEnrollmentLinkFlash(string $contextId, string $enrollmentLink): void
+    {
+        if ($contextId === '' || $enrollmentLink === '') {
+            return;
+        }
+
+        SessionManager::set($this->enrollmentLinkFlashKey($contextId), $enrollmentLink);
+    }
+
+    private function consumeEnrollmentLinkFlash(string $contextId): ?string
+    {
+        if ($contextId === '') {
+            return null;
+        }
+
+        $key = $this->enrollmentLinkFlashKey($contextId);
+        $link = SessionManager::get($key);
+        SessionManager::remove($key);
+
+        if (!is_string($link) || $link === '') {
+            return null;
+        }
+
+        return $link;
+    }
+
+    private function enrollmentLinkFlashKey(string $contextId): string
+    {
+        return 'enrollment_link_flash_' . hash('sha256', $contextId);
     }
 
     private function extractAuditFilters(array $params): array
