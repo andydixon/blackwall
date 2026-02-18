@@ -1176,26 +1176,40 @@ class AdminController
             return $response->withStatus(403);
         }
 
-        $payload = json_decode((string) $approval['payload_json'], true);
-        $payload = is_array($payload) ? $payload : [];
-
-        $executed = $this->executeApprovalAction((string) $approval['action_type'], $payload, $actorUserId);
-        if (!$executed) {
-            $this->approvalService->decide($approvalId, 'rejected', $actorUserId, 'Execution failed');
-            $audit->logFail('admin.approval.execution.fail', [
-                'actor_user_id' => $actorUserId,
-                'project_id' => $approval['project_id'] ?? null,
-                'target_type' => 'approval_request',
-                'target_id' => (string) $approvalId,
-                'failure_reason' => 'execution_failed',
-                'message' => 'Approval execution failed',
-            ]);
-            return $response->withHeader('Location', '/admin/approvals?error=execution_failed')->withStatus(302);
+        if (!$this->acquireApprovalExecutionLock($approvalId)) {
+            return $response->withHeader('Location', '/admin/approvals?error=busy')->withStatus(302);
         }
 
-        if (!$this->approvalService->decide($approvalId, 'approved', $actorUserId, trim((string) ($body['note'] ?? '')))) {
-            return $response->withHeader('Location', '/admin/approvals?error=not_pending')->withStatus(302);
+        try {
+            $approval = $this->approvalService->getById($approvalId);
+            if (!$approval || $approval['status'] !== 'pending') {
+                return $response->withHeader('Location', '/admin/approvals?error=not_pending')->withStatus(302);
+            }
+
+            $payload = json_decode((string) $approval['payload_json'], true);
+            $payload = is_array($payload) ? $payload : [];
+
+            $executed = $this->executeApprovalAction((string) $approval['action_type'], $payload, $actorUserId);
+            if (!$executed) {
+                $this->approvalService->decide($approvalId, 'rejected', $actorUserId, 'Execution failed');
+                $audit->logFail('admin.approval.execution.fail', [
+                    'actor_user_id' => $actorUserId,
+                    'project_id' => $approval['project_id'] ?? null,
+                    'target_type' => 'approval_request',
+                    'target_id' => (string) $approvalId,
+                    'failure_reason' => 'execution_failed',
+                    'message' => 'Approval execution failed',
+                ]);
+                return $response->withHeader('Location', '/admin/approvals?error=execution_failed')->withStatus(302);
+            }
+
+            if (!$this->approvalService->decide($approvalId, 'approved', $actorUserId, trim((string) ($body['note'] ?? '')))) {
+                return $response->withHeader('Location', '/admin/approvals?error=not_pending')->withStatus(302);
+            }
+        } finally {
+            $this->releaseApprovalExecutionLock($approvalId);
         }
+
         $audit->logSuccess('admin.approval.approve', [
             'actor_user_id' => $actorUserId,
             'project_id' => $approval['project_id'] ?? null,
@@ -3974,6 +3988,27 @@ class AdminController
     private function enrollmentLinkFlashKey(string $contextId): string
     {
         return 'enrollment_link_flash_' . hash('sha256', $contextId);
+    }
+
+    private function acquireApprovalExecutionLock(int $approvalId): bool
+    {
+        if ($approvalId < 1) {
+            return false;
+        }
+
+        $stmt = \BlackWall\Database::getInstance()->prepare('SELECT GET_LOCK(?, 2)');
+        $stmt->execute(['approval_execute_' . $approvalId]);
+        return (int) ($stmt->fetchColumn() ?: 0) === 1;
+    }
+
+    private function releaseApprovalExecutionLock(int $approvalId): void
+    {
+        if ($approvalId < 1) {
+            return;
+        }
+
+        $stmt = \BlackWall\Database::getInstance()->prepare('SELECT RELEASE_LOCK(?)');
+        $stmt->execute(['approval_execute_' . $approvalId]);
     }
 
     private function extractAuditFilters(array $params): array
