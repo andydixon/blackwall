@@ -693,6 +693,22 @@ class OAuthController
                 ]));
                 return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
             }
+
+            $jwtTokenStmt = Database::getInstance()->prepare(
+                'SELECT 1
+                 FROM oauth_access_tokens t
+                 JOIN oauth_clients c ON c.id = t.client_id
+                 WHERE t.token_hash = ? AND t.revoked_at IS NULL AND t.expires_at > NOW() AND c.client_id = ? AND c.status = ?'
+            );
+            $jwtTokenStmt->execute([hash('sha256', $accessToken), $audience, 'active']);
+            if (!$jwtTokenStmt->fetchColumn()) {
+                $audit->logFail('oidc.userinfo.fail', ['failure_reason' => 'JWT token revoked or expired']);
+                $response->getBody()->write(json_encode([
+                    'error' => 'invalid_token',
+                    'error_description' => 'Token has been revoked or expired'
+                ]));
+                return $response->withStatus(401)->withHeader('Content-Type', 'application/json');
+            }
             
             // Get user details from database
             $db = Database::getInstance();

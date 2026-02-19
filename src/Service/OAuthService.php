@@ -291,6 +291,7 @@ class OAuthService
             'scope' => implode(' ', $scopes),
         ];
         if ($tokenType === 'jwt') {
+            $expiresAt = (new \DateTimeImmutable())->modify("+{$accessTokenLifetime} seconds");
             $accessToken = $this->getJWTManager()->createAccessToken([
                 'sub' => $user['uuid'],
                 'aud' => $client['client_id'],
@@ -301,6 +302,23 @@ class OAuthService
                 'expires_in' => $accessTokenLifetime,
                 'nonce' => $nonce,
             ]);
+
+            $accessTokenHash = $this->hasher->hash($accessToken);
+            $stmt = $this->db->prepare(
+                'INSERT INTO oauth_access_tokens 
+                (token_hash, client_id, user_id, project_id, scopes, privilege_level, expires_at) 
+                VALUES (?, ?, ?, ?, ?, ?, ?)'
+            );
+            $stmt->execute([
+                $accessTokenHash,
+                $clientId,
+                $userId,
+                $projectId,
+                json_encode($scopes),
+                $privilegeLevel,
+                $expiresAt->format('Y-m-d H:i:s'),
+            ]);
+
             $response['access_token'] = $accessToken;
         } else {
             $accessToken = $this->hasher->generateToken(32);
