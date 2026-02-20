@@ -17,7 +17,7 @@
                 </div>
 
                 <div class="row g-4 mb-4">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <a href="/cryptbin" class="text-decoration-none">
                             <div class="card stat-card h-100" style="border-left-color: #f59e0b">
                                 <div class="card-body text-center p-4">
@@ -32,7 +32,7 @@
                         </a>
                     </div>
 
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <a href="/portal" class="text-decoration-none">
                             <div class="card stat-card h-100" style="border-left-color: #3b82f6">
                                 <div class="card-body text-center p-4">
@@ -47,7 +47,7 @@
                         </a>
                     </div>
 
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <a href="/admin" class="text-decoration-none">
                             <div class="card stat-card h-100" style="border-left-color: #10b981">
                                 <div class="card-body text-center p-4">
@@ -57,6 +57,21 @@
                                         Manage users, projects, and OAuth clients
                                     </p>
                                     <button class="btn btn-success btn-sm">Admin Login →</button>
+                                </div>
+                            </div>
+                        </a>
+                    </div>
+
+                    <div class="col-md-3">
+                        <a href="/organisations/signup" class="text-decoration-none">
+                            <div class="card stat-card h-100" style="border-left-color: #22c55e">
+                                <div class="card-body text-center p-4">
+                                    <div class="fs-1 mb-3">🏢</div>
+                                    <h5 class="mb-2">Create an Organisation</h5>
+                                    <p class="text-muted small mb-3">
+                                        Sign up your organisation. Currently free during development.
+                                    </p>
+                                    <button class="btn btn-success btn-sm">Start Signup →</button>
                                 </div>
                             </div>
                         </a>

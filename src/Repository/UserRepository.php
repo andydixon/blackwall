@@ -17,12 +17,12 @@ class UserRepository
         $this->db = Database::getInstance();
     }
 
-    public function create(string $uuid, ?string $displayLabel, string $status = 'active'): User
+    public function create(int $organizationId, string $uuid, ?string $displayLabel, string $status = 'active'): User
     {
         $stmt = $this->db->prepare(
-            'INSERT INTO users (uuid, display_label, status) VALUES (?, ?, ?)'
+            'INSERT INTO users (organization_id, uuid, display_label, status) VALUES (?, ?, ?, ?)'
         );
-        $stmt->execute([$uuid, $displayLabel, $status]);
+        $stmt->execute([$organizationId, $uuid, $displayLabel, $status]);
 
         return $this->findById((int) $this->db->lastInsertId());
     }
@@ -53,9 +53,23 @@ class UserRepository
         return array_map([$this, 'hydrate'], $stmt->fetchAll());
     }
 
+    public function findByOrganization(int $organizationId, int $limit = 1000, int $offset = 0): array
+    {
+        $stmt = $this->db->prepare('SELECT * FROM users WHERE organization_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?');
+        $stmt->execute([$organizationId, $limit, $offset]);
+        return array_map([$this, 'hydrate'], $stmt->fetchAll());
+    }
+
     public function count(): int
     {
         $stmt = $this->db->query('SELECT COUNT(*) FROM users');
+        return (int) $stmt->fetchColumn();
+    }
+
+    public function countByOrganization(int $organizationId): int
+    {
+        $stmt = $this->db->prepare('SELECT COUNT(*) FROM users WHERE organization_id = ?');
+        $stmt->execute([$organizationId]);
         return (int) $stmt->fetchColumn();
     }
 
@@ -77,6 +91,7 @@ class UserRepository
     {
         return new User(
             id: (int) $row['id'],
+            organizationId: (int) $row['organization_id'],
             uuid: $row['uuid'],
             displayLabel: $row['display_label'],
             status: $row['status'],

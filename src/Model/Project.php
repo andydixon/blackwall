@@ -8,6 +8,7 @@ class Project
 {
     public function __construct(
         public readonly int $id,
+        public readonly int $organizationId,
         public readonly string $uuid,
         public readonly string $name,
         public readonly ?int $ownerUserId,

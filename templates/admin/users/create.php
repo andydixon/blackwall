@@ -14,6 +14,19 @@
                         <small class="form-text text-muted">Optional. NOT used for authentication.</small>
                     </div>
 
+                    <?php if (!empty($scope['is_super_admin']) && !empty($organizations)): ?>
+                        <div class="mb-3">
+                            <label class="form-label">Organisation</label>
+                            <select name="organization_uuid" class="form-select" required>
+                                <?php foreach ($organizations as $organization): ?>
+                                    <option value="<?= htmlspecialchars($organization->uuid) ?>">
+                                        <?= htmlspecialchars($organization->name) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    <?php endif; ?>
+
                     <div class="d-flex gap-2">
                         <button type="submit" class="btn btn-primary">Create User</button>
                         <a href="/admin/users" class="btn btn-secondary">Cancel</a>

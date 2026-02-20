@@ -8,6 +8,7 @@ class User
 {
     public function __construct(
         public readonly int $id,
+        public readonly int $organizationId,
         public readonly string $uuid,
         public readonly ?string $displayLabel,
         public readonly string $status,

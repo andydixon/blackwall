@@ -12,6 +12,11 @@
             <div class="col-md-6">
                 <div class="card bg-secondary">
                     <div class="card-body p-4">
+                        <?php if (!empty($organization['logo_url'])): ?>
+                            <div class="text-center mb-3">
+                                <img src="<?= htmlspecialchars((string) $organization['logo_url']) ?>" alt="<?= htmlspecialchars((string) ($organization['name'] ?? 'Organisation')) ?>" style="max-height: 56px;">
+                            </div>
+                        <?php endif; ?>
                         <h3 class="mb-3">🔐 BlackWall Bootstrap</h3>
                         <p>Complete WebAuthn credential enrollment for user:</p>
                         <p><strong><?= htmlspecialchars($user['display_label'] ?? $user['uuid']) ?></strong></p>

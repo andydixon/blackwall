@@ -33,6 +33,12 @@ try {
         exit(1);
     }
 
+    $defaultOrgStmt = $db->query("SELECT id FROM organizations WHERE uuid = '00000000-0000-0000-0000-000000000001' LIMIT 1");
+    $defaultOrgId = (int) ($defaultOrgStmt->fetchColumn() ?: 0);
+    if ($defaultOrgId < 1) {
+        throw new RuntimeException('Default organisation is missing. Run database migrations first.');
+    }
+
     echo "Step 1: Creating BlackWall Admin project...\n";
     
     $projectRepo = new ProjectRepository();
@@ -41,6 +47,7 @@ try {
     if (!$adminProject) {
         $adminProjectUuid = Uuid::uuid4()->toString();
         $adminProject = $projectRepo->create(
+            $defaultOrgId,
             $adminProjectUuid,
             'BlackWall Admin',
             null,
@@ -89,7 +96,7 @@ try {
         }
 
         $adminUserUuid = Uuid::uuid4()->toString();
-        $adminUser = $userRepo->create($adminUserUuid, $displayLabel, 'active');
+        $adminUser = $userRepo->create($defaultOrgId, $adminUserUuid, $displayLabel, 'active');
         
         echo "✓ Created admin user (UUID: {$adminUserUuid})\n";
         echo "  Display label: {$displayLabel}\n\n";

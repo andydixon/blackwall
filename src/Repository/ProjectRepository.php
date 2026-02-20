@@ -17,12 +17,12 @@ class ProjectRepository
         $this->db = Database::getInstance();
     }
 
-    public function create(string $uuid, string $name, ?int $ownerUserId, string $status = 'active'): Project
+    public function create(int $organizationId, string $uuid, string $name, ?int $ownerUserId, string $status = 'active'): Project
     {
         $stmt = $this->db->prepare(
-            'INSERT INTO projects (uuid, name, owner_user_id, status) VALUES (?, ?, ?, ?)'
+            'INSERT INTO projects (organization_id, uuid, name, owner_user_id, status) VALUES (?, ?, ?, ?, ?)'
         );
-        $stmt->execute([$uuid, $name, $ownerUserId, $status]);
+        $stmt->execute([$organizationId, $uuid, $name, $ownerUserId, $status]);
 
         return $this->findById((int) $this->db->lastInsertId());
     }
@@ -62,6 +62,13 @@ class ProjectRepository
         return array_map([$this, 'hydrate'], $stmt->fetchAll());
     }
 
+    public function findByOrganization(int $organizationId, int $limit = 1000, int $offset = 0): array
+    {
+        $stmt = $this->db->prepare('SELECT * FROM projects WHERE organization_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?');
+        $stmt->execute([$organizationId, $limit, $offset]);
+        return array_map([$this, 'hydrate'], $stmt->fetchAll());
+    }
+
     public function update(int $id, string $name, string $status): bool
     {
         $stmt = $this->db->prepare(
@@ -74,6 +81,7 @@ class ProjectRepository
     {
         return new Project(
             id: (int) $row['id'],
+            organizationId: (int) $row['organization_id'],
             uuid: $row['uuid'],
             name: $row['name'],
             ownerUserId: $row['owner_user_id'] ? (int) $row['owner_user_id'] : null,

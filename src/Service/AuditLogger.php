@@ -64,6 +64,8 @@ class AuditLogger
         $actorUserUuid = $context['actor_user_uuid'] ?? null;
         $projectId = $context['project_id'] ?? null;
         $projectUuid = $context['project_uuid'] ?? null;
+        $organizationId = $context['organization_id'] ?? null;
+        $organizationUuid = $context['organization_uuid'] ?? null;
         $oauthClientId = $context['oauth_client_id'] ?? null;
         $oauthClientPublicId = $context['oauth_client_public_id'] ?? null;
         $credentialDbId = $context['webauthn_credential_id'] ?? null;
@@ -71,6 +73,43 @@ class AuditLogger
         $targetType = $context['target_type'] ?? null;
         $targetId = $context['target_id'] ?? null;
         $metadataJson = !empty($metadata) ? json_encode($metadata) : null;
+
+        if ($organizationId === null && $projectId !== null) {
+            $orgLookup = $this->db->prepare(
+                'SELECT o.id, o.uuid
+                 FROM projects p
+                 JOIN organizations o ON o.id = p.organization_id
+                 WHERE p.id = ?'
+            );
+            $orgLookup->execute([(int) $projectId]);
+            $row = $orgLookup->fetch();
+            if ($row) {
+                $organizationId = (int) $row['id'];
+                $organizationUuid = (string) $row['uuid'];
+            }
+        }
+        if ($organizationId === null && $actorUserId !== null) {
+            $orgLookup = $this->db->prepare(
+                'SELECT o.id, o.uuid
+                 FROM users u
+                 JOIN organizations o ON o.id = u.organization_id
+                 WHERE u.id = ?'
+            );
+            $orgLookup->execute([(int) $actorUserId]);
+            $row = $orgLookup->fetch();
+            if ($row) {
+                $organizationId = (int) $row['id'];
+                $organizationUuid = (string) $row['uuid'];
+            }
+        }
+        if ($organizationId !== null && $organizationUuid === null) {
+            $orgLookup = $this->db->prepare('SELECT uuid FROM organizations WHERE id = ?');
+            $orgLookup->execute([(int) $organizationId]);
+            $organizationUuid = (string) ($orgLookup->fetchColumn() ?: '');
+            if ($organizationUuid === '') {
+                $organizationUuid = null;
+            }
+        }
 
         $this->db->beginTransaction();
 
@@ -86,13 +125,13 @@ class AuditLogger
         $stmt = $this->db->prepare(
             'INSERT INTO audit_log (
                 created_at, event_type, outcome, message, correlation_id, ip_address, user_agent,
-                actor_user_id, actor_user_uuid, project_id, project_uuid,
+                actor_user_id, actor_user_uuid, project_id, project_uuid, organization_id, organization_uuid,
                 oauth_client_id, oauth_client_public_id,
                 webauthn_credential_id, webauthn_credential_public_id,
                 target_type, target_id, metadata_json,
                 chain_prev_hash, chain_hash
             ) VALUES (
-                NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                NOW(), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             )'
         );
 
@@ -116,6 +155,8 @@ class AuditLogger
                 'actor_user_uuid' => $actorUserUuid,
                 'project_id' => $projectId,
                 'project_uuid' => $projectUuid,
+                'organization_id' => $organizationId,
+                'organization_uuid' => $organizationUuid,
                 'oauth_client_id' => $oauthClientId,
                 'oauth_client_public_id' => $oauthClientPublicId,
                 'webauthn_credential_id' => $credentialDbId,
@@ -140,6 +181,8 @@ class AuditLogger
                 $actorUserUuid,
                 $projectId,
                 $projectUuid,
+                $organizationId,
+                $organizationUuid,
                 $oauthClientId,
                 $oauthClientPublicId,
                 $credentialDbId,
@@ -210,6 +253,22 @@ class AuditLogger
         if (!empty($filters['project_uuid'])) {
             $conditions[] = 'project_uuid = ?';
             $params[] = $filters['project_uuid'];
+        }
+
+        if (!empty($filters['organization_uuid'])) {
+            $conditions[] = 'organization_uuid = ?';
+            $params[] = $filters['organization_uuid'];
+        }
+
+        if (!empty($filters['organization_ids']) && is_array($filters['organization_ids'])) {
+            $organizationIds = array_values(array_filter(array_map('intval', $filters['organization_ids']), static fn(int $v): bool => $v > 0));
+            if (!empty($organizationIds)) {
+                $placeholders = implode(',', array_fill(0, count($organizationIds), '?'));
+                $conditions[] = "organization_id IN ({$placeholders})";
+                foreach ($organizationIds as $organizationId) {
+                    $params[] = $organizationId;
+                }
+            }
         }
 
         if (!empty($filters['project_ids']) && is_array($filters['project_ids'])) {
@@ -290,6 +349,22 @@ class AuditLogger
         if (!empty($filters['project_uuid'])) {
             $conditions[] = 'project_uuid = ?';
             $params[] = $filters['project_uuid'];
+        }
+
+        if (!empty($filters['organization_uuid'])) {
+            $conditions[] = 'organization_uuid = ?';
+            $params[] = $filters['organization_uuid'];
+        }
+
+        if (!empty($filters['organization_ids']) && is_array($filters['organization_ids'])) {
+            $organizationIds = array_values(array_filter(array_map('intval', $filters['organization_ids']), static fn(int $v): bool => $v > 0));
+            if (!empty($organizationIds)) {
+                $placeholders = implode(',', array_fill(0, count($organizationIds), '?'));
+                $conditions[] = "organization_id IN ({$placeholders})";
+                foreach ($organizationIds as $organizationId) {
+                    $params[] = $organizationId;
+                }
+            }
         }
 
         if (!empty($filters['project_ids']) && is_array($filters['project_ids'])) {
