@@ -16,3 +16,5 @@ phpunit.xml
 etc/
 logs/
 tmp/
+__storage
+BEFF
