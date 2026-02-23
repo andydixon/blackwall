@@ -1240,41 +1240,50 @@ class AdminController
         }
 
         $approvalId = (int) ($args['id'] ?? 0);
-        $approval = $this->approvalService->getById($approvalId);
-        if (!$approval || $approval['status'] !== 'pending') {
-            return $response->withHeader('Location', '/admin/approvals?error=not_pending')->withStatus(302);
-        }
-        $scope = $this->getAdminScope($actorUserId);
-        $denyReason = ApprovalDecisionPolicy::denialReason(
-            $this->hasCapability('decide_approvals'),
-            $approval,
-            $scope,
-            $actorUserId
-        );
-        if ($denyReason !== null) {
-            $audit->logFail('admin.approval.decision.denied', [
-                'actor_user_id' => $actorUserId,
-                'project_id' => $approval['project_id'] ?? null,
-                'target_type' => 'approval_request',
-                'target_id' => (string) $approvalId,
-                'failure_reason' => $denyReason,
-                'message' => 'Approval rejection denied: ' . str_replace('_', ' ', $denyReason),
-            ]);
-            if ($denyReason === 'self_decision') {
-                return $response->withHeader('Location', '/admin/approvals?error=self_decide')->withStatus(302);
-            }
-            return $response->withStatus(403);
+        if (!$this->acquireApprovalExecutionLock($approvalId)) {
+            return $response->withHeader('Location', '/admin/approvals?error=busy')->withStatus(302);
         }
 
-        $decided = $this->approvalService->decide(
-            $approvalId,
-            'rejected',
-            $actorUserId,
-            trim((string) ($body['note'] ?? ''))
-        );
-        if (!$decided) {
-            return $response->withHeader('Location', '/admin/approvals?error=not_pending')->withStatus(302);
+        try {
+            $approval = $this->approvalService->getById($approvalId);
+            if (!$approval || $approval['status'] !== 'pending') {
+                return $response->withHeader('Location', '/admin/approvals?error=not_pending')->withStatus(302);
+            }
+            $scope = $this->getAdminScope($actorUserId);
+            $denyReason = ApprovalDecisionPolicy::denialReason(
+                $this->hasCapability('decide_approvals'),
+                $approval,
+                $scope,
+                $actorUserId
+            );
+            if ($denyReason !== null) {
+                $audit->logFail('admin.approval.decision.denied', [
+                    'actor_user_id' => $actorUserId,
+                    'project_id' => $approval['project_id'] ?? null,
+                    'target_type' => 'approval_request',
+                    'target_id' => (string) $approvalId,
+                    'failure_reason' => $denyReason,
+                    'message' => 'Approval rejection denied: ' . str_replace('_', ' ', $denyReason),
+                ]);
+                if ($denyReason === 'self_decision') {
+                    return $response->withHeader('Location', '/admin/approvals?error=self_decide')->withStatus(302);
+                }
+                return $response->withStatus(403);
+            }
+
+            $decided = $this->approvalService->decide(
+                $approvalId,
+                'rejected',
+                $actorUserId,
+                trim((string) ($body['note'] ?? ''))
+            );
+            if (!$decided) {
+                return $response->withHeader('Location', '/admin/approvals?error=not_pending')->withStatus(302);
+            }
+        } finally {
+            $this->releaseApprovalExecutionLock($approvalId);
         }
+
         $audit->logInfo('admin.approval.reject', [
             'actor_user_id' => $actorUserId,
             'project_id' => $approval['project_id'] ?? null,
@@ -1309,20 +1318,28 @@ class AdminController
         }
 
         $approvalId = (int) ($args['id'] ?? 0);
-        $cancelled = $this->approvalService->cancelByRequester(
-            $approvalId,
-            $actorUserId,
-            trim((string) ($body['note'] ?? 'Cancelled by requester'))
-        );
-        if (!$cancelled) {
-            $audit->logFail('admin.approval.cancel.denied', [
-                'actor_user_id' => $actorUserId,
-                'target_type' => 'approval_request',
-                'target_id' => (string) $approvalId,
-                'failure_reason' => 'not_pending_or_not_requester',
-                'message' => 'Approval cancellation denied',
-            ]);
-            return $response->withHeader('Location', '/admin/approvals?error=not_pending')->withStatus(302);
+        if (!$this->acquireApprovalExecutionLock($approvalId)) {
+            return $response->withHeader('Location', '/admin/approvals?error=busy')->withStatus(302);
+        }
+
+        try {
+            $cancelled = $this->approvalService->cancelByRequester(
+                $approvalId,
+                $actorUserId,
+                trim((string) ($body['note'] ?? 'Cancelled by requester'))
+            );
+            if (!$cancelled) {
+                $audit->logFail('admin.approval.cancel.denied', [
+                    'actor_user_id' => $actorUserId,
+                    'target_type' => 'approval_request',
+                    'target_id' => (string) $approvalId,
+                    'failure_reason' => 'not_pending_or_not_requester',
+                    'message' => 'Approval cancellation denied',
+                ]);
+                return $response->withHeader('Location', '/admin/approvals?error=not_pending')->withStatus(302);
+            }
+        } finally {
+            $this->releaseApprovalExecutionLock($approvalId);
         }
 
         $audit->logInfo('admin.approval.cancel', [
