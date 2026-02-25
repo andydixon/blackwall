@@ -953,10 +953,23 @@ class AdminController
             return $response->withHeader('Location', '/admin/organisations/' . $organization->uuid . '?error=csv')->withStatus(302);
         }
 
+        $maxCsvBytes = max(1024, Config::getInt('ADMIN_ORGANIZATION_IMPORT_MAX_BYTES', 1048576));
+        $csvSize = (int) $csvFile->getSize();
+        if ($csvSize > 0 && $csvSize > $maxCsvBytes) {
+            return $response->withHeader('Location', '/admin/organisations/' . $organization->uuid . '?error=csv_too_large')->withStatus(302);
+        }
+
         $stream = $csvFile->getStream();
         $stream->rewind();
         $content = $stream->getContents();
+        if (strlen((string) $content) > $maxCsvBytes) {
+            return $response->withHeader('Location', '/admin/organisations/' . $organization->uuid . '?error=csv_too_large')->withStatus(302);
+        }
         $rows = preg_split('/\r\n|\n|\r/', (string) $content) ?: [];
+        $maxRows = max(1, Config::getInt('ADMIN_ORGANIZATION_IMPORT_MAX_ROWS', 2000));
+        if (count($rows) > $maxRows + 1) {
+            return $response->withHeader('Location', '/admin/organisations/' . $organization->uuid . '?error=csv_too_many_rows')->withStatus(302);
+        }
 
         $created = [];
         foreach ($rows as $index => $line) {
