@@ -14,6 +14,6 @@ class PortalActiveProjectScopeSourceTest extends TestCase
         $this->assertIsString($source);
 
         $this->assertStringContainsString('AND p.status = ?', $source);
-        $this->assertStringContainsString("$stmt->execute([\$userId, 'active']);", $source);
+        $this->assertStringContainsString('$stmt->execute([$userId, \'active\']);', $source);
     }
 }
