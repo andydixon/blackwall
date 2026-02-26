@@ -14,7 +14,7 @@ class IpAddressMiddlewareProxySpoofingSourceTest extends TestCase
         $this->assertIsString($source);
 
         $this->assertStringContainsString('for ($i = count($ips) - 1; $i >= 0; $i--)', $source);
-        $this->assertStringContainsString('!in_array($ips[$i], $trustedProxies, true)', $source);
+        $this->assertStringContainsString('!$this->isTrustedProxy($ips[$i], $trustedProxies)', $source);
         $this->assertStringContainsString('filter_var($candidate, FILTER_VALIDATE_IP)', $source);
         $this->assertStringContainsString("return \$this->validatedIpOrNull(\$remoteAddr) ?? '0.0.0.0';", $source);
     }

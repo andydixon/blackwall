@@ -29,7 +29,7 @@ class IpAddressMiddleware implements MiddlewareInterface
             $trustedProxies = explode(',', Config::get('TRUSTED_PROXIES', ''));
             $trustedProxies = array_map('trim', $trustedProxies);
 
-            if (in_array($remoteAddr, $trustedProxies, true)) {
+            if ($this->isTrustedProxy($remoteAddr, $trustedProxies)) {
                 $forwardedFor = $request->getHeaderLine('X-Forwarded-For');
                 if (!empty($forwardedFor)) {
                     $ips = array_values(array_filter(array_map(
@@ -41,7 +41,7 @@ class IpAddressMiddleware implements MiddlewareInterface
                         // XFF can include attacker-controlled left-most values; walk from the
                         // right and pick the first hop that is not a trusted proxy.
                         for ($i = count($ips) - 1; $i >= 0; $i--) {
-                            if (!in_array($ips[$i], $trustedProxies, true)) {
+                            if (!$this->isTrustedProxy($ips[$i], $trustedProxies)) {
                                 return $ips[$i];
                             }
                         }
@@ -69,5 +69,71 @@ class IpAddressMiddleware implements MiddlewareInterface
         }
 
         return filter_var($candidate, FILTER_VALIDATE_IP) !== false ? $candidate : null;
+    }
+
+    private function isTrustedProxy(string $ip, array $trustedEntries): bool
+    {
+        $validatedIp = $this->validatedIpOrNull($ip);
+        if ($validatedIp === null) {
+            return false;
+        }
+
+        foreach ($trustedEntries as $entry) {
+            $entry = trim((string) $entry);
+            if ($entry === '') {
+                continue;
+            }
+
+            if (str_contains($entry, '/')) {
+                if ($this->ipInCidr($validatedIp, $entry)) {
+                    return true;
+                }
+                continue;
+            }
+
+            if ($validatedIp === $entry) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function ipInCidr(string $ip, string $cidr): bool
+    {
+        [$subnet, $prefixLength] = array_pad(explode('/', $cidr, 2), 2, null);
+        $subnet = $this->validatedIpOrNull((string) $subnet);
+        if ($subnet === null || $prefixLength === null || !ctype_digit($prefixLength)) {
+            return false;
+        }
+
+        $ipPacked = inet_pton($ip);
+        $subnetPacked = inet_pton($subnet);
+        if ($ipPacked === false || $subnetPacked === false) {
+            return false;
+        }
+        if (strlen($ipPacked) !== strlen($subnetPacked)) {
+            return false;
+        }
+
+        $maxBits = strlen($ipPacked) * 8;
+        $prefix = (int) $prefixLength;
+        if ($prefix < 0 || $prefix > $maxBits) {
+            return false;
+        }
+
+        $bytes = intdiv($prefix, 8);
+        $bits = $prefix % 8;
+
+        if ($bytes > 0 && substr($ipPacked, 0, $bytes) !== substr($subnetPacked, 0, $bytes)) {
+            return false;
+        }
+
+        if ($bits === 0) {
+            return true;
+        }
+
+        $mask = ((0xFF00 >> $bits) & 0xFF);
+        return (ord($ipPacked[$bytes]) & $mask) === (ord($subnetPacked[$bytes]) & $mask);
     }
 }
