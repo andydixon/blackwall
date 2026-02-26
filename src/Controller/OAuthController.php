@@ -18,6 +18,7 @@ use BlackWall\Security\CSRFProtection;
 use BlackWall\Security\JWTManager;
 use BlackWall\Security\OAuthClientAuthenticator;
 use BlackWall\Security\OAuthAuthorizationRequestValidator;
+use BlackWall\Security\OAuthScopePolicy;
 use BlackWall\Security\OidcNonceReplayGuard;
 use BlackWall\Security\RateLimiter;
 use BlackWall\Security\TokenHasher;
@@ -202,6 +203,24 @@ class OAuthController
                 $params['state'] ?? null
             );
         }
+
+        $disallowedScope = OAuthScopePolicy::firstDisallowed($requestedScopes, $client->scopes);
+        if ($disallowedScope !== null) {
+            $audit->logFail('oauth.authorize.fail', [
+                'message' => 'Requested scope not allowed for client',
+                'error_code' => 'invalid_scope',
+                'oauth_client_id' => $client->id,
+                'oauth_client_public_id' => $client->clientId,
+                'scope' => $disallowedScope,
+            ]);
+            return $this->redirectError(
+                $response,
+                $params['redirect_uri'],
+                'invalid_scope',
+                'Requested scope is not allowed for this client',
+                $params['state'] ?? null
+            );
+        }
         
         // Check if user is logged in
         $userId = SessionManager::get('user_id');
@@ -321,6 +340,25 @@ class OAuthController
 
         // User approved - generate authorization code
         $requestedScopes = isset($params['scope']) ? explode(' ', $params['scope']) : [];
+        $disallowedScope = OAuthScopePolicy::firstDisallowed($requestedScopes, $client->scopes);
+        if ($disallowedScope !== null) {
+            $audit->logFail('oauth.authorize.fail', [
+                'message' => 'Requested scope not allowed at consent submission',
+                'error_code' => 'invalid_scope',
+                'oauth_client_id' => $client->id,
+                'oauth_client_public_id' => $client->clientId,
+                'scope' => $disallowedScope,
+            ]);
+            SessionManager::remove('oauth_auth_request');
+            return $this->redirectError(
+                $response,
+                $redirectUri,
+                'invalid_scope',
+                'Requested scope is not allowed for this client',
+                $params['state'] ?? null
+            );
+        }
+
         $role = $this->roleRepo->findByUserAndProject((int) $userId, $project->id);
         if ($role === null) {
             $audit->logFail('oauth.authorize.fail', [
