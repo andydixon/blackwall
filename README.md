@@ -324,6 +324,7 @@ See `IMPLEMENTATION_PROMPT.md` for comprehensive integration guide.
 - User manual (UK English): `docs/USER_MANUAL.md`
 - Operational runbook: `docs/RUNBOOK.md`
 - Documentation index: `docs/README.md`
+- Security model and tenant isolation invariants: `security.md`
 
 ## Audit Logging
 
