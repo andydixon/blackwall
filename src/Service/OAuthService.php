@@ -13,6 +13,7 @@ use BlackWall\Security\TokenHasher;
 use BlackWall\Security\PKCEValidator;
 use BlackWall\Security\JWTManager;
 use BlackWall\Security\RefreshTokenStatePolicy;
+use BlackWall\Security\OAuthScopePolicy;
 use PDO;
 
 class OAuthService
@@ -167,6 +168,7 @@ class OAuthService
                 c.access_token_lifetime,
                 c.refresh_token_lifetime,
                 c.oidc_enabled,
+                c.scopes AS client_scopes,
                 c.status AS client_status
              FROM oauth_refresh_tokens rt
              JOIN oauth_clients c ON c.id = rt.client_id
@@ -192,6 +194,15 @@ class OAuthService
             return null;
         }
         if ($state !== RefreshTokenStatePolicy::STATE_VALID) {
+            return null;
+        }
+
+        $refreshScopes = json_decode((string) ($row['scopes'] ?? '[]'), true);
+        $refreshScopes = is_array($refreshScopes) ? $refreshScopes : [];
+        $clientScopes = json_decode((string) ($row['client_scopes'] ?? '[]'), true);
+        $clientScopes = is_array($clientScopes) ? $clientScopes : [];
+        $disallowedScope = OAuthScopePolicy::firstDisallowed($refreshScopes, $clientScopes);
+        if ($disallowedScope !== null) {
             return null;
         }
 
@@ -221,14 +232,11 @@ class OAuthService
                 $role->privilegeLevel
             );
 
-            $scopes = json_decode((string) ($row['scopes'] ?? '[]'), true);
-            $scopes = is_array($scopes) ? $scopes : [];
-
             $tokens = $this->issueTokens(
                 clientId: (int) $row['client_id'],
                 userId: (int) $row['user_id'],
                 projectId: (int) $row['project_id'],
-                scopes: $scopes,
+                scopes: $refreshScopes,
                 privilegeLevel: $role->privilegeLevel,
                 privilegeName: PrivilegeLabelResolver::resolve(
                     $role->privilegeLevel,
