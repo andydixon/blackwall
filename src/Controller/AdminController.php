@@ -73,13 +73,10 @@ class AdminController
         $currentUserId = SessionManager::get('user_id');
         if ($currentUserId) {
             $scope = $this->getAdminScope((int) $currentUserId);
-            if ($scope['is_super_admin']) {
-                $data['currentAdminRole'] = 'super_admin';
-            } elseif ($scope['is_admin']) {
-                $data['currentAdminRole'] = 'operator';
-            } else {
-                $data['currentAdminRole'] = null;
-            }
+            $role = (string) ($scope['admin_role'] ?? '');
+            $data['currentAdminRole'] = in_array($role, ['super_admin', 'operator', 'auditor'], true)
+                ? $role
+                : null;
         } else {
             $data['currentAdminRole'] = null;
         }
@@ -100,7 +97,10 @@ class AdminController
         SessionManager::start();
         $userId = (int) SessionManager::get('user_id');
         $scope = $this->getAdminScope($userId);
-        $role = $scope['is_super_admin'] ? 'super_admin' : ($scope['is_admin'] ? 'operator' : 'auditor');
+        $role = (string) ($scope['admin_role'] ?? '');
+        if (!in_array($role, ['super_admin', 'operator', 'auditor'], true)) {
+            $role = $scope['is_super_admin'] ? 'super_admin' : ($scope['is_admin'] ? 'operator' : 'auditor');
+        }
 
         $matrix = [
             'super_admin' => [
@@ -3711,6 +3711,7 @@ class AdminController
             return [
                 'is_admin' => false,
                 'is_super_admin' => false,
+                'admin_role' => null,
                 'organization_ids' => [],
                 'organization_uuids' => [],
                 'organization_uuid_set' => [],
@@ -3732,6 +3733,7 @@ class AdminController
                 'user_id' => $userId,
                 'is_admin' => false,
                 'is_super_admin' => false,
+                'admin_role' => null,
                 'organization_ids' => [],
                 'organization_uuids' => [],
                 'organization_uuid_set' => [],
@@ -3743,6 +3745,15 @@ class AdminController
             return $scope;
         }
 
+        $configuredAdminRole = null;
+        if ($this->adminAuthz->hasConfiguredRoles()) {
+            $role = $this->adminAuthz->getRole($userId);
+            if (in_array($role, ['super_admin', 'operator', 'auditor'], true)) {
+                $configuredAdminRole = $role;
+            }
+        }
+
+        $isSuperAdmin = $configuredAdminRole === 'super_admin';
         $superStmt = $db->prepare(
             "SELECT p.id, p.uuid, p.name
              FROM user_project_roles upr
@@ -3752,11 +3763,12 @@ class AdminController
         $superStmt->execute([$userId]);
         $rows = $superStmt->fetchAll();
 
-        $isSuperAdmin = false;
-        foreach ($rows as $row) {
-            if ($this->isSuperProject((string) $row['uuid'], (string) ($row['name'] ?? ''))) {
-                $isSuperAdmin = true;
-                break;
+        if (!$isSuperAdmin) {
+            foreach ($rows as $row) {
+                if ($this->isSuperProject((string) $row['uuid'], (string) ($row['name'] ?? ''))) {
+                    $isSuperAdmin = true;
+                    break;
+                }
             }
         }
 
@@ -3795,10 +3807,16 @@ class AdminController
             }
         }
 
+        $hasRoleBasedAdmin = in_array($configuredAdminRole, ['super_admin', 'operator', 'auditor'], true);
+        $effectiveAdminRole = $isSuperAdmin
+            ? 'super_admin'
+            : ($configuredAdminRole ?? (!empty($organizationIds) ? 'operator' : null));
+
         $scope = [
             'user_id' => $userId,
-            'is_admin' => $isSuperAdmin || !empty($organizationIds),
+            'is_admin' => $isSuperAdmin || $hasRoleBasedAdmin || !empty($organizationIds),
             'is_super_admin' => $isSuperAdmin,
+            'admin_role' => $effectiveAdminRole,
             'organization_ids' => array_values(array_unique($organizationIds)),
             'organization_uuids' => array_values(array_unique($organizationUuids)),
             'organization_uuid_set' => array_fill_keys(array_values(array_unique($organizationUuids)), true),
