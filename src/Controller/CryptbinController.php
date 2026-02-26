@@ -109,9 +109,14 @@ class CryptbinController
         $wrappedDekNonce = (string) ($body['wrapped_dek_nonce'] ?? '');
         $wrappedDekAlg = (string) ($body['wrapped_dek_alg'] ?? '');
         $kekVersion = (string) ($body['kek_version'] ?? '');
+        $boundCredentialDbId = (int) ($body['webauthn_credential_id'] ?? 0);
+        $boundCredentialPublicId = trim((string) ($body['webauthn_credential_public_id'] ?? ''));
 
         if ($wrappedDek === '' || $wrappedDekNonce === '' || $wrappedDekAlg === '' || $kekVersion === '') {
             return $this->json($response, ['error' => 'Missing wrapped DEK'], 400);
+        }
+        if (($boundCredentialDbId > 0) xor ($boundCredentialPublicId !== '')) {
+            return $this->json($response, ['error' => 'Invalid credential binding'], 400);
         }
 
         $mimeType = trim((string) ($body['mime_type'] ?? 'application/octet-stream'));
@@ -153,6 +158,10 @@ class CryptbinController
             'updated_at' => $now,
             'requires_webauthn_for_view' => true,
         ];
+        if ($boundCredentialDbId > 0 && $boundCredentialPublicId !== '') {
+            $metadata['webauthn_credential_id'] = $boundCredentialDbId;
+            $metadata['webauthn_credential_public_id'] = $boundCredentialPublicId;
+        }
 
         $expiryDays = Config::getInt('CRYPTBIN_DEFAULT_RETENTION_DAYS', 0);
         if ($expiryDays > 0) {
@@ -358,6 +367,8 @@ class CryptbinController
         return $this->json($response, [
             'success' => true,
             'wrapped' => $wrapped,
+            'webauthn_credential_id' => $authResult['credential_db_id'],
+            'webauthn_credential_public_id' => $authResult['credential_id'],
         ]);
     }
 
@@ -396,6 +407,10 @@ class CryptbinController
         if ($authResult === null) {
             $audit->logFail('cryptbin.unwrap.fail', ['target_type' => 'cryptbin', 'target_id' => $id, 'failure_reason' => 'WebAuthn verification failed']);
             return $this->json($response, ['error' => 'WebAuthn verification failed'], 403);
+        }
+        if (!$this->verifyBoundCredential($meta, $authResult)) {
+            $audit->logFail('cryptbin.unwrap.fail', ['target_type' => 'cryptbin', 'target_id' => $id, 'failure_reason' => 'Credential binding mismatch']);
+            return $this->json($response, ['error' => 'Forbidden'], 403);
         }
 
         try {
@@ -454,6 +469,10 @@ class CryptbinController
         if ($authResult === null) {
             $audit->logFail('cryptbin.update.fail', ['target_type' => 'cryptbin', 'target_id' => $id, 'failure_reason' => 'WebAuthn verification failed']);
             return $this->json($response, ['error' => 'WebAuthn verification failed'], 403);
+        }
+        if (!$this->verifyBoundCredential($meta, $authResult)) {
+            $audit->logFail('cryptbin.update.fail', ['target_type' => 'cryptbin', 'target_id' => $id, 'failure_reason' => 'Credential binding mismatch']);
+            return $this->json($response, ['error' => 'Forbidden'], 403);
         }
 
         $itemType = (string) ($body['item_type'] ?? '');
@@ -562,6 +581,10 @@ class CryptbinController
             $audit->logFail('cryptbin.delete.fail', ['target_type' => 'cryptbin', 'target_id' => $id, 'failure_reason' => 'WebAuthn verification failed']);
             return $this->json($response, ['error' => 'WebAuthn verification failed'], 403);
         }
+        if (!$this->verifyBoundCredential($meta, $authResult)) {
+            $audit->logFail('cryptbin.delete.fail', ['target_type' => 'cryptbin', 'target_id' => $id, 'failure_reason' => 'Credential binding mismatch']);
+            return $this->json($response, ['error' => 'Forbidden'], 403);
+        }
 
         if (!$this->storage->deleteItem($id)) {
             $audit->logFail('cryptbin.delete.fail', ['target_type' => 'cryptbin', 'target_id' => $id, 'failure_reason' => 'Delete failed']);
@@ -657,6 +680,20 @@ class CryptbinController
     private function verifyKey(array $metadata, string $keyB64): bool
     {
         return CryptbinKeyVerifier::verify($keyB64, (string) ($metadata['verifier'] ?? ''));
+    }
+
+    private function verifyBoundCredential(array $metadata, array $authResult): bool
+    {
+        $boundDbId = (int) ($metadata['webauthn_credential_id'] ?? 0);
+        $boundPublicId = (string) ($metadata['webauthn_credential_public_id'] ?? '');
+        if ($boundDbId < 1 || $boundPublicId === '') {
+            // Backwards-compatible behavior for legacy items without credential binding metadata.
+            return true;
+        }
+
+        $assertedDbId = (int) ($authResult['credential_db_id'] ?? 0);
+        $assertedPublicId = (string) ($authResult['credential_id'] ?? '');
+        return $assertedDbId === $boundDbId && $assertedPublicId !== '' && hash_equals($boundPublicId, $assertedPublicId);
     }
 
     private function isAllowedOperation(string $op): bool

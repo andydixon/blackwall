@@ -265,7 +265,9 @@
                 wrapped_dek: wrapped.wrapped.wrapped_dek,
                 wrapped_dek_nonce: wrapped.wrapped.wrapped_dek_nonce,
                 wrapped_dek_alg: wrapped.wrapped.wrapped_dek_alg,
-                kek_version: wrapped.wrapped.kek_version
+                kek_version: wrapped.wrapped.kek_version,
+                webauthn_credential_id: wrapped.webauthn_credential_id,
+                webauthn_credential_public_id: wrapped.webauthn_credential_public_id
             });
 
             window.location.href = '/cryptbin/' + encodeURIComponent(id) + '/share#' + keyB64;
