@@ -74,6 +74,15 @@ class AuditLogger
         $targetId = $context['target_id'] ?? null;
         $metadataJson = !empty($metadata) ? json_encode($metadata) : null;
 
+        if ($actorUserUuid === null && $actorUserId !== null) {
+            $userLookup = $this->db->prepare('SELECT uuid FROM users WHERE id = ? LIMIT 1');
+            $userLookup->execute([(int) $actorUserId]);
+            $actorUserUuid = (string) ($userLookup->fetchColumn() ?: '');
+            if ($actorUserUuid === '') {
+                $actorUserUuid = null;
+            }
+        }
+
         if ($organizationId === null && $projectId !== null) {
             $orgLookup = $this->db->prepare(
                 'SELECT o.id, o.uuid

@@ -9,7 +9,7 @@
                 <div>
                     <a href="/admin/projects/<?= $project->uuid ?>" class="btn btn-outline-light btn-sm me-2">← Back to Project</a>
                     <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addAssignmentModal">
-                        + Add Assignment
+                        + Add User
                     </button>
                 </div>
             </div>
@@ -42,7 +42,7 @@
                         <h5 class="text-muted">No user assignments yet</h5>
                         <p class="text-muted">Assign users to this project with specific privilege levels</p>
                         <button class="btn btn-primary mt-3" data-bs-toggle="modal" data-bs-target="#addAssignmentModal">
-                            + Add First Assignment
+                            + Add First User
                         </button>
                     </div>
                 <?php else: ?>
@@ -91,17 +91,23 @@
     </div>
 </div>
 
-<!-- Add Assignment Modal -->
+<!-- Add User Modal -->
 <div class="modal fade" id="addAssignmentModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content bg-dark">
             <div class="modal-header">
-                <h5 class="modal-title">Add User Assignment</h5>
+                <h5 class="modal-title">Add User</h5>
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST" action="/admin/projects/<?= $project->uuid ?>/assignments/create">
                 <div class="modal-body">
                     <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                    <div class="alert alert-secondary small">
+                        <strong>Existing user?</strong> Assign them below.
+                        <hr class="my-2">
+                        <strong>Need a brand new user?</strong>
+                        <a href="/admin/users/create?project_uuid=<?= urlencode($project->uuid) ?>" class="alert-link">Create the user and assign them to this project</a>.
+                    </div>
                     <div class="mb-3">
                         <label class="form-label">User</label>
                         <select name="user_id" class="form-select" required>
@@ -127,7 +133,7 @@
                 </div>
                 <div class="modal-footer">
                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                    <button type="submit" class="btn btn-primary">Add Assignment</button>
+                    <button type="submit" class="btn btn-primary">Add Existing User</button>
                 </div>
             </form>
         </div>

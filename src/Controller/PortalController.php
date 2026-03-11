@@ -157,6 +157,8 @@ class PortalController
             SessionManager::remove('portal_webauthn_challenge');
             $audit->logFail('portal.login.fail', [
                 'failure_reason' => 'Challenge missing or expired',
+                'actor_user_id' => (int) $credential['user_id'],
+                'webauthn_credential_id' => $credential['id'],
                 'webauthn_credential_public_id' => $credentialId,
             ]);
             $response->getBody()->write(json_encode(['error' => 'Session expired']));
@@ -177,6 +179,8 @@ class PortalController
         if (!$verified) {
             $audit->logFail('portal.login.fail', [
                 'failure_reason' => 'Signature verification failed',
+                'actor_user_id' => (int) $credential['user_id'],
+                'webauthn_credential_id' => $credential['id'],
                 'webauthn_credential_public_id' => $credentialId,
             ]);
             $response->getBody()->write(json_encode(['error' => 'Invalid credential']));

@@ -1494,10 +1494,39 @@ class AdminController
             return $response->withStatus(403);
         }
 
+        $params = $request->getQueryParams();
+        $assignmentProject = null;
+        $assignmentPrivilegeLevels = [];
+        $assignmentBackUrl = '/admin/users';
+        $assignmentProjectUuid = (string) ($params['project_uuid'] ?? '');
+
+        if ($assignmentProjectUuid !== '') {
+            $assignmentProject = $this->projectRepo->findByUuid($assignmentProjectUuid);
+            if ($assignmentProject === null) {
+                return $response->withStatus(404);
+            }
+            if (!$this->canAccessProjectId($assignmentProject->id)) {
+                return $response->withStatus(403);
+            }
+
+            for ($i = 1; $i <= 10; $i++) {
+                $custom = $this->privilegeRepo->findByProjectAndLevel($assignmentProject->id, $i);
+                $assignmentPrivilegeLevels[] = [
+                    'level' => $i,
+                    'name' => PrivilegeLabelResolver::resolve($i, $custom?->name),
+                ];
+            }
+
+            $assignmentBackUrl = '/admin/projects/' . rawurlencode($assignmentProject->uuid) . '/assignments';
+        }
+
         return $this->renderWithLayout($response, 'admin/users/create.php', [
             'title' => 'Create User',
             'csrfToken' => CSRFProtection::generateToken(),
             'scope' => $scope,
+            'assignmentProject' => $assignmentProject,
+            'assignmentPrivilegeLevels' => $assignmentPrivilegeLevels,
+            'assignmentBackUrl' => $assignmentBackUrl,
             'organizations' => $scope['is_super_admin']
                 ? $this->organizationRepo->findAll(500, 0)
                 : array_values(array_filter(array_map(
@@ -1535,19 +1564,90 @@ class AdminController
             return $response->withHeader('Location', '/admin/users')->withStatus(302);
         }
 
-        $targetOrgId = $this->resolveTargetOrganizationId($scope, (string) ($body['organization_uuid'] ?? ''));
-        if ($targetOrgId === null) {
-            return $response->withHeader('Location', '/admin/users?error=org')->withStatus(302);
+        $assignmentProjectUuid = (string) ($body['assignment_project_uuid'] ?? '');
+        $assignmentPrivilegeLevel = (int) ($body['assignment_privilege_level'] ?? 0);
+        $assignmentProject = null;
+        if ($assignmentProjectUuid !== '') {
+            if (($deny = $this->requireCapability($response, 'manage_assignments')) !== null) {
+                return $deny;
+            }
+
+            $assignmentProject = $this->projectRepo->findByUuid($assignmentProjectUuid);
+            if ($assignmentProject === null) {
+                return $response->withStatus(404);
+            }
+            if (!$this->canAccessProjectId($assignmentProject->id)) {
+                return $response->withStatus(403);
+            }
+            if ($assignmentPrivilegeLevel < 1 || $assignmentPrivilegeLevel > 10) {
+                return $response
+                    ->withHeader('Location', '/admin/users/create?project_uuid=' . urlencode($assignmentProjectUuid) . '&error=assignment_level')
+                    ->withStatus(302);
+            }
+            if ($this->privilegeRepo->findByProjectAndLevel($assignmentProject->id, $assignmentPrivilegeLevel) === null) {
+                return $response
+                    ->withHeader('Location', '/admin/users/create?project_uuid=' . urlencode($assignmentProjectUuid) . '&error=assignment_level')
+                    ->withStatus(302);
+            }
+
+            $targetOrgId = $assignmentProject->organizationId;
+        } else {
+            $targetOrgId = $this->resolveTargetOrganizationId($scope, (string) ($body['organization_uuid'] ?? ''));
+            if ($targetOrgId === null) {
+                return $response->withHeader('Location', '/admin/users?error=org')->withStatus(302);
+            }
         }
 
         $uuid = Uuid::uuid4()->toString();
         $user = $this->userRepo->create($targetOrgId, $uuid, $body['display_label'] ?? null, 'active');
+
+        if ($assignmentProject !== null) {
+            $assignmentPrivilegeLabel = PrivilegeLabelResolver::resolve(
+                $assignmentPrivilegeLevel,
+                $this->privilegeRepo->findByProjectAndLevel($assignmentProject->id, $assignmentPrivilegeLevel)?->name
+            );
+            $userAuditLabel = $user->uuid;
+            if (!empty($user->displayLabel)) {
+                $userAuditLabel .= ' (' . $user->displayLabel . ')';
+            }
+
+            if (AdminMutationPolicy::shouldRequireAssignmentApproval($this->hasCapability('assignment_mutations_direct'))) {
+                $this->approvalService->create(
+                    'create_assignment',
+                    [
+                        'project_uuid' => $assignmentProject->uuid,
+                        'user_id' => $user->id,
+                        'privilege_level' => $assignmentPrivilegeLevel,
+                    ],
+                    (int) $userId,
+                    $assignmentProject->id
+                );
+            } else {
+                $this->roleRepo->create($user->id, $assignmentProject->id, $assignmentPrivilegeLevel);
+            }
+        }
 
         $audit->logSuccess('admin.user.create', [
             'actor_user_id' => $userId,
             'target_type' => 'user',
             'target_id' => $user->uuid,
         ]);
+
+        if ($assignmentProject !== null) {
+            $audit->logSuccess('admin.assignment.create', [
+                'actor_user_id' => $userId,
+                'project_id' => $assignmentProject->id,
+                'project_uuid' => $assignmentProject->uuid,
+                'target_type' => 'user_project_role',
+                'target_id' => $user->uuid,
+                'message' => AdminMutationPolicy::shouldRequireAssignmentApproval($this->hasCapability('assignment_mutations_direct'))
+                    ? "Created user {$userAuditLabel} and submitted assignment approval with privilege {$assignmentPrivilegeLabel}"
+                    : "Created user {$userAuditLabel} and assigned privilege {$assignmentPrivilegeLabel}",
+            ]);
+        }
+
+        $enrollmentLink = $this->createEnrollmentLinkForUser($user->id);
+        $this->setEnrollmentLinkFlash($user->uuid, $enrollmentLink);
 
         return $response->withHeader('Location', '/admin/users/' . $user->uuid)->withStatus(302);
     }
@@ -1731,11 +1831,53 @@ class AdminController
         $offset = ($page - 1) * $perPage;
 
         $logs = $audit->search($filters, $perPage, $offset);
+        $projectDisplayMap = [];
+        $clientDisplayMap = [];
+        $userDisplayMap = [];
+
+        foreach ($logs as $log) {
+            $actorUserUuid = (string) ($log['actor_user_uuid'] ?? '');
+            if ($actorUserUuid !== '' && !isset($userDisplayMap[$actorUserUuid])) {
+                $actorUser = $this->userRepo->findByUuid($actorUserUuid);
+                if ($actorUser !== null && $this->canAccessUserId($actorUser->id)) {
+                    $userDisplayMap[$actorUserUuid] = [
+                        'name' => $actorUser->displayLabel ?? '',
+                        'href' => '/admin/users/' . rawurlencode($actorUser->uuid),
+                    ];
+                }
+            }
+
+            $projectUuid = (string) ($log['project_uuid'] ?? '');
+            if ($projectUuid !== '' && !isset($projectDisplayMap[$projectUuid])) {
+                $project = $this->projectRepo->findByUuid($projectUuid);
+                if ($project !== null && $this->canAccessProjectId($project->id)) {
+                    $projectDisplayMap[$projectUuid] = [
+                        'name' => $project->name,
+                        'href' => '/admin/projects/' . rawurlencode($project->uuid),
+                    ];
+                }
+            }
+
+            $clientPublicId = (string) ($log['oauth_client_public_id'] ?? '');
+            if ($clientPublicId !== '' && !isset($clientDisplayMap[$clientPublicId])) {
+                $client = $this->clientRepo->findByClientId($clientPublicId);
+                if ($client !== null && $this->canAccessProjectId($client->projectId)) {
+                    $clientDisplayMap[$clientPublicId] = [
+                        'name' => $client->name,
+                        'href' => '/admin/clients/' . rawurlencode($client->clientId),
+                    ];
+                }
+            }
+        }
+
         $total = $audit->countSearch($filters);
 
         return $this->renderWithLayout($response, 'admin/audit/log.php', [
             'title' => 'Audit Log',
             'logs' => $logs,
+            'userDisplayMap' => $userDisplayMap,
+            'projectDisplayMap' => $projectDisplayMap,
+            'clientDisplayMap' => $clientDisplayMap,
             'filters' => $filters,
             'page' => $page,
             'perPage' => $perPage,
@@ -2512,13 +2654,21 @@ class AdminController
         }
 
         $created = $this->roleRepo->create($userId, $projectId, $privilegeLevel);
+        $privilegeLabel = PrivilegeLabelResolver::resolve(
+            $privilegeLevel,
+            $this->privilegeRepo->findByProjectAndLevel($project->id, $privilegeLevel)?->name
+        );
+        $userAuditLabel = $targetUser->uuid;
+        if (!empty($targetUser->displayLabel)) {
+            $userAuditLabel .= ' (' . $targetUser->displayLabel . ')';
+        }
         $audit->logSuccess('admin.assignment.create', [
             'actor_user_id' => $actorUserId,
             'project_id' => $project->id,
             'project_uuid' => $project->uuid,
             'target_type' => 'user_project_role',
             'target_id' => (string) $created->id,
-            'message' => "Assigned user {$userId} at privilege level {$privilegeLevel}",
+            'message' => "Assigned user {$userAuditLabel} with privilege {$privilegeLabel}",
         ]);
         return $response->withHeader('Location', "/admin/projects/{$project->uuid}/assignments?success=created")->withStatus(302);
     }

@@ -74,6 +74,7 @@
                                 <th>Event</th>
                                 <th>Outcome</th>
                                 <th>IP</th>
+                                <th>User</th>
                                 <th>Project</th>
                                 <th>Client</th>
                                 <th>Message</th>
@@ -83,7 +84,7 @@
                         <tbody>
                             <?php if (empty($logs)): ?>
                                 <tr>
-                                    <td colspan="8" class="text-center text-muted">No audit logs found</td>
+                                    <td colspan="9" class="text-center text-muted">No audit logs found</td>
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($logs as $log): ?>
@@ -101,8 +102,63 @@
                                             <span class="badge <?= $badgeClass ?>"><?= htmlspecialchars($log['outcome']) ?></span>
                                         </td>
                                         <td class="small"><?= htmlspecialchars($log['ip_address']) ?></td>
-                                        <td class="small"><?= htmlspecialchars($log['project_uuid'] ?? '-') ?></td>
-                                        <td class="small"><?= htmlspecialchars($log['oauth_client_public_id'] ?? '-') ?></td>
+                                        <td class="small">
+                                            <?php
+                                            $actorUserUuid = (string) ($log['actor_user_uuid'] ?? '');
+                                            $actorUserDisplay = $actorUserUuid !== '' ? ($userDisplayMap[$actorUserUuid] ?? null) : null;
+                                            ?>
+                                            <?php if ($actorUserDisplay !== null): ?>
+                                                <a
+                                                    href="<?= htmlspecialchars($actorUserDisplay['href']) ?>"
+                                                    class="link-info text-decoration-none"
+                                                    title="<?= htmlspecialchars(trim(($actorUserDisplay['name'] !== '' ? $actorUserDisplay['name'] . ' ' : '') . '(' . $actorUserUuid . ')')) ?>"
+                                                >
+                                                    <code><?= htmlspecialchars($actorUserUuid) ?></code>
+                                                </a>
+                                            <?php elseif ($actorUserUuid !== ''): ?>
+                                                <code title="<?= htmlspecialchars($actorUserUuid) ?>"><?= htmlspecialchars($actorUserUuid) ?></code>
+                                            <?php else: ?>
+                                                -
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="small">
+                                            <?php
+                                            $projectUuid = (string) ($log['project_uuid'] ?? '');
+                                            $projectDisplay = $projectUuid !== '' ? ($projectDisplayMap[$projectUuid] ?? null) : null;
+                                            ?>
+                                            <?php if ($projectDisplay !== null): ?>
+                                                <a
+                                                    href="<?= htmlspecialchars($projectDisplay['href']) ?>"
+                                                    class="link-info text-decoration-none"
+                                                    title="<?= htmlspecialchars($projectDisplay['name'] . ' (' . $projectUuid . ')') ?>"
+                                                >
+                                                    <code><?= htmlspecialchars($projectUuid) ?></code>
+                                                </a>
+                                            <?php elseif ($projectUuid !== ''): ?>
+                                                <code title="<?= htmlspecialchars($projectUuid) ?>"><?= htmlspecialchars($projectUuid) ?></code>
+                                            <?php else: ?>
+                                                -
+                                            <?php endif; ?>
+                                        </td>
+                                        <td class="small">
+                                            <?php
+                                            $clientPublicId = (string) ($log['oauth_client_public_id'] ?? '');
+                                            $clientDisplay = $clientPublicId !== '' ? ($clientDisplayMap[$clientPublicId] ?? null) : null;
+                                            ?>
+                                            <?php if ($clientDisplay !== null): ?>
+                                                <a
+                                                    href="<?= htmlspecialchars($clientDisplay['href']) ?>"
+                                                    class="link-info text-decoration-none"
+                                                    title="<?= htmlspecialchars($clientDisplay['name'] . ' (' . $clientPublicId . ')') ?>"
+                                                >
+                                                    <code><?= htmlspecialchars($clientPublicId) ?></code>
+                                                </a>
+                                            <?php elseif ($clientPublicId !== ''): ?>
+                                                <code title="<?= htmlspecialchars($clientPublicId) ?>"><?= htmlspecialchars($clientPublicId) ?></code>
+                                            <?php else: ?>
+                                                -
+                                            <?php endif; ?>
+                                        </td>
                                         <td class="small"><?= htmlspecialchars($log['message']) ?></td>
                                         <td class="small"><code><?= htmlspecialchars(substr($log['correlation_id'], 0, 8)) ?>...</code></td>
                                     </tr>
