@@ -37,6 +37,9 @@
                         <li class="nav-item">
                             <a class="nav-link" href="/admin/organisations">Organisations</a>
                         </li>
+                        <li class="nav-item">
+                            <a class="nav-link" href="/admin/cryptbin">Cryptbin</a>
+                        </li>
                     <?php endif; ?>
                     <li class="nav-item">
                         <a class="nav-link" href="/admin/approvals">Approvals</a>

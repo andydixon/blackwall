@@ -156,6 +156,46 @@ class CryptbinStorageService
         return $metadata;
     }
 
+    public function listItems(): array
+    {
+        $items = [];
+        $pattern = $this->storagePath . '/*.json';
+        $files = glob($pattern);
+
+        if ($files === false) {
+            return [];
+        }
+
+        foreach ($files as $metaFile) {
+            $raw = @file_get_contents($metaFile);
+            if ($raw === false) {
+                continue;
+            }
+
+            $metadata = json_decode($raw, true);
+            if (!is_array($metadata)) {
+                continue;
+            }
+
+            $id = (string) ($metadata['id'] ?? basename($metaFile, '.json'));
+            if (!self::isValidId($id)) {
+                continue;
+            }
+
+            $ciphertextPath = $this->binPath($id);
+            $metadata['id'] = $id;
+            $metadata['size_bytes'] = isset($metadata['size_bytes'])
+                ? (int) $metadata['size_bytes']
+                : (is_file($ciphertextPath) ? (int) filesize($ciphertextPath) : 0);
+            $metadata['ciphertext_exists'] = is_file($ciphertextPath);
+            $metadata['metadata_mtime'] = @filemtime($metaFile) ?: null;
+
+            $items[] = $metadata;
+        }
+
+        return $items;
+    }
+
     private function normalizeStoragePath(string $path): string
     {
         if ($path === '') {

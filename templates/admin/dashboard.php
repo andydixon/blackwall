@@ -77,6 +77,49 @@
             </div>
         </div>
 
+        <?php if (!empty($cryptbinDashboardStats)): ?>
+        <?php
+        $formatBytesCompact = static function (int $bytes): string {
+            if ($bytes < 1024) {
+                return $bytes . ' B';
+            }
+            $units = ['KB', 'MB', 'GB', 'TB'];
+            $value = $bytes / 1024;
+            foreach ($units as $unit) {
+                if ($value < 1024 || $unit === 'TB') {
+                    return round($value, 1) . ' ' . $unit;
+                }
+                $value /= 1024;
+            }
+            return round($value, 1) . ' TB';
+        };
+        ?>
+        <div class="row g-4 mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+                        <div>
+                            <h5 class="mb-1">🗄️ Cryptbin Overview</h5>
+                            <p class="text-muted mb-0">
+                                Items: <strong><?= (int) ($cryptbinDashboardStats['total_items'] ?? 0) ?></strong>
+                                · Active: <strong class="text-success"><?= (int) ($cryptbinDashboardStats['active_items'] ?? 0) ?></strong>
+                                · Expired: <strong class="text-warning"><?= (int) ($cryptbinDashboardStats['expired_items'] ?? 0) ?></strong>
+                                · Stored: <strong><?= htmlspecialchars($formatBytesCompact((int) ($cryptbinDashboardStats['total_bytes'] ?? 0))) ?></strong>
+                            </p>
+                            <p class="text-muted mb-0 small">
+                                Last updated: <?= htmlspecialchars((string) (($cryptbinDashboardStats['last_updated_at'] ?? null) ?: 'Never')) ?>
+                                · Last accessed: <?= htmlspecialchars((string) (($cryptbinDashboardStats['last_accessed_at'] ?? null) ?: 'Never')) ?>
+                            </p>
+                        </div>
+                        <div>
+                            <a href="/admin/cryptbin" class="btn btn-sm btn-outline-light">Open Cryptbin Admin</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+
         <div class="row g-4 mb-4">
             <div class="col-12">
                 <div class="card">
@@ -521,7 +564,25 @@
                                                     ?>
                                                     <span class="badge <?= $badge ?>"><?= htmlspecialchars($log['outcome']) ?></span>
                                                 </td>
-                                                <td><?= htmlspecialchars($log['actor_user_uuid'] ?? '-') ?></td>
+                                                <td>
+                                                    <?php
+                                                    $actorUserUuid = (string) ($log['actor_user_uuid'] ?? '');
+                                                    $actorUserDisplay = $actorUserUuid !== '' ? ($recentUserDisplayMap[$actorUserUuid] ?? null) : null;
+                                                    ?>
+                                                    <?php if ($actorUserDisplay !== null): ?>
+                                                        <a
+                                                            href="<?= htmlspecialchars($actorUserDisplay['href']) ?>"
+                                                            class="text-decoration-none link-info"
+                                                            title="<?= htmlspecialchars(trim(($actorUserDisplay['name'] !== '' ? $actorUserDisplay['name'] . ' ' : '') . '(' . $actorUserUuid . ')')) ?>"
+                                                        >
+                                                            <code class="small"><?= htmlspecialchars($actorUserUuid) ?></code>
+                                                        </a>
+                                                    <?php elseif ($actorUserUuid !== ''): ?>
+                                                        <code class="small" title="<?= htmlspecialchars($actorUserUuid) ?>"><?= htmlspecialchars($actorUserUuid) ?></code>
+                                                    <?php else: ?>
+                                                        -
+                                                    <?php endif; ?>
+                                                </td>
                                                 <td>
                                                     <a href="/admin/audit?ip_address=<?= urlencode($log['ip_address']) ?>" 
                                                        class="text-decoration-none">

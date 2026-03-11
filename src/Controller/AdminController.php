@@ -14,6 +14,7 @@ use BlackWall\Repository\UserProjectRoleRepository;
 use BlackWall\Service\ApprovalService;
 use BlackWall\Service\AdminAuthorizationService;
 use BlackWall\Service\AuditLogger;
+use BlackWall\Service\CryptbinStorageService;
 use BlackWall\Service\MaintenanceService;
 use BlackWall\Service\WebAuthnService;
 use BlackWall\Security\SessionManager;
@@ -113,6 +114,7 @@ class AdminController
                 'change_project_status_direct', 'change_client_status_direct',
                 'update_project_settings_direct', 'update_client_settings_direct',
                 'assignment_mutations_direct',
+                'view_cryptbin', 'manage_cryptbin',
                 'view_approvals', 'decide_approvals',
             ],
             'operator' => [
@@ -317,6 +319,7 @@ class AdminController
         $db = \BlackWall\Database::getInstance();
         $scope = $this->getAdminScope((int) SessionManager::get('user_id'));
         $projectIds = $scope['project_ids'];
+        $cryptbinDashboardStats = null;
 
         if (!$scope['is_super_admin'] && empty($projectIds)) {
             $stats = ['users' => 0, 'projects' => 0, 'clients' => 0, 'audit_count' => 0];
@@ -378,6 +381,8 @@ class AdminController
                  LIMIT 12"
             );
             $failBreakdown = $breakdownFailStmt->fetchAll();
+
+            $cryptbinDashboardStats = $this->cryptbinDashboardStats($db);
         } else {
             $projectPlaceholders = implode(',', array_fill(0, count($projectIds), '?'));
             $statsStmt = $db->prepare(
@@ -505,11 +510,28 @@ class AdminController
         $rateLimitSecurityStats = $this->dashboardSecurityEventStats($db, 'security.rate_limit.admin_mutation', $scope['is_super_admin'], $projectIds);
         $csrfTopProjects = $this->dashboardSecurityTopProjects($db, 'security.csrf.fail', $scope['is_super_admin'], $projectIds);
         $rateLimitTopProjects = $this->dashboardSecurityTopProjects($db, 'security.rate_limit.admin_mutation', $scope['is_super_admin'], $projectIds);
+        $recentUserDisplayMap = [];
+        foreach ($recent_logs as $log) {
+            $actorUserUuid = (string) ($log['actor_user_uuid'] ?? '');
+            if ($actorUserUuid === '' || isset($recentUserDisplayMap[$actorUserUuid])) {
+                continue;
+            }
+
+            $actorUser = $this->userRepo->findByUuid($actorUserUuid);
+            if ($actorUser !== null && $this->canAccessUserId($actorUser->id)) {
+                $recentUserDisplayMap[$actorUserUuid] = [
+                    'name' => $actorUser->displayLabel ?? '',
+                    'href' => '/admin/users/' . rawurlencode($actorUser->uuid),
+                ];
+            }
+        }
 
         return $this->renderWithLayout($response, 'admin/dashboard.php', [
             'title' => 'Dashboard',
             'stats' => $stats,
+            'cryptbinDashboardStats' => $cryptbinDashboardStats,
             'recent_logs' => $recent_logs,
+            'recentUserDisplayMap' => $recentUserDisplayMap,
             'outcomeStats' => $outcomeStats,
             'successBreakdown' => $successBreakdown,
             'failBreakdown' => $failBreakdown,
@@ -522,6 +544,93 @@ class AdminController
             'rateLimitTopProjects' => $rateLimitTopProjects,
             'csrfToken' => CSRFProtection::generateToken(),
         ]);
+    }
+
+    public function cryptbinList(Request $request, Response $response): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'view_cryptbin')) !== null) {
+            return $deny;
+        }
+
+        $params = $request->getQueryParams();
+        $sort = (string) ($params['sort'] ?? 'updated_at');
+        $dir = strtolower((string) ($params['dir'] ?? 'desc')) === 'asc' ? 'asc' : 'desc';
+        $filters = [
+            'status' => (string) ($params['status'] ?? ''),
+            'item_type' => (string) ($params['item_type'] ?? ''),
+            'activity' => (string) ($params['activity'] ?? ''),
+        ];
+
+        $db = \BlackWall\Database::getInstance();
+        $storage = new CryptbinStorageService();
+        $items = $this->buildCryptbinAdminItems($storage->listItems(), $this->cryptbinAuditAggregates($db), $sort, $dir, $filters);
+
+        return $this->renderWithLayout($response, 'admin/cryptbin/list.php', [
+            'title' => 'Cryptbin',
+            'items' => $items,
+            'sort' => $sort,
+            'dir' => $dir,
+            'filters' => $filters,
+            'csrfToken' => CSRFProtection::generateToken(),
+            'cryptbinStats' => $this->cryptbinDashboardStats($db),
+        ]);
+    }
+
+    public function cryptbinDelete(Request $request, Response $response, array $args): Response
+    {
+        if (!$this->checkAuth()) {
+            return $response->withHeader('Location', '/admin/login')->withStatus(302);
+        }
+        if (($deny = $this->requireCapability($response, 'manage_cryptbin')) !== null) {
+            return $deny;
+        }
+
+        $body = (array) $request->getParsedBody();
+        $redirect = $this->safeAdminRedirectTarget($request->getHeaderLine('Referer'), '/admin/cryptbin');
+        /** @var AuditLogger $audit */
+        $audit = $request->getAttribute('audit_logger');
+        $actorUserId = (int) SessionManager::get('user_id');
+
+        if (($limited = $this->enforceAdminMutationRateLimit($request, $response, $audit, 'cryptbin_delete_admin', '/admin/cryptbin')) !== null) {
+            return $limited;
+        }
+
+        if (!CSRFProtection::validateToken((string) ($body['csrf_token'] ?? ''))) {
+            $audit->logFail('security.csrf.fail', ['failure_reason' => 'admin.cryptbin.delete']);
+            return $response->withHeader('Location', $this->appendQueryParam($redirect, 'error', 'csrf'))->withStatus(302);
+        }
+
+        $id = (string) ($args['id'] ?? '');
+        if (!CryptbinStorageService::isValidId($id)) {
+            return $response->withHeader('Location', $this->appendQueryParam($redirect, 'error', 'invalid'))->withStatus(302);
+        }
+
+        $storage = new CryptbinStorageService();
+        if ($storage->readMetadata($id) === null) {
+            return $response->withHeader('Location', $this->appendQueryParam($redirect, 'error', 'not_found'))->withStatus(302);
+        }
+
+        if (!$storage->deleteItem($id)) {
+            $audit->logFail('admin.cryptbin.delete.fail', [
+                'actor_user_id' => $actorUserId,
+                'target_type' => 'cryptbin',
+                'target_id' => $id,
+                'message' => 'Superadmin Cryptbin delete failed',
+            ]);
+            return $response->withHeader('Location', $this->appendQueryParam($redirect, 'error', 'delete'))->withStatus(302);
+        }
+
+        $audit->logSuccess('admin.cryptbin.delete.success', [
+            'actor_user_id' => $actorUserId,
+            'target_type' => 'cryptbin',
+            'target_id' => $id,
+            'message' => 'Superadmin deleted Cryptbin item',
+        ]);
+
+        return $response->withHeader('Location', $this->appendQueryParam($redirect, 'success', 'deleted'))->withStatus(302);
     }
 
     public function usersList(Request $request, Response $response): Response
@@ -3842,6 +3951,183 @@ class AdminController
         }
 
         return $stmt->fetchAll();
+    }
+
+    private function cryptbinAuditAggregates(\PDO $db): array
+    {
+        $stmt = $db->query(
+            "SELECT
+                target_id,
+                MAX(CASE WHEN event_type = 'cryptbin.create.success' THEN created_at END) AS created_event_at,
+                MAX(CASE WHEN event_type = 'cryptbin.update.success' THEN created_at END) AS last_updated_at,
+                MAX(CASE WHEN event_type = 'cryptbin.unwrap.success' THEN created_at END) AS last_accessed_at,
+                COUNT(CASE WHEN event_type = 'cryptbin.unwrap.success' THEN 1 END) AS access_count,
+                COUNT(CASE WHEN event_type = 'cryptbin.update.success' THEN 1 END) AS update_count
+             FROM audit_log
+             WHERE target_type = 'cryptbin'
+               AND target_id IS NOT NULL
+             GROUP BY target_id"
+        );
+
+        $aggregates = [];
+        foreach ($stmt->fetchAll() as $row) {
+            $aggregates[(string) $row['target_id']] = $row;
+        }
+
+        return $aggregates;
+    }
+
+    private function buildCryptbinAdminItems(array $items, array $auditAggregates, string $sort, string $dir, array $filters = []): array
+    {
+        $now = time();
+        $normalized = [];
+
+        foreach ($items as $item) {
+            $id = (string) ($item['id'] ?? '');
+            if ($id === '') {
+                continue;
+            }
+
+            $audit = $auditAggregates[$id] ?? [];
+            $createdAt = (string) ($item['created_at'] ?? ($audit['created_event_at'] ?? ''));
+            $updatedAt = (string) ($item['updated_at'] ?? ($audit['last_updated_at'] ?? $createdAt));
+            $lastAccessedAt = (string) ($audit['last_accessed_at'] ?? '');
+            $expiresAt = (string) ($item['expires_at'] ?? '');
+            $isExpired = false;
+            if ($expiresAt !== '') {
+                $expiryTs = strtotime($expiresAt);
+                $isExpired = $expiryTs !== false && $expiryTs < $now;
+            }
+
+            $normalized[] = [
+                'id' => $id,
+                'item_type' => (string) ($item['item_type'] ?? 'unknown'),
+                'original_filename' => (string) ($item['original_filename'] ?? ''),
+                'mime_type' => (string) ($item['mime_type'] ?? ''),
+                'size_bytes' => (int) ($item['size_bytes'] ?? 0),
+                'created_at' => $createdAt,
+                'updated_at' => $updatedAt,
+                'last_accessed_at' => $lastAccessedAt,
+                'expires_at' => $expiresAt,
+                'is_expired' => $isExpired,
+                'access_count' => (int) ($audit['access_count'] ?? 0),
+                'update_count' => (int) ($audit['update_count'] ?? 0),
+                'requires_webauthn_for_view' => (bool) ($item['requires_webauthn_for_view'] ?? false),
+                'ciphertext_exists' => (bool) ($item['ciphertext_exists'] ?? false),
+            ];
+        }
+
+        $statusFilter = (string) ($filters['status'] ?? '');
+        $typeFilter = (string) ($filters['item_type'] ?? '');
+        $activityFilter = (string) ($filters['activity'] ?? '');
+
+        $normalized = array_values(array_filter($normalized, static function (array $item) use ($statusFilter, $typeFilter, $activityFilter, $now): bool {
+            if ($statusFilter === 'active' && !empty($item['is_expired'])) {
+                return false;
+            }
+            if ($statusFilter === 'expired' && empty($item['is_expired'])) {
+                return false;
+            }
+
+            if ($typeFilter !== '' && $typeFilter !== (string) ($item['item_type'] ?? '')) {
+                return false;
+            }
+
+            if ($activityFilter !== '') {
+                $threshold = match ($activityFilter) {
+                    '24h' => $now - 86400,
+                    '7d' => $now - (7 * 86400),
+                    '30d' => $now - (30 * 86400),
+                    default => null,
+                };
+
+                if ($threshold !== null) {
+                    $candidate = (string) (($item['last_accessed_at'] ?? '') !== '' ? $item['last_accessed_at'] : ($item['updated_at'] ?? ''));
+                    $candidateTs = $candidate !== '' ? strtotime($candidate) : false;
+                    if ($candidateTs === false || $candidateTs < $threshold) {
+                        return false;
+                    }
+                }
+            }
+
+            return true;
+        }));
+
+        $allowedSorts = ['size_bytes', 'created_at', 'updated_at', 'last_accessed_at', 'access_count'];
+        if (!in_array($sort, $allowedSorts, true)) {
+            $sort = 'updated_at';
+        }
+
+        usort($normalized, static function (array $a, array $b) use ($sort, $dir): int {
+            $left = $a[$sort] ?? null;
+            $right = $b[$sort] ?? null;
+
+            if (str_ends_with($sort, '_at')) {
+                $left = $left ? strtotime((string) $left) : 0;
+                $right = $right ? strtotime((string) $right) : 0;
+            }
+
+            $result = $left <=> $right;
+            if ($result === 0) {
+                $result = strcmp((string) $a['id'], (string) $b['id']);
+            }
+
+            return $dir === 'asc' ? $result : -$result;
+        });
+
+        return $normalized;
+    }
+
+    private function cryptbinDashboardStats(\PDO $db): array
+    {
+        $storage = new CryptbinStorageService();
+        $items = $storage->listItems();
+        $audit = $this->cryptbinAuditAggregates($db);
+        $now = time();
+
+        $stats = [
+            'total_items' => 0,
+            'active_items' => 0,
+            'expired_items' => 0,
+            'total_bytes' => 0,
+            'last_updated_at' => null,
+            'last_accessed_at' => null,
+        ];
+
+        foreach ($items as $item) {
+            $id = (string) ($item['id'] ?? '');
+            if ($id === '') {
+                continue;
+            }
+
+            $stats['total_items']++;
+            $stats['total_bytes'] += (int) ($item['size_bytes'] ?? 0);
+
+            $expiresAt = (string) ($item['expires_at'] ?? '');
+            $isExpired = false;
+            if ($expiresAt !== '') {
+                $expiryTs = strtotime($expiresAt);
+                $isExpired = $expiryTs !== false && $expiryTs < $now;
+            }
+
+            if ($isExpired) {
+                $stats['expired_items']++;
+            } else {
+                $stats['active_items']++;
+            }
+
+            $updatedAt = (string) ($item['updated_at'] ?? ($audit[$id]['last_updated_at'] ?? $item['created_at'] ?? ''));
+            if ($updatedAt !== '' && ($stats['last_updated_at'] === null || strtotime($updatedAt) > strtotime((string) $stats['last_updated_at']))) {
+                $stats['last_updated_at'] = $updatedAt;
+            }
+
+            $lastAccessedAt = (string) ($audit[$id]['last_accessed_at'] ?? '');
+            if ($lastAccessedAt !== '' && ($stats['last_accessed_at'] === null || strtotime($lastAccessedAt) > strtotime((string) $stats['last_accessed_at']))) {
+                $stats['last_accessed_at'] = $lastAccessedAt;
+            }
+        }
+
+        return $stats;
     }
 
     private function checkAuth(): bool
