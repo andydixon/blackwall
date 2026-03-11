@@ -10,68 +10,124 @@
 <body class="bg-charcoal">
     <div class="container">
         <div class="row justify-content-center align-items-center min-vh-100">
-            <div class="col-md-8 col-lg-6">
+            <div class="col-md-10 col-lg-8 col-xl-7">
                 <div class="text-center mb-5">
                     <h1 class="display-4 fw-bold mb-3">//BlackWall</h1>
                     <p class="lead text-muted">WebAuthn-Secured OAuth 2.1 / OpenID Connect Provider / Data Security</p>
                 </div>
 
-                <div class="row g-4 mb-4">
-                    <div class="col-md-3">
+                <div class="d-grid gap-3 mb-4">
+                    <div>
                         <a href="/cryptbin" class="text-decoration-none">
                             <div class="card stat-card h-100" style="border-left-color: #f59e0b">
-                                <div class="card-body text-center p-4">
-                                    <div class="fs-1 mb-3">🗄️</div>
-                                    <h5 class="mb-2">Cryptbin</h5>
-                                    <p class="text-muted small mb-3">
-                                        Encrypted pastebin for text and file payloads
-                                    </p>
-                                    <button class="btn btn-warning btn-sm">Open Cryptbin →</button>
+                                <div class="card-body p-4 p-lg-5">
+                                    <div class="row g-4 align-items-center">
+                                        <div class="col-md-8">
+                                            <div class="d-flex align-items-center gap-3 mb-3">
+                                                <div class="fs-1">🗄️</div>
+                                                <div>
+                                                    <h4 class="mb-1">Cryptbin</h4>
+                                                    <p class="text-muted mb-0">Encrypted pastebin for sensitive text and file payloads.</p>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex flex-wrap gap-2 small text-muted">
+                                                <span class="badge text-bg-warning">Client-side encryption</span>
+                                                <span class="badge text-bg-dark border border-secondary">Timed expiry</span>
+                                                <span class="badge text-bg-dark border border-secondary">One-time sharing</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 text-md-end">
+                                            <p class="small text-muted mb-3">Use it to hand off logs, tokens, or incident notes without leaving plaintext lying around.</p>
+                                            <button class="btn btn-warning">Open Cryptbin →</button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </a>
                     </div>
 
-                    <div class="col-md-3">
+                    <div>
                         <a href="/portal" class="text-decoration-none">
                             <div class="card stat-card h-100" style="border-left-color: #3b82f6">
-                                <div class="card-body text-center p-4">
-                                    <div class="fs-1 mb-3">👤</div>
-                                    <h5 class="mb-2">Portal</h5>
-                                    <p class="text-muted small mb-3">
-                                        View your projects and manage security keys
-                                    </p>
-                                    <button class="btn btn-primary btn-sm">Access Portal →</button>
+                                <div class="card-body p-4 p-lg-5">
+                                    <div class="row g-4 align-items-center">
+                                        <div class="col-md-8">
+                                            <div class="d-flex align-items-center gap-3 mb-3">
+                                                <div class="fs-1">👤</div>
+                                                <div>
+                                                    <h4 class="mb-1">Portal</h4>
+                                                    <p class="text-muted mb-0">View assigned projects and manage your WebAuthn credentials.</p>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex flex-wrap gap-2 small text-muted">
+                                                <span class="badge text-bg-primary">Project access</span>
+                                                <span class="badge text-bg-dark border border-secondary">Security keys</span>
+                                                <span class="badge text-bg-dark border border-secondary">Account self-service</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 text-md-end">
+                                            <p class="small text-muted mb-3">This is the day-to-day user entry point for authentication, device enrolment, and access checks.</p>
+                                            <button class="btn btn-primary">Access Portal →</button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </a>
                     </div>
 
-                    <div class="col-md-3">
+                    <div>
                         <a href="/admin" class="text-decoration-none">
                             <div class="card stat-card h-100" style="border-left-color: #10b981">
-                                <div class="card-body text-center p-4">
-                                    <div class="fs-1 mb-3">⚙️</div>
-                                    <h5 class="mb-2">Admin</h5>
-                                    <p class="text-muted small mb-3">
-                                        Manage users, projects, and OAuth clients
-                                    </p>
-                                    <button class="btn btn-success btn-sm">Admin Login →</button>
+                                <div class="card-body p-4 p-lg-5">
+                                    <div class="row g-4 align-items-center">
+                                        <div class="col-md-8">
+                                            <div class="d-flex align-items-center gap-3 mb-3">
+                                                <div class="fs-1">⚙️</div>
+                                                <div>
+                                                    <h4 class="mb-1">Admin</h4>
+                                                    <p class="text-muted mb-0">Operate tenants, projects, policies, OAuth clients, and audit controls.</p>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex flex-wrap gap-2 small text-muted">
+                                                <span class="badge text-bg-success">User management</span>
+                                                <span class="badge text-bg-dark border border-secondary">OAuth clients</span>
+                                                <span class="badge text-bg-dark border border-secondary">Audit visibility</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 text-md-end">
+                                            <p class="small text-muted mb-3">Intended for operators and admins who need to manage onboarding, access models, and service health.</p>
+                                            <button class="btn btn-success">Admin Login →</button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </a>
                     </div>
 
-                    <div class="col-md-3">
+                    <div>
                         <a href="/organisations/signup" class="text-decoration-none">
                             <div class="card stat-card h-100" style="border-left-color: #22c55e">
-                                <div class="card-body text-center p-4">
-                                    <div class="fs-1 mb-3">🏢</div>
-                                    <h5 class="mb-2">Create an Organisation</h5>
-                                    <p class="text-muted small mb-3">
-                                        Sign up your organisation. Currently free during development.
-                                    </p>
-                                    <button class="btn btn-success btn-sm">Start Signup →</button>
+                                <div class="card-body p-4 p-lg-5">
+                                    <div class="row g-4 align-items-center">
+                                        <div class="col-md-8">
+                                            <div class="d-flex align-items-center gap-3 mb-3">
+                                                <div class="fs-1">🏢</div>
+                                                <div>
+                                                    <h4 class="mb-1">Create an Organisation</h4>
+                                                    <p class="text-muted mb-0">Provision a new tenant and start onboarding users and projects.</p>
+                                                </div>
+                                            </div>
+                                            <div class="d-flex flex-wrap gap-2 small text-muted">
+                                                <span class="badge text-bg-success">Tenant setup</span>
+                                                <span class="badge text-bg-dark border border-secondary">Developer preview</span>
+                                                <span class="badge text-bg-dark border border-secondary">Fast onboarding</span>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 text-md-end">
+                                            <p class="small text-muted mb-3">Best for greenfield installs or test organisations that need a dedicated space quickly.</p>
+                                            <button class="btn btn-success">Start Signup →</button>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </a>
