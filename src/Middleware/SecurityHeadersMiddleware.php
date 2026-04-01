@@ -14,6 +14,11 @@ class SecurityHeadersMiddleware implements MiddlewareInterface
     public function process(ServerRequestInterface $request, RequestHandlerInterface $handler): ResponseInterface
     {
         $response = $handler->handle($request);
+        $path = $request->getUri()->getPath();
+        $formAction = "form-action 'self'";
+        if ($path === '/oauth/authorize') {
+            $formAction = "form-action 'self' https: http://localhost:* http://127.0.0.1:* http://[::1]:*";
+        }
 
         $csp = implode('; ', [
             "default-src 'self'",
@@ -23,7 +28,7 @@ class SecurityHeadersMiddleware implements MiddlewareInterface
             "connect-src 'self'",
             "frame-ancestors 'none'",
             "base-uri 'self'",
-            "form-action 'self'",
+            $formAction,
         ]);
 
         $response = $response

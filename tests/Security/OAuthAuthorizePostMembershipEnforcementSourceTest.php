@@ -17,6 +17,9 @@ class OAuthAuthorizePostMembershipEnforcementSourceTest extends TestCase
         $this->assertStringContainsString('Invalid or inactive OAuth client', $source);
         $this->assertStringContainsString('Client project invalid', $source);
         $this->assertStringContainsString('User not assigned to project at consent submission', $source);
+        $this->assertStringContainsString("\$body['auth_request'] ?? null", $source);
+        $this->assertStringContainsString("SessionManager::set('oauth_auth_request', \$params);", $source);
+        $this->assertStringContainsString("\$this->authRequestValidator->validate(", $source);
 
         $roleCheckPos = strpos($source, 'findByUserAndProject((int) $userId, $project->id)');
         $codeIssuePos = strpos($source, 'createAuthorizationCode([');

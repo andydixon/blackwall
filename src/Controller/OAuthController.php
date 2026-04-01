@@ -184,9 +184,7 @@ class OAuthController
         $validation = $this->authRequestValidator->validate(
             $params,
             $isOidcRequest,
-            $isOidcRequest
-                ? fn(string $nonce): bool => $this->nonceReplayGuard->isReplayAndRemember($client->clientId, $nonce)
-                : null
+            null
         );
         if (!$validation['ok']) {
             $audit->logFail('oauth.authorize.fail', [
@@ -296,6 +294,16 @@ class OAuthController
 
         $params = SessionManager::get('oauth_auth_request');
         if (!is_array($params)) {
+            $postedRequest = $body['auth_request'] ?? null;
+            if (is_array($postedRequest)) {
+                $params = array_map(
+                    static fn (mixed $value): string => is_scalar($value) ? trim((string) $value) : '',
+                    $postedRequest
+                );
+                SessionManager::set('oauth_auth_request', $params);
+            }
+        }
+        if (!is_array($params)) {
             return $this->errorResponse($response, 'invalid_request', 'No authorization request found');
         }
         $clientPublicId = (string) ($params['client_id'] ?? '');
@@ -326,6 +334,30 @@ class OAuthController
             return $this->redirectError($response, $redirectUri, 'invalid_request', 'Client project invalid', $params['state'] ?? null);
         }
 
+        $requestedScopes = isset($params['scope']) ? explode(' ', (string) $params['scope']) : [];
+        $isOidcRequest = in_array('openid', $requestedScopes, true);
+        $validation = $this->authRequestValidator->validate(
+            $params,
+            $isOidcRequest,
+            null
+        );
+        if (!$validation['ok']) {
+            $audit->logFail('oauth.authorize.fail', [
+                'message' => (string) ($validation['description'] ?? $validation['error'] ?? 'Invalid authorization request at consent submission'),
+                'error_code' => (string) ($validation['error'] ?? 'invalid_request'),
+                'oauth_client_id' => $client->id,
+                'oauth_client_public_id' => $client->clientId,
+            ]);
+            SessionManager::remove('oauth_auth_request');
+            return $this->redirectError(
+                $response,
+                $redirectUri,
+                (string) ($validation['error'] ?? 'invalid_request'),
+                (string) ($validation['description'] ?? 'Invalid authorization request'),
+                $params['state'] ?? null
+            );
+        }
+
         if (isset($body['deny'])) {
             $audit->logInfo('oauth.authorize.deny', [
                 'actor_user_id' => $userId,
@@ -339,7 +371,6 @@ class OAuthController
         }
 
         // User approved - generate authorization code
-        $requestedScopes = isset($params['scope']) ? explode(' ', $params['scope']) : [];
         $disallowedScope = OAuthScopePolicy::firstDisallowed($requestedScopes, $client->scopes);
         if ($disallowedScope !== null) {
             $audit->logFail('oauth.authorize.fail', [
@@ -373,7 +404,30 @@ class OAuthController
             SessionManager::remove('oauth_auth_request');
             return $this->redirectError($response, $redirectUri, 'access_denied', 'User not authorized for this project', $params['state'] ?? null);
         }
-        
+
+        if (in_array('openid', $requestedScopes, true)) {
+            $nonce = trim((string) ($params['nonce'] ?? ''));
+            if ($nonce === '' || $this->nonceReplayGuard->isReplayAndRemember($client->clientId, $nonce)) {
+                $audit->logFail('oauth.authorize.fail', [
+                    'message' => 'Nonce replay detected at consent submission',
+                    'error_code' => 'invalid_request',
+                    'actor_user_id' => (int) $userId,
+                    'project_id' => $project->id,
+                    'project_uuid' => $project->uuid,
+                    'oauth_client_id' => $client->id,
+                    'oauth_client_public_id' => $client->clientId,
+                ]);
+                SessionManager::remove('oauth_auth_request');
+                return $this->redirectError(
+                    $response,
+                    $redirectUri,
+                    'invalid_request',
+                    'Nonce replay detected',
+                    $params['state'] ?? null
+                );
+            }
+        }
+
         $code = $this->oauthService->createAuthorizationCode([
             'client_id' => $client->id,
             'user_id' => $userId,

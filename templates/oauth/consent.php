@@ -55,6 +55,16 @@
 
                         <form method="POST" action="/oauth/authorize">
                             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                            <?php foreach (($params ?? []) as $key => $value): ?>
+                                <?php if (!is_scalar($value) && $value !== null): ?>
+                                    <?php continue; ?>
+                                <?php endif; ?>
+                                <input
+                                    type="hidden"
+                                    name="auth_request[<?= htmlspecialchars((string) $key) ?>]"
+                                    value="<?= htmlspecialchars((string) $value) ?>"
+                                >
+                            <?php endforeach; ?>
                             
                             <div class="d-grid gap-2">
                                 <button type="submit" name="approve" class="btn btn-primary btn-lg">

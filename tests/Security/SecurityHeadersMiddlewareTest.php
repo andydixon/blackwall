@@ -31,6 +31,7 @@ class SecurityHeadersMiddlewareTest extends TestCase
         $this->assertSame('strict-origin-when-cross-origin', $response->getHeaderLine('Referrer-Policy'));
         $this->assertStringContainsString("default-src 'self'", $response->getHeaderLine('Content-Security-Policy'));
         $this->assertStringContainsString('https://cdn.jsdelivr.net', $response->getHeaderLine('Content-Security-Policy'));
+        $this->assertStringContainsString("form-action 'self'", $response->getHeaderLine('Content-Security-Policy'));
         $this->assertSame('', $response->getHeaderLine('Strict-Transport-Security'));
     }
 
@@ -47,5 +48,23 @@ class SecurityHeadersMiddlewareTest extends TestCase
         });
 
         $this->assertSame('max-age=31536000; includeSubDomains', $response->getHeaderLine('Strict-Transport-Security'));
+    }
+
+    public function testOAuthAuthorizeAllowsExternalCallbackRedirects(): void
+    {
+        $middleware = new SecurityHeadersMiddleware();
+        $request = (new ServerRequestFactory())->createServerRequest('POST', 'https://example.test/oauth/authorize');
+
+        $response = $middleware->process($request, new class implements RequestHandlerInterface {
+            public function handle(ServerRequestInterface $request): ResponseInterface
+            {
+                return (new ResponseFactory())->createResponse(200);
+            }
+        });
+
+        $this->assertStringContainsString(
+            "form-action 'self' https: http://localhost:* http://127.0.0.1:* http://[::1]:*",
+            $response->getHeaderLine('Content-Security-Policy')
+        );
     }
 }
