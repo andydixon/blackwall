@@ -14,7 +14,8 @@
                 <div class="card shadow-lg">
                     <div class="card-body p-5">
                         <div class="text-center mb-4">
-                            <h1 class="h3 mb-3 fw-bold">🔒 BlackWall Portal</h1>
+                            <img src="/assets/blackwall.svg" alt="BlackWall" height="52" class="mb-3" style="filter: brightness(0) invert(1); opacity: 0.85;">
+                            <h1 class="h3 mb-1 fw-bold">BlackWall Portal</h1>
                             <p class="text-muted">Manage your projects and security keys</p>
                         </div>
 

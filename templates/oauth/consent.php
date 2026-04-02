@@ -1,92 +1,403 @@
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Authorise - BlackWall</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="/assets/css/blackwall.css">
+    <title>Authorise – BlackWall</title>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --bg:           #0b0d12;
+            --surface:      #13161e;
+            --surface-2:    #1a1e28;
+            --border:       rgba(255,255,255,0.08);
+            --border-soft:  rgba(255,255,255,0.05);
+            --accent:       #3b82f6;
+            --accent-glow:  rgba(59,130,246,0.3);
+            --success:      #10b981;
+            --danger:       #ef4444;
+            --text:         #e5e7eb;
+            --muted:        #6b7280;
+            --muted-soft:   #9ca3af;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+            background-image:
+                radial-gradient(ellipse 80% 60% at 50% 0%, rgba(59,130,246,0.06) 0%, transparent 70%);
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+
+        .wrap {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 460px;
+        }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            overflow: hidden;
+            box-shadow:
+                0 0 0 1px rgba(255,255,255,0.03),
+                0 24px 64px rgba(0,0,0,0.55),
+                0 0 80px var(--accent-glow);
+        }
+
+        /* ── Header bar ── */
+        .card-header {
+            padding: 1.75rem 2rem 1.5rem;
+            border-bottom: 1px solid var(--border-soft);
+            text-align: center;
+        }
+
+        /* Connection graphic: BW logo → dots → client */
+        .connection {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-bottom: 1.25rem;
+        }
+
+        .conn-logo {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .conn-logo img.bw-logo {
+            height: 28px;
+            filter: brightness(0) invert(1);
+            opacity: 0.85;
+        }
+
+        .conn-logo .client-initial {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--accent);
+        }
+
+        .conn-dots {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            flex: 1;
+            max-width: 80px;
+        }
+
+        .conn-dots span {
+            height: 2px;
+            flex: 1;
+            background: var(--border);
+            border-radius: 1px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .conn-dots span::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(90deg, transparent, var(--accent), transparent);
+            animation: slide 2s linear infinite;
+        }
+
+        @keyframes slide {
+            from { transform: translateX(-100%); }
+            to   { transform: translateX(100%); }
+        }
+
+        .conn-arrow {
+            color: var(--accent);
+            font-size: 0.9rem;
+            opacity: 0.6;
+        }
+
+        .card-header h1 {
+            font-size: 1.125rem;
+            font-weight: 700;
+            margin-bottom: 0.25rem;
+        }
+
+        .card-header .subtitle {
+            font-size: 0.875rem;
+            color: var(--muted-soft);
+        }
+
+        .card-header .subtitle strong {
+            color: var(--text);
+        }
+
+        /* ── Body ── */
+        .card-body {
+            padding: 1.5rem 2rem;
+        }
+
+        /* Detail rows */
+        .detail-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.875rem;
+            padding: 0.875rem 1rem;
+            background: var(--surface-2);
+            border: 1px solid var(--border-soft);
+            border-radius: 10px;
+            margin-bottom: 0.75rem;
+        }
+
+        .detail-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 8px;
+            background: rgba(59,130,246,0.1);
+            border: 1px solid rgba(59,130,246,0.2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .detail-icon svg {
+            width: 16px;
+            height: 16px;
+            stroke: var(--accent);
+        }
+
+        .detail-text {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .detail-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--muted);
+            margin-bottom: 0.2rem;
+        }
+
+        .detail-value {
+            font-size: 0.9375rem;
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        .detail-sub {
+            font-size: 0.75rem;
+            color: var(--muted);
+            margin-top: 0.15rem;
+            font-family: 'Courier New', monospace;
+        }
+
+        .privilege-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.375rem;
+            background: rgba(59,130,246,0.12);
+            border: 1px solid rgba(59,130,246,0.25);
+            color: var(--accent);
+            font-size: 0.8125rem;
+            font-weight: 600;
+            padding: 0.25em 0.75em;
+            border-radius: 999px;
+        }
+
+        .privilege-level {
+            font-size: 0.75rem;
+            color: var(--muted);
+            margin-top: 0.25rem;
+        }
+
+        /* ── Actions ── */
+        .card-actions {
+            padding: 0 2rem 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 0.625rem;
+        }
+
+        .btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+            width: 100%;
+            padding: 0.8125rem 1.5rem;
+            font-size: 0.9375rem;
+            font-weight: 600;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+            text-decoration: none;
+        }
+
+        .btn:hover { transform: translateY(-1px); }
+        .btn:active { transform: translateY(0); }
+
+        .btn-approve {
+            background: var(--accent);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(59,130,246,0.3);
+        }
+
+        .btn-approve:hover {
+            background: #2563eb;
+            box-shadow: 0 6px 28px rgba(59,130,246,0.45);
+        }
+
+        .btn-deny {
+            background: transparent;
+            color: var(--muted-soft);
+            border: 1px solid var(--border);
+        }
+
+        .btn-deny:hover {
+            background: rgba(239,68,68,0.07);
+            border-color: rgba(239,68,68,0.3);
+            color: #fca5a5;
+        }
+
+        /* ── Notice ── */
+        .notice {
+            text-align: center;
+            font-size: 0.8rem;
+            color: var(--muted);
+            padding: 0 2rem 1.5rem;
+            line-height: 1.5;
+        }
+
+        /* ── Footer ── */
+        .footer {
+            text-align: center;
+            margin-top: 1.5rem;
+            font-size: 0.8rem;
+            color: var(--muted);
+        }
+
+        .footer .sep { margin: 0 0.5em; opacity: 0.4; }
+    </style>
 </head>
-<body class="bg-charcoal">
-    <div class="container">
-        <div class="row justify-content-center align-items-center min-vh-100">
-            <div class="col-md-6">
-                <div class="card shadow-lg bg-dark">
-                    <div class="card-body p-4">
-                        <div class="text-center mb-4">
-                            <h1 class="h4 mb-2">Authorisation Request</h1>
-                            <p class="text-muted">//BlackWall</p>
-                        </div>
+<body>
+    <div class="wrap">
+        <div class="card">
 
-                        <div class="alert alert-info">
-                            <strong><?= htmlspecialchars($client->name) ?></strong> is requesting access to:
-                        </div>
-
-                        <div class="card bg-secondary mb-3">
-                            <div class="card-body">
-                                <h6>Project</h6>
-                                <p class="mb-1"><strong><?= htmlspecialchars($project->name) ?></strong></p>
-                                <small class="text-muted">UUID: <code><?= htmlspecialchars($project->uuid) ?></code></small>
-                            </div>
-                        </div>
-
-                        <div class="card bg-secondary mb-3">
-                            <div class="card-body">
-                                <h6>Your Access Level</h6>
-                                <p class="mb-0">
-                                    <span class="badge bg-primary"><?= htmlspecialchars($privilegeLabel) ?></span>
-                                    <small class="text-muted d-block mt-1">Level <?= (int) $privilegeLevelNumber ?></small>
-                                </p>
-                            </div>
-                        </div>
-
-                        <?php if (!empty($scopes)): ?>
-                        <div class="card bg-secondary mb-4">
-                            <div class="card-body">
-                                <h6>Requested Scopes</h6>
-                                <ul class="list-unstyled mb-0">
-                                    <?php foreach ($scopes as $scope): ?>
-                                        <li>✓ <?= htmlspecialchars($scope) ?></li>
-                                    <?php endforeach; ?>
-                                </ul>
-                            </div>
-                        </div>
-                        <?php endif; ?>
-
-                        <form method="POST" action="/oauth/authorize">
-                            <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
-                            <?php foreach (($params ?? []) as $key => $value): ?>
-                                <?php if (!is_scalar($value) && $value !== null): ?>
-                                    <?php continue; ?>
-                                <?php endif; ?>
-                                <input
-                                    type="hidden"
-                                    name="auth_request[<?= htmlspecialchars((string) $key) ?>]"
-                                    value="<?= htmlspecialchars((string) $value) ?>"
-                                >
-                            <?php endforeach; ?>
-                            
-                            <div class="d-grid gap-2">
-                                <button type="submit" name="approve" class="btn btn-primary btn-lg">
-                                    ✓ Authorize Access
-                                </button>
-                                <button type="submit" name="deny" class="btn btn-outline-danger">
-                                    ✗ Deny Access
-                                </button>
-                            </div>
-                        </form>
-
-                        <div class="mt-3 text-center">
-                            <small class="text-muted">
-                                This will allow the application to act on your behalf with the privilege level shown above.
-                            </small>
-                        </div>
+            <!-- Header: connection graphic -->
+            <div class="card-header">
+                <div class="connection">
+                    <div class="conn-logo">
+                        <img src="/assets/blackwall.svg" class="bw-logo" alt="BlackWall">
+                    </div>
+                    <div class="conn-dots">
+                        <span></span><span></span><span></span>
+                    </div>
+                    <div class="conn-logo">
+                        <span class="client-initial"><?= htmlspecialchars(mb_substr($client->name, 0, 1)) ?></span>
                     </div>
                 </div>
+                <h1>Authorisation Request</h1>
+                <p class="subtitle"><strong><?= htmlspecialchars($client->name) ?></strong> is requesting access to your account</p>
             </div>
+
+            <!-- Details -->
+            <div class="card-body">
+
+                <!-- Project -->
+                <div class="detail-row">
+                    <div class="detail-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="3" width="20" height="14" rx="2"/>
+                            <path d="M8 21h8M12 17v4"/>
+                        </svg>
+                    </div>
+                    <div class="detail-text">
+                        <div class="detail-label">Project</div>
+                        <div class="detail-value"><?= htmlspecialchars($project->name) ?></div>
+                        <div class="detail-sub"><?= htmlspecialchars($project->uuid) ?></div>
+                    </div>
+                </div>
+
+                <!-- Access level -->
+                <div class="detail-row">
+                    <div class="detail-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                        </svg>
+                    </div>
+                    <div class="detail-text">
+                        <div class="detail-label">Your Access Level</div>
+                        <div>
+                            <span class="privilege-badge">
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6L9 17l-5-5"/></svg>
+                                <?= htmlspecialchars($privilegeLabel) ?>
+                            </span>
+                        </div>
+                        <div class="privilege-level">Level <?= (int) $privilegeLevelNumber ?></div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Actions -->
+            <form method="POST" action="/oauth/authorize" id="consentForm">
+                <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>">
+                <?php foreach (($params ?? []) as $key => $value): ?>
+                    <?php if (!is_scalar($value) && $value !== null): ?>
+                        <?php continue; ?>
+                    <?php endif; ?>
+                    <input
+                        type="hidden"
+                        name="auth_request[<?= htmlspecialchars((string) $key) ?>]"
+                        value="<?= htmlspecialchars((string) $value) ?>"
+                    >
+                <?php endforeach; ?>
+
+                <div class="card-actions">
+                    <button type="submit" name="approve" class="btn btn-approve">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+                        Authorise Access
+                    </button>
+                    <button type="submit" name="deny" class="btn btn-deny">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+                        Deny Access
+                    </button>
+                </div>
+            </form>
+
+            <p class="notice">Authorising will allow <strong><?= htmlspecialchars($client->name) ?></strong> to act on your behalf with the access level shown above.</p>
+        </div>
+
+        <div class="footer">
+            Secured by <strong>BlackWall</strong>
         </div>
     </div>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
