@@ -1,0 +1,32 @@
+{{define "doc_body"}}
+<p>Every admin mutation, every OAuth flow, every WebAuthn assertion writes a row to <code>audit_log</code>. The chain is tamper-evident and the export is HMAC-signed.</p>
+
+<h5>Chain integrity</h5>
+<p>Each row's <code>chain_hash</code> is <code>SHA-256(prev_chain_hash + "|" + canonical_payload_json)</code>, computed under a MySQL <code>GET_LOCK('blackwall:audit_chain', 2)</code> so concurrent writes serialise correctly. To verify a chain, walk forward from the first row and recompute each hash; mismatches mark the tampered row.</p>
+
+<h5>What's recorded</h5>
+<ul>
+    <li><code>event_type</code> — dotted action name, e.g. <code>oauth.authorize.approve</code>, <code>admin.user.update</code>.</li>
+    <li><code>outcome</code> — <code>success</code>, <code>fail</code>, or <code>info</code>.</li>
+    <li><code>correlation_id</code> — propagated from the <code>X-Correlation-Id</code> header so a single end-user request can be traced across services.</li>
+    <li><code>ip_address</code> + <code>user_agent</code> — derived from the validated request headers.</li>
+    <li>Actor / target identity columns: user UUID, project UUID, oauth client public ID, WebAuthn credential public ID, target type/id.</li>
+    <li><code>metadata_json</code> — free-form additional context per event (e.g. denied reason, requested scopes).</li>
+</ul>
+
+<h5>Search and filtering</h5>
+<p>The <a href="/admin/audit" class="text-light">audit log</a> page supports filtering by event type (substring), outcome, actor UUID, project UUID, target type, correlation ID, and date range. Non-super-admins are scoped — they only see entries tied to a project they can access, plus system-wide entries with no <code>project_id</code>.</p>
+
+<h5>Export with HMAC manifest</h5>
+<p>Export delivers CSV of the (filtered, scoped) rows followed by a manifest line:</p>
+<pre class="bg-charcoal p-2 mb-2"><code># manifest: rows=&lt;n&gt; generated_at=&lt;rfc3339&gt; hmac_sha256=&lt;hex&gt;</code></pre>
+<p>The HMAC key is <code>audit_export_signing_key</code> from <code>config.yaml</code> (falling back to <code>csrf_secret</code> if unset). Verify the export by HMAC-SHA-256-ing all bytes <em>before</em> the manifest line under the same key and matching the result to the manifest.</p>
+
+<h5>Security indicators on the dashboard</h5>
+<ul>
+    <li><code>security.csrf.fail</code> spike → likely browser misbehaviour or active cross-site attack attempt.</li>
+    <li>Repeated <code>security.ratelimit.hit</code> → either client misuse or brute-force attempt; correlate by <code>ip_address</code>.</li>
+    <li><code>oauth.authorize.fail</code> with <code>error_code=invalid_client</code> from one IP → enumeration attempt.</li>
+    <li>Rising <code>fail</code>-outcome counts on the dashboard breakdown — investigate by event_type.</li>
+</ul>
+{{end}}

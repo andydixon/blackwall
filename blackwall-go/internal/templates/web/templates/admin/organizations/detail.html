@@ -1,0 +1,122 @@
+{{define "content"}}
+<div class="row mt-4 align-items-center">
+    <div class="col">
+        <div class="page-header"><h2>{{.Org.Name}}</h2></div>
+        <p class="text-muted small mb-0"><code class="small">{{.Org.UUID}}</code> · slug <code>{{.Org.Slug}}</code></p>
+    </div>
+    <div class="col-auto">
+        <a href="/admin/organisations" class="btn btn-outline-secondary">Back</a>
+    </div>
+</div>
+
+{{if .Success}}<div class="alert alert-success mt-3">{{.Success}}</div>{{end}}
+{{if .Error}}<div class="alert alert-danger mt-3">{{.Error}}</div>{{end}}
+
+<div class="row mt-3 g-3">
+    <div class="col-md-4">
+        <div class="card text-center"><div class="card-body">
+            <div class="display-6">{{.Org.UserCount}}</div>
+            <div class="text-muted small">Users</div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center"><div class="card-body">
+            <div class="display-6">{{.Org.ProjectCount}}</div>
+            <div class="text-muted small">Projects</div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center"><div class="card-body">
+            <h6>Admin</h6>
+            {{if .Org.AdminUUID}}<a href="/admin/users/{{.Org.AdminUUID}}" class="text-light">{{.Org.AdminLabel}}</a>
+            {{else}}<span class="text-muted">— not assigned —</span>{{end}}
+        </div></div>
+    </div>
+</div>
+
+{{if .CanManage}}
+<div class="card mt-3">
+    <div class="card-header">Settings</div>
+    <div class="card-body">
+        <form method="POST" action="/admin/organisations/{{.Org.UUID}}/update" class="row g-3">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <div class="col-md-6">
+                <label class="form-label">Name</label>
+                <input type="text" class="form-control" name="name" value="{{.Org.Name}}">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Status</label>
+                <select class="form-select" name="status">
+                    <option value="active" {{if eq .Org.Status "active"}}selected{{end}}>Active</option>
+                    <option value="disabled" {{if eq .Org.Status "disabled"}}selected{{end}}>Disabled</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+{{end}}
+
+{{if .CanSwitchAdmin}}
+<div class="card mt-3">
+    <div class="card-header">Switch organisation admin</div>
+    <div class="card-body">
+        <form method="POST" action="/admin/organisations/{{.Org.UUID}}/switch-admin" class="row g-3">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <div class="col-md-9">
+                <label class="form-label">New admin user</label>
+                <select class="form-select" name="user_uuid" required>
+                    <option value="">— select —</option>
+                    {{range .AdminCandidates}}
+                    <option value="{{.UUID}}">{{.Label}}</option>
+                    {{end}}
+                </select>
+            </div>
+            <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-warning w-100">Switch admin</button>
+            </div>
+        </form>
+        <p class="text-muted small mt-2 mb-0">The previous admin keeps their org membership but loses the operator capability matrix derived from being the admin.</p>
+    </div>
+</div>
+{{end}}
+
+<div class="row mt-3 g-3">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">Projects</div>
+            <div class="card-body p-0">
+                <table class="table table-dark table-sm mb-0">
+                    <thead><tr><th>Name</th><th>Status</th></tr></thead>
+                    <tbody>
+                        {{range .Projects}}
+                        <tr><td><a href="/admin/projects/{{.UUID}}" class="text-light">{{.Name}}</a></td><td>{{.Status}}</td></tr>
+                        {{else}}
+                        <tr><td colspan="2" class="text-center text-muted py-3">No projects.</td></tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">Users</div>
+            <div class="card-body p-0">
+                <table class="table table-dark table-sm mb-0">
+                    <thead><tr><th>Display label</th><th>Status</th></tr></thead>
+                    <tbody>
+                        {{range .Users}}
+                        <tr><td><a href="/admin/users/{{.UUID}}" class="text-light">{{.DisplayLabel}}</a></td><td>{{.Status}}</td></tr>
+                        {{else}}
+                        <tr><td colspan="2" class="text-center text-muted py-3">No users.</td></tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}

@@ -1,0 +1,48 @@
+{{define "content"}}
+<div class="row mt-4 align-items-center">
+    <div class="col">
+        <div class="page-header"><h2>Maintenance</h2></div>
+        <p class="text-muted small mb-0">Background jobs that prune expired tokens, codes, and audit log entries past retention.</p>
+    </div>
+    {{if .CanRun}}
+    <div class="col-auto">
+        <form method="POST" action="/admin/maintenance">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <button type="submit" class="btn btn-primary" onclick="return confirm('Trigger a manual maintenance run?')">Run all jobs now</button>
+        </form>
+    </div>
+    {{end}}
+</div>
+
+{{if .Success}}<div class="alert alert-success mt-3">Maintenance run triggered.</div>{{end}}
+{{if .Error}}<div class="alert alert-danger mt-3">{{.Error}}</div>{{end}}
+
+<div class="card mt-3">
+    <div class="card-header">Recent job runs</div>
+    <div class="card-body p-0">
+        <table class="table table-dark table-sm mb-0 align-middle">
+            <thead><tr><th>Job</th><th>Started</th><th>Finished</th><th>Duration</th><th>Rows</th><th>Status</th><th>Error</th></tr></thead>
+            <tbody>
+                {{range .Jobs}}
+                <tr>
+                    <td><code class="small">{{.JobName}}</code></td>
+                    <td class="small text-muted">{{.StartedAt.Format "2006-01-02 15:04:05"}}</td>
+                    <td class="small text-muted">{{if not .FinishedAt.IsZero}}{{.FinishedAt.Format "15:04:05"}}{{else}}—{{end}}</td>
+                    <td class="small">{{.Duration}}</td>
+                    <td>{{.RowsAffected}}</td>
+                    <td>
+                        {{if eq .Status "success"}}<span class="badge bg-success">success</span>
+                        {{else if eq .Status "running"}}<span class="badge bg-info text-dark">running</span>
+                        {{else if eq .Status "fail"}}<span class="badge bg-danger">fail</span>
+                        {{else}}<span class="badge bg-secondary">{{.Status}}</span>{{end}}
+                    </td>
+                    <td class="small text-danger">{{.ErrorMessage}}</td>
+                </tr>
+                {{else}}
+                <tr><td colspan="7" class="text-center text-muted py-4">No maintenance runs recorded yet.</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{end}}

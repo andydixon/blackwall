@@ -1,0 +1,27 @@
+{{define "doc_body"}}
+<p>BlackWall exposes two metric surfaces: a Prometheus-compatible scrape endpoint, and an optional outbound push of every audit event as a counter sample.</p>
+
+<h5>/metrics scrape endpoint</h5>
+<p>Authenticated by bearer token (<code>metrics_token</code> in <code>config.yaml</code>) by default. Set <code>metrics_allow_unauthenticated: true</code> to drop the check — only do this if /metrics is otherwise network-isolated.</p>
+<p>The endpoint emits gauges for: total user count, active user count, project count, active OAuth client count, registered WebAuthn credential count, audit events written today, active access tokens, and pending approval count.</p>
+
+<h5>Event push (vmagent / VictoriaMetrics)</h5>
+<p>If <code>event_metrics_push_enabled: true</code> and <code>event_metrics_push_url</code> is set, every audit event is also pushed asynchronously as a single counter sample to that URL. Format is Prometheus text exposition.</p>
+<table class="table table-dark table-sm">
+    <thead><tr><th>Config key</th><th>Purpose</th></tr></thead>
+    <tbody>
+        <tr><td><code>event_metrics_push_metric_name</code></td><td>Defaults to <code>blackwall_event</code>.</td></tr>
+        <tr><td><code>event_metrics_push_include_outcome</code></td><td>Adds <code>outcome="success|fail|info"</code> label.</td></tr>
+        <tr><td><code>event_metrics_push_static_labels</code></td><td>Comma-separated extra labels e.g. <code>env="prod",region="eu-west"</code>.</td></tr>
+        <tr><td><code>event_metrics_push_timeout_ms</code></td><td>HTTP timeout per push, default 250ms. Pushes happen in goroutines so a slow endpoint doesn't block the audit write.</td></tr>
+    </tbody>
+</table>
+
+<h5>Validation</h5>
+<ol>
+    <li>Trigger a known event (e.g. open the dashboard).</li>
+    <li>Watch <code>vmagent</code>'s ingest log for the new sample.</li>
+    <li>Query <code>blackwall_event{event_type="oauth.authorize.begin"}</code> in your dashboard tool and confirm a new sample arrives.</li>
+</ol>
+<p>If the push silently fails, the audit row still lands in <code>audit_log</code> — there is no inline retry queue. If you need lossless metric delivery, scrape <code>/metrics</code> instead.</p>
+{{end}}

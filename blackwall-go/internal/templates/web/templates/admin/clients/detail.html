@@ -1,0 +1,108 @@
+{{define "content"}}
+<div class="row mt-4 align-items-center">
+    <div class="col">
+        <div class="page-header"><h2>{{.Client.Name}}</h2></div>
+        <p class="text-muted small mb-0">
+            Project: <a href="/admin/projects/{{.Client.ProjectUUID}}" class="text-light">{{.Client.ProjectName}}</a> ·
+            <code>{{.Client.PublicID}}</code>
+            {{if .Client.Confidential}}<span class="badge bg-info text-dark ms-2">Confidential</span>{{else}}<span class="badge bg-warning text-dark ms-2">Public (PKCE)</span>{{end}}
+        </p>
+    </div>
+    <div class="col-auto">
+        <a href="/admin/projects/{{.Client.ProjectUUID}}/clients" class="btn btn-outline-secondary">Back</a>
+    </div>
+</div>
+
+{{if .Success}}<div class="alert alert-success mt-3">{{if eq .Success "created"}}Client created.{{else if eq .Success "updated"}}Client updated.{{else if eq .Success "pending_approval"}}Change submitted for approval.{{else}}{{.Success}}{{end}}</div>{{end}}
+{{if .Error}}<div class="alert alert-danger mt-3">{{.Error}}</div>{{end}}
+
+{{if .NewSecret}}
+<div class="card mt-3 border-warning">
+    <div class="card-body">
+        <h5 class="card-title">Client secret <span class="badge bg-warning text-dark">show once</span></h5>
+        <p class="text-muted small mb-2">Copy and store this securely now. It will not be shown again.</p>
+        <input type="text" class="form-control bg-charcoal border-warning text-warning font-monospace" readonly value="{{.NewSecret}}" onclick="this.select()">
+    </div>
+</div>
+{{end}}
+
+{{if .CanManage}}
+<form method="POST" action="/admin/clients/{{.Client.PublicID}}/update" class="card mt-3">
+    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+    <div class="card-header">Settings</div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-8">
+                <label class="form-label">Name</label>
+                <input type="text" class="form-control" name="name" value="{{.Client.Name}}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Status</label>
+                <select class="form-select" name="status">
+                    <option value="active" {{if eq .Client.Status "active"}}selected{{end}}>Active</option>
+                    <option value="disabled" {{if eq .Client.Status "disabled"}}selected{{end}}>Disabled</option>
+                </select>
+                {{if not .CanDirectStatus}}<div class="form-text text-warning">Status changes require approval.</div>{{end}}
+            </div>
+
+            <div class="col-md-12">
+                <label class="form-label">Redirect URIs <span class="text-muted">(one per line)</span></label>
+                <textarea class="form-control font-monospace" name="redirect_uris" rows="3">{{range .Client.RedirectURIs}}{{.}}
+{{end}}</textarea>
+            </div>
+
+            <div class="col-md-6">
+                <label class="form-label">Allowed scopes <span class="text-muted">(one per line)</span></label>
+                <textarea class="form-control font-monospace" name="scopes" rows="4">{{range .Client.Scopes}}{{.}}
+{{end}}</textarea>
+            </div>
+            <div class="col-md-6">
+                <div class="row g-3">
+                    <div class="col-12">
+                        <label class="form-label">Access token type</label>
+                        <select class="form-select" name="access_token_type">
+                            <option value="jwt" {{if eq .Client.AccessTokenType "jwt"}}selected{{end}}>JWT</option>
+                            <option value="opaque" {{if eq .Client.AccessTokenType "opaque"}}selected{{end}}>Opaque</option>
+                        </select>
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Access lifetime (s)</label>
+                        <input type="number" class="form-control" name="access_token_lifetime" value="{{.Client.AccessTokenLifetime}}">
+                    </div>
+                    <div class="col-6">
+                        <label class="form-label">Refresh lifetime (s)</label>
+                        <input type="number" class="form-control" name="refresh_token_lifetime" value="{{.Client.RefreshTokenLifetime}}">
+                    </div>
+                    <div class="col-12">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="oidcEnabled" name="oidc_enabled" value="1" {{if .Client.OIDCEnabled}}checked{{end}}>
+                            <label class="form-check-label" for="oidcEnabled">OIDC enabled (issue ID tokens)</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {{if not .CanDirectSettings}}
+        <div class="alert alert-warning mt-3 mb-0 small">Settings changes will be submitted for approval — you don't hold update_client_settings_direct.</div>
+        {{end}}
+    </div>
+    <div class="card-footer text-end">
+        <button type="submit" class="btn btn-primary">Save changes</button>
+    </div>
+</form>
+{{else}}
+<div class="card mt-3">
+    <div class="card-body">
+        <dl class="row mb-0">
+            <dt class="col-sm-3">Status</dt><dd class="col-sm-9">{{.Client.Status}}</dd>
+            <dt class="col-sm-3">Token type</dt><dd class="col-sm-9">{{.Client.AccessTokenType}}</dd>
+            <dt class="col-sm-3">Access lifetime</dt><dd class="col-sm-9">{{.Client.AccessTokenLifetime}}s</dd>
+            <dt class="col-sm-3">Refresh lifetime</dt><dd class="col-sm-9">{{.Client.RefreshTokenLifetime}}s</dd>
+            <dt class="col-sm-3">OIDC enabled</dt><dd class="col-sm-9">{{.Client.OIDCEnabled}}</dd>
+            <dt class="col-sm-3">Scopes</dt><dd class="col-sm-9"><code>{{range .Client.Scopes}}{{.}} {{end}}</code></dd>
+            <dt class="col-sm-3">Redirect URIs</dt><dd class="col-sm-9"><code>{{range .Client.RedirectURIs}}{{.}}<br>{{end}}</code></dd>
+        </dl>
+    </div>
+</div>
+{{end}}
+{{end}}

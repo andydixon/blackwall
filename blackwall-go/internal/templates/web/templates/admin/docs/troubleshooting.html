@@ -1,0 +1,32 @@
+{{define "doc_body"}}
+<h5>Triage order</h5>
+<ol>
+    <li>Check <a href="/admin/audit" class="text-light">/admin/audit</a> filtered by the user's UUID, the failing event_type, and a 5-minute window. The <code>metadata_json</code> column usually has the precise reason.</li>
+    <li>Cross-reference the user's correlation ID. If they were given an error trace code, decode it at <a href="/admin/error-trace" class="text-light">/admin/error-trace</a>.</li>
+    <li>Check the dashboard for a recent spike in <code>fail</code> events of the relevant type — the issue may not be specific to one user.</li>
+</ol>
+
+<h5>Common faults</h5>
+<table class="table table-dark table-sm">
+    <thead><tr><th>Symptom</th><th>Likely cause</th><th>Action</th></tr></thead>
+    <tbody>
+        <tr><td>OAuth flow ends with <code>access_denied</code></td><td>User has no project assignment, or project status is <code>inactive</code>.</td><td>Open the user detail page and add an assignment.</td></tr>
+        <tr><td>OAuth flow ends with <code>invalid_request: nonce required</code></td><td>OIDC client didn't send <code>nonce</code>.</td><td>Configure the client to include <code>nonce</code>; required for openid scope.</td></tr>
+        <tr><td>OAuth flow ends with <code>invalid_request: Nonce replay detected</code></td><td>Client reused a nonce from a previous flow.</td><td>Client must generate a fresh per-session nonce. See OIDC §3.1.2.1.</td></tr>
+        <tr><td>WebAuthn assertion fails on a known-good credential</td><td>Sign-counter regression — possible cloned authenticator.</td><td>Delete that credential and ask the user to re-enrol on the original device.</td></tr>
+        <tr><td>WebAuthn assertion fails with "user verification flag not set"</td><td>Authenticator doesn't perform UV (e.g. legacy U2F key).</td><td>Use a UV-capable authenticator (built-in biometrics or a security key with PIN).</td></tr>
+        <tr><td>Form submissions silently fail</td><td>CSRF token mismatch — usually caused by the user opening the form in one tab and submitting after another tab logged them out.</td><td>Ask the user to refresh the form and resubmit.</td></tr>
+        <tr><td>CryptBin item refuses to decrypt</td><td>KEK was rotated without rewrap, or the bound credential was deleted.</td><td>Check <code>kek_version</code> in the item meta; if it doesn't match the configured KEK, the item is unrecoverable.</td></tr>
+        <tr><td>Unauthenticated 429 on <code>/oauth/token</code></td><td>Per-IP rate limit hit (default 60/min).</td><td>Investigate <code>security.ratelimit.hit</code> entries for that IP — could be runaway client retry or an attack.</td></tr>
+        <tr><td>Audit chain hash mismatch reported</td><td>Database row was edited or rolled back outside of normal application flow.</td><td>Treat as an integrity incident; restore from backup and audit who had write access.</td></tr>
+    </tbody>
+</table>
+
+<h5>Diagnostic surfaces</h5>
+<ul>
+    <li><a href="/admin/scope" class="text-light">/admin/scope</a> — what your role can see and act on right now.</li>
+    <li><a href="/admin/error-trace" class="text-light">/admin/error-trace</a> — decode the short opaque code shown to end-users on error pages.</li>
+    <li><a href="/admin/maintenance" class="text-light">/admin/maintenance</a> — last run results for each cleanup job.</li>
+    <li><code>/metrics</code> + your scrape stack — quantitative views.</li>
+</ul>
+{{end}}

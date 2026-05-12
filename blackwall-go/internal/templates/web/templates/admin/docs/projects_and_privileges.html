@@ -1,0 +1,30 @@
+{{define "doc_body"}}
+<p>Projects are the unit of OAuth client ownership and user access. Every project lives inside an organisation, holds its own privilege ladder, and has its own set of OAuth clients.</p>
+
+<h5>Privilege levels</h5>
+<p>Each project ships with five default rungs:</p>
+<table class="table table-dark table-sm">
+    <thead><tr><th>Level</th><th>Default name</th><th>Convention</th></tr></thead>
+    <tbody>
+        <tr><td>1</td><td>Owner</td><td>Project lifecycle decisions; the legacy super-admin signal.</td></tr>
+        <tr><td>2</td><td>Administrator</td><td>Full operations within the project.</td></tr>
+        <tr><td>3</td><td>Editor</td><td>Routine writes.</td></tr>
+        <tr><td>4</td><td>Member</td><td>Read + limited write.</td></tr>
+        <tr><td>5</td><td>Viewer</td><td>Read-only.</td></tr>
+    </tbody>
+</table>
+<p>You can rename rungs, add more, or delete unused ones. Lower numbers always carry more privilege than higher numbers.</p>
+
+<h5>Assignments</h5>
+<p>An assignment binds one user to one project at one privilege level. A user without an assignment cannot complete an OAuth flow against any client in that project — even if their credential is valid, the authorise endpoint returns <code>access_denied</code>.</p>
+
+<h5>How privilege flows into tokens</h5>
+<ul>
+    <li>Access tokens (JWT type) carry <code>privilege_level</code> and <code>privilege_name</code> claims.</li>
+    <li>Opaque access tokens carry the same fields in the database row; <code>/oauth/introspect</code> exposes them.</li>
+    <li>Downstream applications should authorise their own actions on the basis of these claims rather than blanket trust.</li>
+</ul>
+
+<h5>Approval gates</h5>
+<p>Operators don't have <code>assignment_mutations_direct</code>, so creating, updating, or removing assignments creates an approval request that another super-admin or operator with that capability must decide. The approval payload contains the full proposed change so reviewers can see exactly what was requested.</p>
+{{end}}

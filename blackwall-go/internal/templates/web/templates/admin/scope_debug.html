@@ -1,0 +1,96 @@
+{{define "content"}}
+<div class="row mt-4">
+    <div class="col">
+        <div class="page-header"><h2>Scope debugger</h2></div>
+        <p class="text-muted small mb-0">Effective view of what your current admin role can see and do.</p>
+    </div>
+</div>
+
+<div class="row mt-3 g-3">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">Identity</div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-5">Internal user ID</dt><dd class="col-sm-7">{{.Scope.UserID}}</dd>
+                    <dt class="col-sm-5">Admin role</dt><dd class="col-sm-7"><span class="badge bg-info text-dark">{{.Scope.AdminRole}}</span></dd>
+                    <dt class="col-sm-5">Is admin</dt><dd class="col-sm-7">{{.Scope.IsAdmin}}</dd>
+                    <dt class="col-sm-5">Is super admin</dt><dd class="col-sm-7">{{.Scope.IsSuperAdmin}}</dd>
+                </dl>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">Visible orgs &amp; projects</div>
+            <div class="card-body">
+                <h6 class="small text-uppercase text-muted">Organisations ({{len .Scope.OrganizationUUIDs}})</h6>
+                <ul class="font-monospace small mb-3">
+                    {{range .Scope.OrganizationUUIDs}}<li>{{.}}</li>{{else}}<li class="text-muted">none</li>{{end}}
+                </ul>
+                <h6 class="small text-uppercase text-muted">Projects ({{len .Scope.ProjectUUIDs}})</h6>
+                <ul class="font-monospace small mb-0">
+                    {{range .Scope.ProjectUUIDs}}<li>{{.}}</li>{{else}}<li class="text-muted">none</li>{{end}}
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">Effective capabilities</div>
+    <div class="card-body">
+        <div class="row">
+            {{range .EffectiveCapabilities}}
+            <div class="col-md-3"><code class="small">{{.}}</code></div>
+            {{else}}
+            <div class="col-12 text-muted">No capabilities — your role grants nothing.</div>
+            {{end}}
+        </div>
+    </div>
+</div>
+
+<div class="row mt-3 g-3">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">Registered OAuth scopes</div>
+            <div class="card-body p-0">
+                <table class="table table-dark table-sm mb-0">
+                    <thead><tr><th>Name</th><th>Default</th><th>Description</th></tr></thead>
+                    <tbody>
+                        {{range .RegisteredScopes}}
+                        <tr>
+                            <td><code class="small">{{.Name}}</code></td>
+                            <td>{{if .IsDefault}}<span class="badge bg-success">yes</span>{{else}}<span class="text-muted">no</span>{{end}}</td>
+                            <td class="small text-muted">{{.Description}}</td>
+                        </tr>
+                        {{else}}
+                        <tr><td colspan="3" class="text-center text-muted py-3">No scopes registered.</td></tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">Per-client scope allow-list</div>
+            <div class="card-body p-0">
+                <table class="table table-dark table-sm mb-0">
+                    <thead><tr><th>Project / Client</th><th>Allowed scopes</th></tr></thead>
+                    <tbody>
+                        {{range .ClientScopes}}
+                        <tr>
+                            <td class="small">{{.ProjectName}} / <a href="/admin/clients/{{.ClientPublicID}}" class="text-light">{{.ClientName}}</a></td>
+                            <td class="small font-monospace">{{range .Scopes}}{{.}} {{end}}</td>
+                        </tr>
+                        {{else}}
+                        <tr><td colspan="2" class="text-center text-muted py-3">No clients in scope.</td></tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}

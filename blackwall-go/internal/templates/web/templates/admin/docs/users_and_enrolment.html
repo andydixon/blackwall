@@ -1,0 +1,33 @@
+{{define "doc_body"}}
+<p>Users in BlackWall have no passwords. They authenticate exclusively with WebAuthn (passkeys), and they're created in two stages: profile first, then a one-time enrolment link the user follows to register their first credential.</p>
+
+<h5>Lifecycle</h5>
+<ol>
+    <li>Operator fills <a href="/admin/users/create" class="text-light">/admin/users/create</a>: display label, optional email, organisation, status.</li>
+    <li>BlackWall generates a 32-byte enrolment token, valid for 24 hours, stored in <code>system_config</code>.</li>
+    <li>Operator copies the enrolment URL from the user's detail page and sends it out-of-band (email, signal, etc.).</li>
+    <li>The user opens the URL in a WebAuthn-capable browser and registers their authenticator.</li>
+    <li>From that point on, the user can sign into the portal at <code>/portal/login</code> and any OAuth client whose project they're assigned to.</li>
+</ol>
+
+<h5>Status meanings</h5>
+<ul>
+    <li><code>active</code> — can sign in, holds tokens, appears in <code>/portal</code>.</li>
+    <li><code>inactive</code> — cannot sign in; existing tokens still work until they expire (use revocation if you need immediate effect).</li>
+    <li><code>suspended</code> — cannot sign in; existing tokens are rejected at validation time.</li>
+</ul>
+
+<h5>WebAuthn credentials</h5>
+<p>Each user can register multiple authenticators. Sign-counter regression is treated as a cloned-credential indicator and the assertion is rejected. Both the User Present (UP) and User Verification (UV) flags are required at every assertion.</p>
+
+<h5>When a user loses their authenticator</h5>
+<ol>
+    <li>Operator opens the user's detail page.</li>
+    <li>Operator deletes the lost credential. (<code>operator</code> role: this enqueues an approval; <code>super_admin</code> applies it directly.)</li>
+    <li>Operator generates a fresh enrolment link from the same page and sends it to the user.</li>
+    <li>User registers a replacement credential and they're back in.</li>
+</ol>
+
+<h5>Removing access permanently</h5>
+<p>Set the user to <code>suspended</code>. Existing access tokens stop being honoured at the next userinfo / introspect call. To purge all credentials, delete each one from the user detail page; the user record itself is preserved so audit history remains attributable.</p>
+{{end}}

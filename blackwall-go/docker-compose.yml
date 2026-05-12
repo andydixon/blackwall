@@ -1,0 +1,34 @@
+services:
+  blackwall:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./config.yaml:/etc/blackwall/config.yaml:ro
+      - cryptbin_data:/var/lib/blackwall/cryptbin
+    environment:
+      - SERVER_ADDR=:8080
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: blackwall
+      MYSQL_USER: blackwall
+      MYSQL_PASSWORD: blackwallpass
+    volumes:
+      - db_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "blackwall", "-pblackwallpass"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  cryptbin_data:
+  db_data:

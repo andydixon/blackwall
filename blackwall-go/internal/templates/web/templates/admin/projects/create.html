@@ -1,0 +1,36 @@
+{{define "content"}}
+<div class="row mt-4">
+    <div class="col-md-8 offset-md-2">
+        <div class="page-header"><h2>Create Project</h2></div>
+        {{if .Error}}<div class="alert alert-danger">{{.Error}}</div>{{end}}
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" action="/admin/projects/create">
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    <div class="mb-3">
+                        <label class="form-label">Project name</label>
+                        <input type="text" class="form-control" name="name" required maxlength="120">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Organisation</label>
+                        <select class="form-select" name="organization_uuid" required>
+                            <option value="">— select —</option>
+                            {{range .Organizations}}
+                            <option value="{{.UUID}}">{{.Name}}</option>
+                            {{end}}
+                        </select>
+                    </div>
+                    <p class="text-muted small">
+                        The five default privilege levels (Owner / Administrator / Editor / Member / Viewer)
+                        will be created automatically. You can rename or extend them after the project exists.
+                    </p>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">Create project</button>
+                        <a href="/admin/projects" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{{end}}

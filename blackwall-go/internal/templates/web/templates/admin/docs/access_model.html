@@ -1,0 +1,39 @@
+{{define "doc_body"}}
+<p>BlackWall's authorisation model has three layers:</p>
+<ol>
+    <li><strong>Admin role</strong> — one of <code>super_admin</code>, <code>operator</code>, or <code>auditor</code>. Each role grants a fixed set of named capabilities.</li>
+    <li><strong>Scope</strong> — for non-super-admins, the set of organisations and projects the actor can see and act on. Super-admins are scope-unbounded.</li>
+    <li><strong>Approval gates</strong> — capabilities ending in <code>_direct</code> let the actor mutate immediately; otherwise the change becomes an approval request.</li>
+</ol>
+
+<h5>Roles</h5>
+<table class="table table-dark table-sm">
+    <thead><tr><th>Role</th><th>Headline</th></tr></thead>
+    <tbody>
+        <tr><td><span class="badge bg-info text-dark">super_admin</span></td><td>Unrestricted scope, every capability, including direct status changes and credential deletes.</td></tr>
+        <tr><td><span class="badge bg-info text-dark">operator</span></td><td>Day-to-day administration scoped to organisations they own. Mutations route through approvals.</td></tr>
+        <tr><td><span class="badge bg-info text-dark">auditor</span></td><td>Read-only: audit log, dashboard, scope debugger, error trace decoder, docs.</td></tr>
+    </tbody>
+</table>
+<p>The complete capability list per role lives at <a href="/admin/roles" class="text-light">Admin roles &gt; Capability matrix</a>.</p>
+
+<h5>Scope</h5>
+<p>Scope is computed per-request from the user's organisation memberships:</p>
+<ul>
+    <li>If the user has the <code>super_admin</code> role <em>or</em> is a level-1 member of the legacy super-admin project, they see everything.</li>
+    <li>Otherwise, scope is the union of organisations where they are listed as <code>admin_user_id</code>, plus all projects belonging to those organisations.</li>
+</ul>
+<p>Scope is enforced at every list query and at every per-resource detail/update handler. An out-of-scope project URL returns 403, not 404, so URL-guessing is a deliberate signal.</p>
+
+<h5>Approval gates</h5>
+<p>The following mutations route through the approval workflow when the actor lacks the matching <code>_direct</code> capability:</p>
+<ul>
+    <li>User status changes (<code>change_user_status_direct</code>)</li>
+    <li>WebAuthn credential deletions (<code>delete_credentials_direct</code>)</li>
+    <li>Project name and status changes (<code>update_project_settings_direct</code>, <code>change_project_status_direct</code>)</li>
+    <li>Privilege level deletions (<code>delete_privilege_direct</code>)</li>
+    <li>OAuth client settings and status changes (<code>update_client_settings_direct</code>, <code>change_client_status_direct</code>)</li>
+    <li>All assignment mutations (<code>assignment_mutations_direct</code>)</li>
+</ul>
+<p>Request → review → decision is end-to-end audited; see <a href="/admin/docs/approvals" class="text-light">Approvals Workflow</a>.</p>
+{{end}}

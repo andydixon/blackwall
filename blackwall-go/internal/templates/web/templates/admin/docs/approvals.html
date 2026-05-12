@@ -1,0 +1,36 @@
+{{define "doc_body"}}
+<p>The approval workflow is a deliberate friction layer for sensitive admin actions. When an actor without the matching <code>_direct</code> capability attempts a mutation, BlackWall persists an approval request instead of executing the change.</p>
+
+<h5>Lifecycle of a request</h5>
+<ol>
+    <li>Operator submits a mutation through a normal admin form.</li>
+    <li>BlackWall stores an <code>approval_requests</code> row with the full proposed change in <code>payload_json</code>, status <code>pending</code>.</li>
+    <li>An actor with <code>decide_approvals</code> reviews the request at <a href="/admin/approvals" class="text-light">/admin/approvals</a>.</li>
+    <li>The decision (approved / rejected) updates the row and logs <code>admin.approval.decision.approved</code> or <code>admin.approval.decision.denied</code> with the reviewer's user ID and decision note.</li>
+    <li>The original mutation must then be re-applied by an actor with the <code>_direct</code> capability — approvals do not auto-apply changes.</li>
+</ol>
+
+<h5>What gets enqueued</h5>
+<p>See the <a href="/admin/docs/access-model" class="text-light">Access Model</a> page for the full list. Common cases:</p>
+<ul>
+    <li>User status changes</li>
+    <li>WebAuthn credential deletions</li>
+    <li>Project / OAuth client setting changes</li>
+    <li>All assignment mutations (operators always need approval here)</li>
+    <li>Privilege level deletions</li>
+</ul>
+
+<h5>Cancellation</h5>
+<p>The original requester can cancel their own pending request from the approvals page. Cancellation is logged as <code>admin.approval.cancelled</code> with the supplied note.</p>
+
+<h5>SLA monitoring</h5>
+<p>The dashboard surfaces:</p>
+<ul>
+    <li>Today / 7-day / 30-day decision counts per status.</li>
+    <li>Decision latency: median and P95 in seconds.</li>
+    <li>Number of pending requests older than the warning threshold (<code>admin_approval_pending_warning_days</code>, default 3).</li>
+</ul>
+
+<h5>Decision notes</h5>
+<p>When rejecting, fill in the short <code>failure_reason</code> field — it appears in the requester's view and helps operators self-serve fixes. Long-form context goes in the <code>note</code> field, which is visible to anyone reviewing the request.</p>
+{{end}}

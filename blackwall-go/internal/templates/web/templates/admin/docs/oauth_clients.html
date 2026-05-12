@@ -1,0 +1,44 @@
+{{define "doc_body"}}
+<p>OAuth clients are downstream applications that ask BlackWall to authenticate users. Every client is registered against exactly one project and inherits that project's user pool.</p>
+
+<h5>Client types</h5>
+<table class="table table-dark table-sm">
+    <thead><tr><th>Type</th><th>When to choose</th><th>Token endpoint auth</th></tr></thead>
+    <tbody>
+        <tr>
+            <td><span class="badge bg-info text-dark">Confidential</span></td>
+            <td>Server-side applications that can keep a secret (Go services, PHP backends, server-side rendered apps).</td>
+            <td><code>client_secret_basic</code> or <code>client_secret_post</code></td>
+        </tr>
+        <tr>
+            <td><span class="badge bg-warning text-dark">Public</span></td>
+            <td>Browser SPAs and native mobile/desktop apps that cannot keep a secret.</td>
+            <td><code>none</code> — security comes entirely from PKCE</td>
+        </tr>
+    </tbody>
+</table>
+
+<h5>Required parameters at /oauth/authorize</h5>
+<ul>
+    <li><code>response_type=code</code> — only the Authorisation Code flow is supported.</li>
+    <li><code>client_id</code> — the public ID shown on the client detail page.</li>
+    <li><code>redirect_uri</code> — must be one of the URIs registered on the client (exact match including scheme, host, port, path).</li>
+    <li><code>code_challenge</code> + <code>code_challenge_method=S256</code> — PKCE is mandatory for every client, public or confidential.</li>
+    <li><code>scope</code> — space-separated; subset of the client's allow-list.</li>
+    <li><code>nonce</code> — required when <code>openid</code> is in scope.</li>
+    <li><code>state</code> — strongly recommended for CSRF protection on the redirect.</li>
+</ul>
+
+<h5>Token type choice</h5>
+<p><strong>JWT</strong> is the default. JWTs are signed RS256, include scope, project_id, privilege_level/name, and (for ID tokens) <code>at_hash</code> per OIDC §3.1.3.6. They are also stored as a hash in <code>oauth_access_tokens</code> so revocation works.</p>
+<p><strong>Opaque</strong> stores the random token in the database and forces every authenticated request through <code>/oauth/introspect</code>. Pick this if downstream services need real-time revocation visibility and don't mind the round-trip.</p>
+
+<h5>Refresh tokens</h5>
+<p>Issued only when the client requests <code>offline_access</code>. Each refresh is single-use: the old token is revoked and a new one returned. Re-using a refresh token triggers <em>token family revocation</em> — every active access and refresh token for that user/project/client triple is revoked, in line with current OAuth 2.1 best-practice.</p>
+
+<h5>Approval gates</h5>
+<p>Editing client name, redirect URIs, scopes, token lifetimes, or status all route through approval if the actor lacks <code>update_client_settings_direct</code>. The proposed and current settings are both included in the approval payload.</p>
+
+<h5>Discovery</h5>
+<p>The OIDC discovery document at <code>/.well-known/openid-configuration</code> advertises <code>response_types_supported=["code"]</code>, <code>code_challenge_methods_supported=["S256"]</code>, and <code>token_endpoint_auth_methods_supported=["client_secret_post", "client_secret_basic", "none"]</code>. Clients that ignore this and try other flows will be rejected at <code>/oauth/authorize</code>.</p>
+{{end}}

@@ -1,0 +1,75 @@
+{{define "content"}}
+<div class="row mt-4 align-items-center">
+    <div class="col">
+        <div class="page-header"><h2>Privilege levels</h2></div>
+        <p class="text-muted small mb-0">Project: <a href="/admin/projects/{{.Project.UUID}}" class="text-light">{{.Project.Name}}</a></p>
+    </div>
+    <div class="col-auto">
+        <a href="/admin/projects/{{.Project.UUID}}" class="btn btn-outline-secondary">Back</a>
+    </div>
+</div>
+
+{{if .Success}}<div class="alert alert-success mt-3">{{.Success}}</div>{{end}}
+{{if .Error}}<div class="alert alert-danger mt-3">{{.Error}}</div>{{end}}
+
+<div class="card mt-3">
+    <div class="card-header">Existing levels</div>
+    <div class="card-body p-0">
+        <table class="table table-dark table-sm mb-0 align-middle">
+            <thead><tr><th style="width:80px">Level</th><th>Name</th><th>Seats</th><th></th></tr></thead>
+            <tbody>
+                {{range .Levels}}
+                <tr>
+                    <td><span class="badge bg-secondary">{{.Level}}</span></td>
+                    <td>
+                        {{if $.CanManage}}
+                        <form method="POST" action="/admin/privileges/{{.ID}}/update" class="d-flex gap-2">
+                            <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                            <input type="text" class="form-control form-control-sm" name="name" value="{{.Name}}" required>
+                            <button class="btn btn-sm btn-outline-primary" type="submit">Save</button>
+                        </form>
+                        {{else}}
+                        {{.Name}}
+                        {{end}}
+                    </td>
+                    <td><span class="badge bg-info text-dark">{{.SeatCount}}</span></td>
+                    <td class="text-end">
+                        {{if $.CanManage}}
+                        <form method="POST" action="/admin/privileges/{{.ID}}/delete" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                            <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this privilege level?')" type="submit">Delete</button>
+                        </form>
+                        {{end}}
+                    </td>
+                </tr>
+                {{else}}
+                <tr><td colspan="4" class="text-center text-muted py-4">No privilege levels defined.</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{{if .CanManage}}
+<div class="card mt-3">
+    <div class="card-header">Add level</div>
+    <div class="card-body">
+        <form method="POST" action="/admin/projects/{{.Project.UUID}}/privileges/create" class="row g-3">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <div class="col-md-3">
+                <label class="form-label">Level number</label>
+                <input type="number" class="form-control" name="level" min="1" max="99" required>
+            </div>
+            <div class="col-md-7">
+                <label class="form-label">Display name</label>
+                <input type="text" class="form-control" name="name" required maxlength="80">
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-primary w-100">Add</button>
+            </div>
+        </form>
+        <p class="text-muted small mt-2 mb-0">Lower-numbered levels carry more privileges. Level 1 is conventionally the project owner.</p>
+    </div>
+</div>
+{{end}}
+{{end}}

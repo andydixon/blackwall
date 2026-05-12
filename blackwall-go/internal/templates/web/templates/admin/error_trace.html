@@ -1,0 +1,36 @@
+{{define "content"}}
+<div class="row mt-4">
+    <div class="col-md-8 offset-md-2">
+        <div class="page-header"><h2>Error trace decoder</h2></div>
+        <p class="text-muted small">Paste an opaque trace code shown to an end-user to reveal the original event identifier you can search the audit log for.</p>
+
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" action="/admin/error-trace" class="row g-3">
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    <div class="col-12">
+                        <label class="form-label">Trace code</label>
+                        <textarea class="form-control font-monospace" name="code" rows="2" required>{{.Code}}</textarea>
+                    </div>
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">Decode</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {{if .DecodeError}}
+        <div class="alert alert-danger mt-3">Decode failed: {{.DecodeError}}</div>
+        {{end}}
+
+        {{if .Decoded}}
+        <div class="card mt-3 border-success">
+            <div class="card-header">Decoded</div>
+            <div class="card-body">
+                <pre class="mb-0 text-success"><code>{{.Decoded}}</code></pre>
+            </div>
+        </div>
+        {{end}}
+    </div>
+</div>
+{{end}}

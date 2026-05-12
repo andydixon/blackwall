@@ -1,0 +1,70 @@
+{{define "doc_body"}}
+<h5>Configuration keys (config.yaml / env vars)</h5>
+<table class="table table-dark table-sm">
+    <thead><tr><th>Key</th><th>Default</th><th>Notes</th></tr></thead>
+    <tbody>
+        <tr><td><code>app_url</code></td><td>—</td><td>Public origin. Used as OIDC <code>issuer</code> and as the WebAuthn RP origin.</td></tr>
+        <tr><td><code>server_addr</code></td><td><code>:8080</code></td><td>HTTP listen address.</td></tr>
+        <tr><td><code>db_*</code></td><td>—</td><td>MySQL connection.</td></tr>
+        <tr><td><code>session_secret</code></td><td>—</td><td>64-char hex; used to derive cookie hash + encryption keys.</td></tr>
+        <tr><td><code>csrf_secret</code></td><td>—</td><td>64-char hex; HMAC key for CSRF tokens. Also default <code>error_trace_key</code> + audit export key.</td></tr>
+        <tr><td><code>session_lifetime</code></td><td><code>7200</code></td><td>Absolute session TTL in seconds.</td></tr>
+        <tr><td><code>session_idle_timeout</code></td><td><code>1800</code></td><td>Idle TTL in seconds.</td></tr>
+        <tr><td><code>session_bind_user_agent</code></td><td><code>true</code></td><td>Invalidate session if UA hash changes.</td></tr>
+        <tr><td><code>webauthn_rp_id</code></td><td>hostname of <code>app_url</code></td><td>WebAuthn relying-party ID.</td></tr>
+        <tr><td><code>cryptbin_kek_base64</code></td><td>—</td><td>Base64 of 32-byte KEK. Required for any CryptBin operation.</td></tr>
+        <tr><td><code>cryptbin_kek_version</code></td><td><code>v1</code></td><td>Tag persisted in each CryptBin item; bumps imply rotation.</td></tr>
+        <tr><td><code>cryptbin_storage_path</code></td><td><code>/var/lib/blackwall/cryptbin</code></td><td>Filesystem root for blob + meta files.</td></tr>
+        <tr><td><code>metrics_token</code></td><td>—</td><td>Bearer token for <code>/metrics</code>.</td></tr>
+        <tr><td><code>trust_proxy</code></td><td><code>false</code></td><td>If true, X-Forwarded-For from <code>trusted_proxies</code> sources is honoured.</td></tr>
+        <tr><td><code>trusted_proxies</code></td><td>—</td><td>Comma-separated IPs and CIDRs.</td></tr>
+        <tr><td><code>rate_limit_enabled</code></td><td><code>true</code></td><td>DB-backed per-IP rate limiting.</td></tr>
+        <tr><td><code>audit_retention_days</code></td><td><code>180</code></td><td>0 disables retention pruning.</td></tr>
+        <tr><td><code>audit_export_signing_key</code></td><td>(falls back to csrf_secret)</td><td>HMAC key for the export manifest line.</td></tr>
+        <tr><td><code>error_trace_key</code></td><td>(falls back to csrf_secret)</td><td>Symmetric key for /admin/error-trace decoding.</td></tr>
+        <tr><td><code>approval_pending_max_age_days</code></td><td><code>14</code></td><td>Pending approval requests older than this are auto-cancelled.</td></tr>
+        <tr><td><code>admin_approval_pending_warning_days</code></td><td><code>3</code></td><td>Dashboard SLA warning threshold.</td></tr>
+        <tr><td><code>event_metrics_push_*</code></td><td>—</td><td>See Metrics page.</td></tr>
+    </tbody>
+</table>
+
+<h5>Route index</h5>
+<table class="table table-dark table-sm">
+    <thead><tr><th>Method</th><th>Path</th><th>Purpose</th></tr></thead>
+    <tbody>
+        <tr><td>GET</td><td><code>/.well-known/openid-configuration</code></td><td>OIDC discovery</td></tr>
+        <tr><td>GET</td><td><code>/oauth/jwks</code></td><td>JSON Web Key Set</td></tr>
+        <tr><td>GET / POST</td><td><code>/oauth/authorize</code></td><td>Authorisation endpoint + consent submission</td></tr>
+        <tr><td>POST</td><td><code>/oauth/token</code></td><td>Code, refresh exchange</td></tr>
+        <tr><td>POST</td><td><code>/oauth/revoke</code></td><td>RFC 7009 revocation</td></tr>
+        <tr><td>POST</td><td><code>/oauth/introspect</code></td><td>RFC 7662 introspection</td></tr>
+        <tr><td>GET / POST</td><td><code>/oauth/userinfo</code></td><td>OIDC userinfo</td></tr>
+        <tr><td>GET / POST</td><td><code>/portal/*</code></td><td>Self-service for end users</td></tr>
+        <tr><td>GET / POST</td><td><code>/cryptbin/*</code></td><td>End-to-end encrypted blob storage</td></tr>
+        <tr><td>GET</td><td><code>/admin/*</code></td><td>Admin UI (this site)</td></tr>
+        <tr><td>GET</td><td><code>/metrics</code></td><td>Prometheus scrape</td></tr>
+    </tbody>
+</table>
+
+<h5>Glossary</h5>
+<dl>
+    <dt>Approval request</dt>
+    <dd>A queued mutation submitted by an actor without the matching <code>_direct</code> capability, awaiting a reviewer's decision.</dd>
+    <dt>Capability</dt>
+    <dd>Named permission like <code>view_users</code> or <code>manage_clients</code>; granted by role.</dd>
+    <dt>CryptBin</dt>
+    <dd>End-to-end encrypted blob storage. Server holds ciphertext + a wrapped DEK; only the user with the right key (and optional WebAuthn binding) can decrypt.</dd>
+    <dt>DEK</dt>
+    <dd>Data Encryption Key. Per-CryptBin-item AES-256 key generated client-side; wrapped under the server-side KEK before storage.</dd>
+    <dt>KEK</dt>
+    <dd>Key Encryption Key. Server-side XChaCha20-Poly1305 key used to wrap each CryptBin DEK. Single key, identified by version tag.</dd>
+    <dt>Privilege level</dt>
+    <dd>Numeric rung within a project's privilege ladder; lower number = more privilege.</dd>
+    <dt>Scope (admin)</dt>
+    <dd>Set of organisations + projects the current admin can see / act on.</dd>
+    <dt>Scope (OAuth)</dt>
+    <dd>Space-separated list of permissions a client requests from BlackWall (e.g. <code>openid profile email</code>).</dd>
+    <dt>Sign counter</dt>
+    <dd>WebAuthn authenticator-incremented value that detects credential cloning.</dd>
+</dl>
+{{end}}

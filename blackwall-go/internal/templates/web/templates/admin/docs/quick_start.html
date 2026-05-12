@@ -1,0 +1,29 @@
+{{define "doc_body"}}
+<p>This walks through what to do in your first session as a freshly-bootstrapped super-admin.</p>
+
+<h5>1. Verify your own credential</h5>
+<p>Sign out and sign back in. If WebAuthn doesn't recognise your passkey, your enrolment didn't take — re-bootstrap with a fresh enrolment link before doing anything else.</p>
+
+<h5>2. Confirm the audit chain is being written</h5>
+<p>Open <a href="/admin/audit" class="text-light">/admin/audit</a> and look for entries from the last few minutes. Each entry carries a <code>chain_hash</code>; if those are blank, audit writes are failing — stop and fix the database connection before continuing.</p>
+
+<h5>3. Create the first additional organisation</h5>
+<p>Even if everything will live in one org, create a second one early so you exercise the multi-tenant code paths during testing.</p>
+
+<h5>4. Enrol an operator</h5>
+<p>Create a new user, hand them the one-shot enrolment link, then assign them the <code>operator</code> admin role. Confirm they can sign in but cannot perform <code>delete_credentials_direct</code> actions — that's correct, those go through approval.</p>
+
+<h5>5. Register a test OAuth client</h5>
+<p>Register a confidential client against any project and run an authorisation-code+PKCE flow against it from <code>curl</code> or your favourite client. Confirm the ID token contains the <code>nonce</code> and <code>at_hash</code> claims.</p>
+
+<h5>6. Trigger maintenance</h5>
+<p>Open <a href="/admin/maintenance" class="text-light">/admin/maintenance</a> and run the scheduled jobs once manually. Verify all jobs land at <code>success</code> with non-zero <code>rows_affected</code> on a populated database.</p>
+
+<h5>Safety checks before going live</h5>
+<ul>
+    <li>HSTS header is being emitted (over HTTPS only).</li>
+    <li>CryptBin KEK is configured (server refuses to handle CryptBin requests without it).</li>
+    <li>Rate limiting is enabled in <code>config.yaml</code>.</li>
+    <li>Backup of the MySQL database is scheduled — see the Maintenance &amp; DR page.</li>
+</ul>
+{{end}}

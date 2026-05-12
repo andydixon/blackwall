@@ -1,0 +1,40 @@
+{{define "doc_body"}}
+<p>BlackWall lets you attach arbitrary key/value pairs to a user that will be merged into every OIDC ID token and <code>/oauth/userinfo</code> response issued for them. Use this to surface organisation-specific attributes (department, cost-centre code, feature flags) to downstream applications without writing them into a custom directory.</p>
+
+<h5>Two scopes</h5>
+<ul>
+    <li><strong>User-level</strong> — set on the user, included in every token regardless of which project the token was issued for.</li>
+    <li><strong>Project-scoped</strong> — set on a (user, project) pair, included only when the issued token is bound to that project. Lets different downstream applications see different per-user attributes without leaking across projects.</li>
+</ul>
+<p>Project-scoped values override user-level values with the same key.</p>
+
+<h5>Where to set them</h5>
+<p>Open a user's detail page and click <strong>Custom claims</strong>, or navigate directly to <code>/admin/users/&#123;userUuid&#125;/claims</code>. The page shows one section for user-level claims and one section per project the user is assigned to. You can only see / edit project sections for projects in your admin scope.</p>
+
+<h5>Key rules</h5>
+<ul>
+    <li>Keys must match <code>[a-z][a-z0-9_]&#123;0,79&#125;</code> — lowercase, digits, and underscore; first character a letter.</li>
+    <li>Reserved JWT and OIDC names are rejected at write time AND re-blocked at signing time: <code>iss, sub, aud, exp, iat, nbf, jti, nonce, at_hash, c_hash, auth_time, acr, amr, azp, scope, client_id, token_type, expires_in, project_id</code>.</li>
+    <li>Values are limited to 4 KiB.</li>
+</ul>
+
+<h5>Value types</h5>
+<p>Values that parse as a JSON literal are emitted with that JSON type:</p>
+<table class="table table-dark table-sm">
+    <thead><tr><th>You enter</th><th>Token sees</th></tr></thead>
+    <tbody>
+        <tr><td><code>Engineering</code></td><td>string <code>"Engineering"</code></td></tr>
+        <tr><td><code>"Engineering"</code></td><td>string <code>"Engineering"</code></td></tr>
+        <tr><td><code>42</code></td><td>number <code>42</code></td></tr>
+        <tr><td><code>true</code></td><td>boolean <code>true</code></td></tr>
+        <tr><td><code>["eng","ops"]</code></td><td>array <code>["eng","ops"]</code></td></tr>
+        <tr><td><code>{"role":"lead"}</code></td><td>object <code>{"role":"lead"}</code></td></tr>
+    </tbody>
+</table>
+
+<h5>Standards posture</h5>
+<p>Custom claims are emitted alongside the standard issuer-controlled claims; downstream OIDC libraries see them as ordinary additional claims, exactly as if they had been set by an external claims provider. The token remains a valid signed RS256 JWT and the discovery document is unchanged. <code>at_hash</code> still binds the ID token to the access token; <code>nonce</code> still echoes back; <code>aud</code> still names the requesting client.</p>
+
+<h5>Audit</h5>
+<p>Every claim mutation is logged under <code>admin.claims.user.upsert</code>, <code>admin.claims.user.delete</code>, <code>admin.claims.project.upsert</code>, or <code>admin.claims.project.delete</code> with actor, target user, project (where applicable), and the claim key. Reserved-key write attempts are logged with <code>outcome=fail</code> so abuse attempts surface in the dashboard.</p>
+{{end}}

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bootstrap Setup — BlackWall</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/css/blackwall.css">
+</head>
+<body class="bg-charcoal d-flex align-items-center justify-content-center" style="min-height:100vh">
+<div class="card" style="width:100%;max-width:500px;margin:2rem auto">
+    <div class="card-body p-4">
+        <div class="text-center mb-4">
+            <img src="/assets/blackwall.svg" alt="BlackWall" style="height:40px;filter:brightness(0) invert(1);opacity:0.85;margin-bottom:1rem">
+            <h5 class="mb-1">System Bootstrap</h5>
+            <p class="text-muted small">Register your first security key to complete setup</p>
+        </div>
+        {{if .Bootstrapped}}
+        <div class="alert alert-success">
+            <strong>Bootstrap Complete!</strong> The system has been initialized. <a href="/admin/login">Sign in to Admin Panel</a>
+        </div>
+        {{else}}
+        {{if not .TokenValid}}
+        <div class="alert alert-danger">Invalid or expired bootstrap token. Please restart the bootstrap process.</div>
+        {{else}}
+        <div class="alert alert-warning">
+            <strong>Security Notice:</strong> This will register the first admin user. Ensure you are on a trusted device.
+        </div>
+        <div id="webauthn-status" class="alert alert-info d-none"></div>
+        <form id="enroll-form">
+            <input type="hidden" name="token" value="{{.Token}}" id="bootstrap-token">
+            <div class="mb-3">
+                <label class="form-label">Key Label (optional)</label>
+                <input type="text" class="form-control" id="key-label" placeholder="e.g. Primary YubiKey">
+            </div>
+            <button type="submit" class="btn btn-primary w-100" id="enroll-btn">Register Security Key</button>
+        </form>
+        {{end}}
+        {{end}}
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/assets/js/blackwall.js"></script>
+<script>
+const form = document.getElementById('enroll-form');
+if (form) {
+    form.addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const btn = document.getElementById('enroll-btn');
+        const status = document.getElementById('webauthn-status');
+        btn.disabled = true;
+        status.className = 'alert alert-info';
+        status.textContent = 'Initialising registration…';
+
+        try {
+            const token = document.getElementById('bootstrap-token').value;
+            const initRes = await fetch('/bootstrap/enroll', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                body: 'token=' + encodeURIComponent(token) + '&phase=init'
+            });
+            const initData = await initRes.json();
+            if (initData.error) throw new Error(initData.error);
+
+            status.textContent = 'Please touch your security key…';
+            const credential = await navigator.credentials.create({
+                publicKey: {
+                    challenge: BlackWall.base64urlDecode(initData.challenge),
+                    rp: { name: initData.rp.name, id: initData.rp.id },
+                    user: {
+                        id: BlackWall.base64urlDecode(initData.user.id),
+                        name: initData.user.name,
+                        displayName: initData.user.displayName
+                    },
+                    pubKeyCredParams: initData.pubKeyCredParams,
+                    timeout: initData.timeout,
+                    attestation: initData.attestation,
+                    authenticatorSelection: initData.authenticatorSelection
+                }
+            });
+
+            status.textContent = 'Completing registration…';
+            const label = document.getElementById('key-label').value;
+            const completeRes = await fetch('/bootstrap/enroll', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    token: token,
+                    phase: 'complete',
+                    label: label,
+                    id: credential.id,
+                    response: {
+                        clientDataJSON: BlackWall.base64urlEncode(credential.response.clientDataJSON),
+                        attestationObject: BlackWall.base64urlEncode(credential.response.attestationObject)
+                    }
+                })
+            });
+            const completeData = await completeRes.json();
+            if (completeData.success) {
+                status.className = 'alert alert-success';
+                status.textContent = 'Registration complete! Redirecting…';
+                setTimeout(() => window.location.href = completeData.redirect || '/admin/login', 1500);
+            } else {
+                throw new Error(completeData.error || 'Registration failed');
+            }
+        } catch(err) {
+            status.className = 'alert alert-danger';
+            status.textContent = err.message;
+            btn.disabled = false;
+        }
+    });
+}
+</script>
+</body>
+</html>

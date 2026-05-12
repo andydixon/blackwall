@@ -1,0 +1,131 @@
+{{define "content"}}
+<div class="row mt-4 align-items-center">
+    <div class="col">
+        <div class="page-header"><h2>{{.User.DisplayLabel}}</h2></div>
+        <p class="text-muted small mb-0"><code>{{.User.UUID}}</code></p>
+    </div>
+    <div class="col-auto">
+        <a href="/admin/users/{{.User.UUID}}/claims" class="btn btn-outline-light">Custom claims</a>
+        <a href="/admin/users" class="btn btn-outline-secondary">Back</a>
+    </div>
+</div>
+
+{{if .Success}}<div class="alert alert-success mt-3">{{if eq .Success "updated"}}User updated.{{else if eq .Success "credential_deleted"}}Credential deleted.{{else if eq .Success "enrollment_link"}}New enrolment link generated.{{else if eq .Success "pending_approval"}}Change submitted for approval.{{else}}{{.Success}}{{end}}</div>{{end}}
+{{if .Error}}<div class="alert alert-danger mt-3">{{.Error}}</div>{{end}}
+
+{{if .EnrollmentLink}}
+<div class="card mt-3 border-warning">
+    <div class="card-body">
+        <h5 class="card-title">Enrolment link <span class="badge bg-warning text-dark">show once</span></h5>
+        <p class="text-muted small mb-2">Send this link to the user. It is valid for 24 hours and lets them register their first WebAuthn passkey.</p>
+        <input type="text" class="form-control bg-charcoal border-warning text-warning" readonly value="{{.EnrollmentLink}}" onclick="this.select()">
+    </div>
+</div>
+{{end}}
+
+<div class="row mt-3 g-3">
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">Profile</div>
+            <div class="card-body">
+                {{if .CanManage}}
+                <form method="POST" action="/admin/users/{{.User.UUID}}/update">
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    <div class="mb-3">
+                        <label class="form-label">Display label</label>
+                        <input type="text" class="form-control" name="display_label" value="{{.User.DisplayLabel}}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" name="email" value="{{.User.Email}}">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" name="status">
+                            <option value="active" {{if eq .User.Status "active"}}selected{{end}}>Active</option>
+                            <option value="inactive" {{if eq .User.Status "inactive"}}selected{{end}}>Inactive</option>
+                            <option value="suspended" {{if eq .User.Status "suspended"}}selected{{end}}>Suspended</option>
+                        </select>
+                        {{if not .CanDirectStatus}}
+                        <div class="form-text text-warning">Status changes require an approval (you don't hold change_user_status_direct).</div>
+                        {{end}}
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save</button>
+                </form>
+                {{else}}
+                <dl class="row mb-0">
+                    <dt class="col-sm-4">Email</dt><dd class="col-sm-8">{{if .User.Email}}{{.User.Email}}{{else}}<span class="text-muted">—</span>{{end}}</dd>
+                    <dt class="col-sm-4">Status</dt><dd class="col-sm-8">{{.User.Status}}</dd>
+                    <dt class="col-sm-4">Organisation</dt><dd class="col-sm-8">{{.User.OrganizationName}}</dd>
+                </dl>
+                {{end}}
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card h-100">
+            <div class="card-header">Enrolment</div>
+            <div class="card-body">
+                <p class="text-muted small">Generate a fresh enrolment link the user can follow to register a new passkey. Existing credentials are not affected.</p>
+                {{if .CanManage}}
+                <form method="POST" action="/admin/users/{{.User.UUID}}/enrollment-link">
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    <button type="submit" class="btn btn-outline-light">Generate enrolment link</button>
+                </form>
+                {{end}}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">WebAuthn credentials ({{len .Credentials}})</div>
+    <div class="card-body p-0">
+        <table class="table table-dark table-sm mb-0 align-middle">
+            <thead>
+                <tr><th>Label</th><th>Credential ID</th><th>Sign counter</th><th>Created</th><th>Last used</th><th></th></tr>
+            </thead>
+            <tbody>
+                {{range .Credentials}}
+                <tr>
+                    <td>{{if .Label}}{{.Label}}{{else}}<span class="text-muted">unlabeled</span>{{end}}</td>
+                    <td><code class="small">{{.CredentialID}}</code></td>
+                    <td class="text-muted">{{.SignCounter}}</td>
+                    <td class="small">{{.CreatedAt.Format "2006-01-02"}}</td>
+                    <td class="small text-muted">{{if .LastUsedAt.Valid}}{{.LastUsedAt.Time.Format "2006-01-02 15:04"}}{{else}}—{{end}}</td>
+                    <td class="text-end">
+                        {{if $.CanManage}}
+                        <form method="POST" action="/admin/users/{{$.User.UUID}}/credentials/{{.CredentialID}}/delete" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                            <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this credential?')" type="submit">Delete</button>
+                        </form>
+                        {{end}}
+                    </td>
+                </tr>
+                {{else}}
+                <tr><td colspan="6" class="text-center text-muted py-4">No credentials registered.</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">Project assignments ({{len .Assignments}})</div>
+    <div class="card-body p-0">
+        <table class="table table-dark table-sm mb-0">
+            <thead><tr><th>Project</th><th>Privilege</th></tr></thead>
+            <tbody>
+                {{range .Assignments}}
+                <tr>
+                    <td><a href="/admin/projects/{{.ProjectUUID}}" class="text-light">{{.ProjectName}}</a></td>
+                    <td><span class="badge bg-secondary">{{.PrivilegeLabel}}</span> <span class="text-muted small">level {{.PrivilegeLevel}}</span></td>
+                </tr>
+                {{else}}
+                <tr><td colspan="2" class="text-center text-muted py-4">Not assigned to any projects.</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{end}}

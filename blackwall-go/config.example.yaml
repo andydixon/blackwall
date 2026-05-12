@@ -1,0 +1,95 @@
+# BlackWall configuration.
+#
+# Copy this file to config.yaml and fill in real values, or set the equivalent
+# UPPER_CASE environment variables (every key here can be overridden via env).
+# The container expects the file at /etc/blackwall/config.yaml.
+#
+# Generate secrets:
+#   openssl rand -hex 32          # session_secret, csrf_secret, audit_export_signing_key, error_trace_key
+#   openssl rand -base64 32       # cryptbin_kek_base64
+
+# ─── Application ─────────────────────────────────────────────────────────────
+app_url: "https://auth.example.com"   # Public origin; used as OIDC issuer + WebAuthn RP origin.
+app_env: "production"
+app_debug: false
+
+# ─── Server ──────────────────────────────────────────────────────────────────
+server_addr: ":8080"
+
+# ─── Database (MySQL 8.0+) ───────────────────────────────────────────────────
+db_host: "localhost"
+db_port: "3306"
+db_name: "blackwall"
+db_user: "blackwall"
+db_pass: "changeme"
+
+# ─── Session ─────────────────────────────────────────────────────────────────
+# Refuses to start if session_secret is shorter than 32 characters or matches
+# csrf_secret. Cookies are HttpOnly + Secure + SameSite=Lax.
+session_secret: "CHANGE_ME_TO_RANDOM_64_CHAR_HEX"
+session_name: "blackwall_session"
+session_lifetime: 7200                 # absolute TTL in seconds (2 hours)
+session_idle_timeout: 1800             # idle TTL in seconds (30 minutes)
+session_bind_user_agent: true          # invalidate session if UA hash changes
+
+# ─── CSRF ────────────────────────────────────────────────────────────────────
+# Single-use HMAC tokens stored in the encrypted session.
+csrf_secret: "CHANGE_ME_TO_ANOTHER_RANDOM_HEX"
+
+# ─── WebAuthn ────────────────────────────────────────────────────────────────
+webauthn_rp_id: ""                     # blank = derive from app_url hostname
+webauthn_rp_name: "BlackWall OAuth"
+min_webauthn_keys: 1                   # minimum keys per active user
+
+# ─── CryptBin ────────────────────────────────────────────────────────────────
+# End-to-end encrypted blob storage. The KEK wraps each item's DEK using
+# XChaCha20-Poly1305-IETF (libsodium-compatible), bound to the item's ID via
+# AAD so a swapped wrapped_dek cannot be reused on a different blob.
+cryptbin_storage_path: "/var/lib/blackwall/cryptbin"
+cryptbin_kek_base64: ""                # base64 of 32 raw bytes
+cryptbin_kek_version: "v1"
+cryptbin_max_upload_bytes: 5242880     # 5 MiB cap on file uploads
+cryptbin_max_text_bytes: 262144        # 256 KiB cap on text bins
+cryptbin_allowed_mime: ""              # blank = allow all; otherwise comma-separated allow-list
+cryptbin_default_retention_days: 0     # 0 = no auto-expiry
+
+# ─── Metrics ─────────────────────────────────────────────────────────────────
+metrics_token: ""                      # bearer token required to scrape /metrics
+metrics_allow_unauthenticated: false   # set true ONLY when /metrics is network-isolated
+
+# ─── Proxy / IP extraction ───────────────────────────────────────────────────
+# When trust_proxy is true, X-Forwarded-For is honoured ONLY if REMOTE_ADDR
+# is in trusted_proxies (CIDR notation supported). The right-most non-trusted
+# hop is treated as the real client.
+trust_proxy: false
+trusted_proxies: ""                    # comma-separated, e.g. "10.0.0.0/8,172.16.0.0/12"
+
+# ─── Rate limiting ───────────────────────────────────────────────────────────
+rate_limit_enabled: true               # database-backed per-IP limits
+
+# ─── Audit log ───────────────────────────────────────────────────────────────
+audit_retention_days: 180              # 0 disables retention pruning
+audit_export_signing_key: ""           # blank = falls back to csrf_secret
+
+# ─── Approvals workflow ──────────────────────────────────────────────────────
+approval_pending_max_age_days: 14      # auto-cancel after this many days
+admin_approval_pending_warning_days: 3 # dashboard SLA warning threshold
+
+# ─── Admin mutation rate limiting ────────────────────────────────────────────
+admin_mutation_rate_limit_attempts: 60
+admin_mutation_rate_limit_window_seconds: 60
+
+# ─── Event metrics push (optional vmagent / VictoriaMetrics) ─────────────────
+# When enabled, every audit-log entry is also pushed asynchronously as a
+# Prometheus counter sample to event_metrics_push_url.
+event_metrics_push_enabled: false
+event_metrics_push_url: ""
+event_metrics_push_metric_name: "blackwall_event"
+event_metrics_push_timeout_ms: 250
+event_metrics_push_include_outcome: true
+event_metrics_push_static_labels: ""   # e.g. 'env="prod",region="eu-west"'
+
+# ─── Error trace decoding key ────────────────────────────────────────────────
+# Symmetric key used by /admin/error-trace to decode the short opaque codes
+# shown to end users on error pages. Blank = falls back to csrf_secret.
+error_trace_key: ""

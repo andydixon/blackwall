@@ -1,0 +1,117 @@
+{{define "content"}}
+<div class="row mt-4 align-items-center">
+    <div class="col">
+        <div class="page-header"><h2>Custom OIDC claims</h2></div>
+        <p class="text-muted small mb-0">User: <a href="/admin/users/{{.User.UUID}}" class="text-light">{{.User.DisplayLabel}}</a></p>
+    </div>
+    <div class="col-auto">
+        <a href="/admin/users/{{.User.UUID}}" class="btn btn-outline-secondary">Back to user</a>
+    </div>
+</div>
+
+{{if .Success}}<div class="alert alert-success mt-3">{{if eq .Success "updated"}}Claim saved.{{else if eq .Success "deleted"}}Claim deleted.{{else}}{{.Success}}{{end}}</div>{{end}}
+{{if .Error}}<div class="alert alert-danger mt-3">
+    {{if eq .Error "invalid"}}Invalid key or value. Keys must match <code>[a-z][a-z0-9_]&#123;0,79&#125;</code> and not be a reserved OIDC name (sub, iss, aud, exp, iat, nbf, nonce, at_hash, scope, etc.).
+    {{else if eq .Error "not_assigned"}}User is not assigned to that project — assign them first.
+    {{else if eq .Error "csrf"}}Session expired — refresh and try again.
+    {{else}}{{.Error}}{{end}}
+</div>{{end}}
+
+<div class="card mt-3">
+    <div class="card-header">
+        User-level claims <span class="text-muted small">(emitted in every token for this user, regardless of project)</span>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-dark table-sm mb-0 align-middle">
+            <thead><tr><th>Key</th><th>Value</th><th class="text-end">Updated</th><th></th></tr></thead>
+            <tbody>
+                {{range .UserClaims}}
+                <tr>
+                    <td><code>{{.Key}}</code></td>
+                    <td><code class="small">{{.Value}}</code></td>
+                    <td class="text-end small text-muted">{{if .UpdatedAt.Valid}}{{.UpdatedAt.Time.Format "2006-01-02 15:04"}}{{end}}</td>
+                    <td class="text-end">
+                        <form method="POST" action="/admin/users/{{$.User.UUID}}/claims/delete" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                            <input type="hidden" name="claim_key" value="{{.Key}}">
+                            <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete claim {{.Key}}?')" type="submit">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {{else}}
+                <tr><td colspan="4" class="text-center text-muted py-3">No user-level claims set.</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer">
+        <form method="POST" action="/admin/users/{{.User.UUID}}/claims" class="row g-2">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <div class="col-md-3">
+                <input type="text" class="form-control form-control-sm font-monospace" name="claim_key" placeholder="claim_key" required maxlength="80" pattern="[a-z][a-z0-9_]{0,79}">
+            </div>
+            <div class="col-md-7">
+                <input type="text" class="form-control form-control-sm" name="claim_value" placeholder='value or JSON literal: "Engineering" / 42 / true / ["a","b"]' required maxlength="4096">
+            </div>
+            <div class="col-md-2 d-grid">
+                <button type="submit" class="btn btn-sm btn-primary">Add / update</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{range $set := .ProjectClaimSets}}
+<div class="card mt-3">
+    <div class="card-header">
+        Project: <a href="/admin/projects/{{$set.ProjectUUID}}" class="text-light">{{$set.ProjectName}}</a>
+        <span class="text-muted small">(emitted only when the issued token is bound to this project)</span>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-dark table-sm mb-0 align-middle">
+            <thead><tr><th>Key</th><th>Value</th><th class="text-end">Updated</th><th></th></tr></thead>
+            <tbody>
+                {{range $set.Claims}}
+                <tr>
+                    <td><code>{{.Key}}</code></td>
+                    <td><code class="small">{{.Value}}</code></td>
+                    <td class="text-end small text-muted">{{if .UpdatedAt.Valid}}{{.UpdatedAt.Time.Format "2006-01-02 15:04"}}{{end}}</td>
+                    <td class="text-end">
+                        <form method="POST" action="/admin/users/{{$.User.UUID}}/projects/{{$set.ProjectUUID}}/claims/delete" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                            <input type="hidden" name="claim_key" value="{{.Key}}">
+                            <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete project claim {{.Key}}?')" type="submit">Delete</button>
+                        </form>
+                    </td>
+                </tr>
+                {{else}}
+                <tr><td colspan="4" class="text-center text-muted py-3">No project-scoped claims for this user.</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer">
+        <form method="POST" action="/admin/users/{{$.User.UUID}}/projects/{{$set.ProjectUUID}}/claims" class="row g-2">
+            <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+            <div class="col-md-3">
+                <input type="text" class="form-control form-control-sm font-monospace" name="claim_key" placeholder="claim_key" required maxlength="80" pattern="[a-z][a-z0-9_]{0,79}">
+            </div>
+            <div class="col-md-7">
+                <input type="text" class="form-control form-control-sm" name="claim_value" placeholder='value or JSON literal' required maxlength="4096">
+            </div>
+            <div class="col-md-2 d-grid">
+                <button type="submit" class="btn btn-sm btn-primary">Add / update</button>
+            </div>
+        </form>
+    </div>
+</div>
+{{else}}
+<div class="alert alert-secondary mt-3 small">
+    To add project-scoped claims, first <a href="/admin/users/{{.User.UUID}}" class="alert-link">assign this user to a project</a>.
+</div>
+{{end}}
+
+<div class="alert alert-info mt-3 small">
+    <strong>Precedence:</strong> project-scoped claims override user-level ones with the same key in tokens issued for that project. Reserved OIDC / JWT claim names (sub, iss, aud, exp, iat, nbf, nonce, at_hash, scope, etc.) cannot be set — they are always issuer-controlled.<br>
+    <strong>Value format:</strong> if the value parses as a JSON literal (number, boolean, array, object) it's emitted with that JSON type; otherwise it's emitted as a string.
+</div>
+{{end}}

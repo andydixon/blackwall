@@ -1,0 +1,23 @@
+{{define "doc_body"}}
+<p>BlackWall is an OAuth 2.1 + OpenID Connect authentication service with WebAuthn (passkey) authentication. It is designed for organisations that need a single, auditable, passwordless identity surface for both staff and external integrations.</p>
+
+<h5>What you can do here</h5>
+<ul>
+    <li>Define <strong>organisations</strong>, each with their own admin user and project portfolio.</li>
+    <li>Run <strong>projects</strong> with bespoke privilege ladders and per-user assignments.</li>
+    <li>Issue and revoke <strong>OAuth clients</strong> for downstream applications.</li>
+    <li>Enrol users with one-time <strong>WebAuthn credentials</strong>; passwords are never used.</li>
+    <li>Track everything through an integrity-chained <strong>audit log</strong> with CSV export.</li>
+    <li>Hold sensitive payloads in <strong>CryptBin</strong> with end-to-end client-side encryption.</li>
+</ul>
+
+<h5>Capability model in one sentence</h5>
+<p>The current viewer's <em>role</em> determines a fixed set of named <em>capabilities</em>; some capabilities apply mutations directly while others enqueue <em>approval requests</em> for review.</p>
+
+<h5>Where to read next</h5>
+<ul>
+    <li><a href="/admin/docs/quick-start" class="text-light">Administrator Quick Start</a> — first-session setup.</li>
+    <li><a href="/admin/docs/access-model" class="text-light">Access Model and Scope</a> — visibility rules and capability matrix.</li>
+    <li><a href="/admin/docs/oauth-clients" class="text-light">OAuth Clients</a> — registering downstream applications.</li>
+</ul>
+{{end}}

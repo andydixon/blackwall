@@ -1,0 +1,31 @@
+{{define "doc_body"}}
+<p>BlackWall ships a set of background jobs that prune expired material, plus the standard expectations around backup / restore.</p>
+
+<h5>Background jobs</h5>
+<table class="table table-dark table-sm">
+    <thead><tr><th>Job</th><th>What it cleans</th></tr></thead>
+    <tbody>
+        <tr><td><code>cleanup_expired_codes</code></td><td>Authorisation codes past their expiry — they're already single-use, but rows pile up.</td></tr>
+        <tr><td><code>cleanup_expired_tokens</code></td><td>Access &amp; refresh tokens whose <code>expires_at</code> has passed.</td></tr>
+        <tr><td><code>cleanup_revoked_tokens</code></td><td>Tokens revoked more than 24h ago.</td></tr>
+        <tr><td><code>cleanup_expired_challenges</code></td><td>Stale WebAuthn / portal challenge sessions.</td></tr>
+        <tr><td><code>cleanup_expired_rate_limits</code></td><td>Old rows in <code>rate_limits</code> past their window.</td></tr>
+        <tr><td><code>cleanup_audit_retention</code></td><td>Audit rows older than <code>audit_retention_days</code>. Set to 0 to disable.</td></tr>
+        <tr><td><code>cleanup_expired_approvals</code></td><td>Approval requests pending longer than <code>approval_pending_max_age_days</code>.</td></tr>
+        <tr><td><code>cleanup_expired_cryptbin</code></td><td>CryptBin items past their <code>expires_at</code>; deletes the on-disk blob and metadata.</td></tr>
+    </tbody>
+</table>
+
+<h5>Triggering manually</h5>
+<p>Super-admins can run all jobs from <a href="/admin/maintenance" class="text-light">/admin/maintenance</a>. The button kicks off a background goroutine; refresh after a few seconds to see the run results.</p>
+
+<h5>Backup expectations</h5>
+<ul>
+    <li><strong>MySQL</strong> — full nightly dump plus binlog shipping to a separate host. The schema includes the JWT signing keys, so a database loss without backup means every issued token becomes unverifiable.</li>
+    <li><strong>CryptBin storage path</strong> — back up to the same RPO as the database. Lose the blobs, lose the items: the database carries only metadata.</li>
+    <li><strong>config.yaml</strong> — back up. Without the original <code>session_secret</code>, <code>csrf_secret</code>, <code>cryptbin_kek_base64</code>, and <code>error_trace_key</code>, you cannot read existing sessions, validate existing CSRF tokens, decrypt CryptBin DEKs, or decode error traces.</li>
+</ul>
+
+<h5>Recovery rehearsal</h5>
+<p>Twice yearly: restore the database + CryptBin storage path + config to a clean host, then attempt to (a) sign in as an existing user, (b) read an existing CryptBin item, and (c) verify an existing token via <code>/oauth/introspect</code>. If any of those fail, your backup set is incomplete.</p>
+{{end}}

@@ -18,3 +18,4 @@ logs/
 tmp/
 __storage
 BEFF
+blackwall-go/dist
