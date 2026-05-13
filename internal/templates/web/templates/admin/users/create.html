@@ -1,0 +1,41 @@
+{{define "content"}}
+<div class="row mt-4">
+    <div class="col-md-8 offset-md-2">
+        <div class="page-header"><h2>Create User</h2></div>
+        {{if .Error}}<div class="alert alert-danger">{{.Error}}</div>{{end}}
+        <div class="card">
+            <div class="card-body">
+                <form method="POST" action="/admin/users/create">
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    <div class="mb-3">
+                        <label class="form-label">Display label</label>
+                        <input type="text" class="form-control" name="display_label" required maxlength="120">
+                        <div class="form-text">A human-readable name shown in the audit log and OAuth consent screens. Use an email address here if you want OIDC `email` claims to derive from it.</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Organisation</label>
+                        <select class="form-select" name="organization_uuid" required>
+                            <option value="">— select —</option>
+                            {{range .Organizations}}
+                            <option value="{{.UUID}}">{{.Name}}</option>
+                            {{end}}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" name="status">
+                            <option value="active" selected>Active</option>
+                            <option value="disabled">Disabled</option>
+                        </select>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">Create user</button>
+                        <a href="/admin/users" class="btn btn-outline-secondary">Cancel</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <p class="text-muted small mt-3">A 24-hour enrolment link will be generated automatically; share it with the user so they can register their first WebAuthn credential.</p>
+    </div>
+</div>
+{{end}}

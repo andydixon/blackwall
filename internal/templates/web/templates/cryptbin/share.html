@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Share - Cryptbin</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/css/blackwall.css">
+</head>
+<body class="bg-charcoal d-flex align-items-center justify-content-center" style="min-height:100vh">
+<div class="card" style="max-width:560px;width:100%;margin:2rem auto">
+    <div class="card-body p-4 text-center">
+        <h5 class="mb-3">Share Link</h5>
+        <p class="text-muted small">The key fragment is included in the URL hash and never sent to the server.</p>
+        <div class="input-group mb-3">
+            <input type="text" class="form-control" id="share-url" readonly>
+            <button class="btn btn-outline-primary" id="copy-url-btn" type="button">Copy</button>
+        </div>
+        <p id="copy-status" class="text-muted small mb-3">Copy this full URL and send it to the recipient through a secure channel.</p>
+        <div class="d-flex justify-content-center gap-2">
+            <a href="#" class="btn btn-primary btn-sm" id="open-item-btn">Open Item</a>
+            <a href="/cryptbin/{{.ID}}" class="btn btn-outline-secondary btn-sm">Back</a>
+        </div>
+    </div>
+</div>
+<script>
+window.CRYPTBIN_CONFIG = {
+    id: {{json .ID}},
+    mode: 'share'
+};
+</script>
+<script src="/assets/js/cryptbin.js"></script>
+</body>
+</html>

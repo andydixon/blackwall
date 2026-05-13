@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Portal — BlackWall</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/css/blackwall.css">
+</head>
+<body class="bg-charcoal">
+<nav class="navbar navbar-expand-lg navbar-dark">
+    <div class="container-fluid px-4">
+        <a class="navbar-brand" href="/portal">
+            <img src="/assets/blackwall.svg" alt="BlackWall" style="height:26px;filter:brightness(0) invert(1);opacity:0.85">
+            <span>BlackWall</span>
+        </a>
+        <div class="d-flex align-items-center">
+            <form method="POST" action="/portal/logout">
+                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                <button class="btn btn-outline-light btn-sm" type="submit">Sign out</button>
+            </form>
+        </div>
+    </div>
+</nav>
+<main class="container-fluid px-4 py-4">
+    {{if .Flash}}
+    <div class="alert alert-{{.Flash.Type}}">{{.Flash.Message}}</div>
+    {{end}}
+
+    <div class="row mb-4">
+        <div class="col-12">
+            <h2>My Account</h2>
+            <p class="text-muted">Welcome, <strong>{{.User.display_label}}</strong></p>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">My Projects</div>
+                <div class="table-responsive">
+                    <table class="table table-dark mb-0">
+                        <thead><tr><th>Project</th><th>Privilege</th></tr></thead>
+                        <tbody>
+                        {{range .Projects}}
+                        <tr>
+                            <td>{{.name}}</td>
+                            <td><span class="badge bg-info">{{.privilege_label}}</span></td>
+                        </tr>
+                        {{else}}
+                        <tr><td colspan="2" class="text-center text-muted py-3">No project assignments</td></tr>
+                        {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    Security Keys
+                    <button class="btn btn-outline-primary btn-sm" id="add-key-btn">+ Add Key</button>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-dark mb-0">
+                        <thead><tr><th>Label</th><th>Added</th><th></th></tr></thead>
+                        <tbody>
+                        {{range .Credentials}}
+                        <tr>
+                            <td>{{if .label}}{{.label}}{{else}}<span class="text-muted">Unnamed</span>{{end}}</td>
+                            <td class="text-muted small">{{.created_at.Format "2006-01-02"}}</td>
+                            <td>
+                                {{if gt (len $.Credentials) 1}}
+                                <form method="POST" action="/portal/keys/{{.credential_id}}/delete" onsubmit="return confirm('Remove this key?')">
+                                    <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                                    <button type="submit" class="btn btn-outline-danger btn-sm">Remove</button>
+                                </form>
+                                {{end}}
+                            </td>
+                        </tr>
+                        {{else}}
+                        <tr><td colspan="3" class="text-center text-muted py-3">No security keys registered</td></tr>
+                        {{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card mt-3 d-none" id="add-key-card">
+                <div class="card-header">Register a New Key</div>
+                <div class="card-body">
+                    <div id="add-key-status" class="alert alert-info d-none"></div>
+                    <div class="mb-3">
+                        <label class="form-label">Key Label (optional)</label>
+                        <input type="text" class="form-control" id="key-label" placeholder="e.g. YubiKey 5">
+                    </div>
+                    <button class="btn btn-primary" id="register-key-btn">Register Security Key</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/assets/js/blackwall.js"></script>
+<script>
+let csrfToken = '{{.CSRFToken}}';
+
+document.getElementById('add-key-btn').addEventListener('click', function() {
+    document.getElementById('add-key-card').classList.toggle('d-none');
+});
+
+document.getElementById('register-key-btn').addEventListener('click', async function() {
+    const btn = this;
+    const status = document.getElementById('add-key-status');
+    btn.disabled = true;
+    status.className = 'alert alert-info';
+    status.textContent = 'Initialising registration…';
+
+    try {
+        const initRes = await fetch('/portal/keys/add/init', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: 'csrf_token=' + encodeURIComponent(csrfToken)
+        });
+        const initData = await initRes.json();
+        if (initData.error) throw new Error(initData.error);
+        if (!initData.csrf_token) throw new Error('No CSRF token received');
+        csrfToken = initData.csrf_token;
+
+        status.textContent = 'Please touch your security key…';
+
+        const credential = await navigator.credentials.create({
+            publicKey: {
+                challenge: BlackWall.base64urlDecode(initData.challenge),
+                rp: { name: initData.rp.name, id: initData.rp.id },
+                user: {
+                    id: BlackWall.base64urlDecode(initData.user.id),
+                    name: initData.user.name,
+                    displayName: initData.user.displayName
+                },
+                pubKeyCredParams: initData.pubKeyCredParams,
+                timeout: initData.timeout,
+                attestation: initData.attestation,
+                authenticatorSelection: initData.authenticatorSelection
+            }
+        });
+
+        status.textContent = 'Completing registration…';
+        const label = document.getElementById('key-label').value;
+
+        const completeRes = await fetch('/portal/keys/add/complete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                csrf_token: csrfToken,
+                label: label,
+                id: credential.id,
+                response: {
+                    clientDataJSON: BlackWall.base64urlEncode(credential.response.clientDataJSON),
+                    attestationObject: BlackWall.base64urlEncode(credential.response.attestationObject)
+                }
+            })
+        });
+        const completeData = await completeRes.json();
+        if (completeData.success) {
+            if (completeData.csrf_token) {
+                csrfToken = completeData.csrf_token;
+            }
+            window.location.reload();
+        } else {
+            throw new Error(completeData.error || 'Registration failed');
+        }
+    } catch (err) {
+        status.className = 'alert alert-danger';
+        status.textContent = err.message;
+        btn.disabled = false;
+    }
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cryptbin - View</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/css/blackwall.css">
+</head>
+<body class="bg-charcoal">
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h1 class="h2 mb-1">Cryptbin Item</h1>
+                    <p class="text-muted mb-0">ID: <code>{{.ID}}</code></p>
+                </div>
+                <a href="/cryptbin" class="btn btn-outline-light">New Item</a>
+            </div>
+
+            <div id="cryptbin-alert" class="alert d-none" role="alert"></div>
+
+            <div class="card mb-4">
+                <div class="card-body">
+                    <div id="key-warning" class="alert alert-warning d-none mb-3">
+                        Missing URL fragment key. Open this page with <code>#&lt;key&gt;</code> to update/delete.
+                    </div>
+                    <div id="loading-state" class="text-muted">Loading encrypted content...</div>
+
+                    <div id="text-content-wrapper" class="d-none">
+                        <label for="text-content" class="form-label">Decrypted Text</label>
+                        <textarea id="text-content" class="form-control" rows="14"></textarea>
+                    </div>
+
+                    <div id="file-content-wrapper" class="d-none">
+                        <p class="mb-2">Decrypted file is available for download:</p>
+                        <button id="download-btn" class="btn btn-success">Download Decrypted File</button>
+                        <p class="text-muted small mt-2 mb-0" id="file-meta"></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="mb-3">Actions</h5>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <button id="update-btn" class="btn btn-primary">Update</button>
+                        <input id="update-file-input" class="form-control" type="file" style="max-width: 360px;">
+                        <button id="delete-btn" class="btn btn-danger">Delete</button>
+                    </div>
+                    <p class="text-muted small mt-3 mb-0">Update/Delete require your key fragment and WebAuthn verification.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+window.CRYPTBIN_CONFIG = {
+    csrfToken: {{json .CSRFToken}},
+    id: {{json .ID}},
+    maxUploadBytes: {{.MaxUploadBytes}},
+    maxTextBytes: {{.MaxTextBytes}},
+    mode: 'view'
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/assets/js/cryptbin.js"></script>
+</body>
+</html>
