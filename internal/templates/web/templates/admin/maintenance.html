@@ -17,6 +17,33 @@
 {{if .Success}}<div class="alert alert-success mt-3">Maintenance run triggered.</div>{{end}}
 {{if .Error}}<div class="alert alert-danger mt-3">{{.Error}}</div>{{end}}
 
+<div class="row mt-3 g-3">
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="mb-2">Expired tokens</h6>
+                <p class="text-muted small mb-0">Access tokens, refresh tokens, and auth codes older than retention are pruned during scheduled maintenance.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="mb-2">Audit retention</h6>
+                <p class="text-muted small mb-0">Audit log rows beyond the configured retention window are removed in background runs to keep storage bounded.</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <h6 class="mb-2">Manual execution</h6>
+                <p class="text-muted small mb-0">Use on-demand runs sparingly, typically after testing lifecycle changes or when validating cron and supervisor behaviour.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="card mt-3">
     <div class="card-header">Recent job runs</div>
     <div class="card-body p-0">

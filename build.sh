@@ -43,7 +43,10 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-VERSION="${VERSION:-$(git describe --tags --always --dirty 2>/dev/null || echo 'dev')}"
+GIT_TAG="${GIT_TAG:-$(git describe --tags --abbrev=0 2>/dev/null || echo 'dev')}"
+GIT_COMMIT_SHORT="${GIT_COMMIT_SHORT:-$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')}"
+BUILD_DATE="${BUILD_DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
+VERSION="${VERSION:-${GIT_TAG}-${GIT_COMMIT_SHORT}}"
 GOOS="${GOOS:-linux}"
 GOARCH="${GOARCH:-amd64}"
 
@@ -55,6 +58,9 @@ fi
 
 echo ">>> BlackWall build"
 echo "    version: ${VERSION}"
+echo "    tag:     ${GIT_TAG}"
+echo "    commit:  ${GIT_COMMIT_SHORT}"
+echo "    built:   ${BUILD_DATE}"
 echo "    binary:  $([[ ${DO_BINARY} -eq 1 ]] && echo yes || echo no)"
 echo "    image:   $([[ ${DO_IMAGE}  -eq 1 ]] && echo yes || echo no) (${IMAGE_REPO})"
 echo "    push:    $([[ ${DO_PUSH}   -eq 1 ]] && echo yes || echo no)"
@@ -70,7 +76,7 @@ if [[ ${DO_BINARY} -eq 1 ]]; then
     # binary so leaked stack traces don't reveal /home/<user>/...
     CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" go build \
         -trimpath \
-        -ldflags="-s -w -X main.Version=${VERSION}" \
+        -ldflags="-s -w -X blackwall/internal/buildinfo.VersionTag=${GIT_TAG} -X blackwall/internal/buildinfo.CommitShort=${GIT_COMMIT_SHORT} -X blackwall/internal/buildinfo.BuildDate=${BUILD_DATE}" \
         -o "${BUILD_DIR}/${BINARY}" \
         ./cmd/blackwall
 
@@ -88,6 +94,9 @@ if [[ ${DO_IMAGE} -eq 1 ]]; then
     echo ">>> Building Docker image ${IMAGE_REPO}:${VERSION}..."
     docker build \
         --build-arg "VERSION=${VERSION}" \
+        --build-arg "GIT_TAG=${GIT_TAG}" \
+        --build-arg "GIT_COMMIT_SHORT=${GIT_COMMIT_SHORT}" \
+        --build-arg "BUILD_DATE=${BUILD_DATE}" \
         --tag "${IMAGE_REPO}:${VERSION}" \
         --file Dockerfile \
         .

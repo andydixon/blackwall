@@ -7,6 +7,33 @@
 </div>
 
 <div class="row mt-3 g-3">
+    <div class="col-md-3">
+        <div class="card text-center"><div class="card-body">
+            <div class="display-6">{{.Scope.UserID}}</div>
+            <div class="text-muted small">Internal user ID</div>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center"><div class="card-body">
+            <div class="display-6">{{.Scope.AdminRole}}</div>
+            <div class="text-muted small">Admin role</div>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center"><div class="card-body">
+            <div class="display-6">{{len .Scope.OrganizationUUIDs}}</div>
+            <div class="text-muted small">Visible orgs</div>
+        </div></div>
+    </div>
+    <div class="col-md-3">
+        <div class="card text-center"><div class="card-body">
+            <div class="display-6">{{len .Scope.ProjectUUIDs}}</div>
+            <div class="text-muted small">Visible projects</div>
+        </div></div>
+    </div>
+</div>
+
+<div class="row mt-3 g-3">
     <div class="col-md-6">
         <div class="card h-100">
             <div class="card-header">Identity</div>
@@ -40,6 +67,7 @@
 <div class="card mt-3">
     <div class="card-header">Effective capabilities</div>
     <div class="card-body">
+        <p class="text-muted small mb-3">This is the post-resolution capability set after role, scope, and super-admin expansion have been applied.</p>
         <div class="row">
             {{range .EffectiveCapabilities}}
             <div class="col-md-3"><code class="small">{{.}}</code></div>

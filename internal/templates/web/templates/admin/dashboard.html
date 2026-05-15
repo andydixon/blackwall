@@ -1,165 +1,333 @@
 {{define "content"}}
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="page-header"><h2>Dashboard</h2></div>
+<div class="row mt-4 align-items-end g-4">
+    <div class="col-lg-8">
+        <div class="page-header">
+            <h2>Dashboard</h2>
+        </div>
+        <p class="text-muted mb-0">
+            Operational visibility across identity, approvals, CSRF pressure, and recent control-plane activity.
+        </p>
+    </div>
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="small text-muted text-uppercase mb-2">Current focus</div>
+                <div class="d-flex flex-wrap gap-2">
+                    <span class="badge text-bg-dark border">Identity plane</span>
+                    {{if .CanViewApprovals}}<span class="badge text-bg-dark border">Approval queue</span>{{end}}
+                    {{if .CanViewCryptbin}}<span class="badge text-bg-dark border">CryptBin</span>{{end}}
+                    <span class="badge text-bg-dark border">Security telemetry</span>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
 <div class="row g-3 mb-4">
-    <div class="col-md-3">
-        <div class="card stat-card">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card h-100">
             <div class="card-body d-flex align-items-center gap-3">
                 <div class="stat-icon stat-icon-blue">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                 </div>
                 <div>
                     <div class="display-6">{{.Stats.Users}}</div>
-                    <div class="text-muted small">Users</div>
+                    <div class="small text-muted">Registered users</div>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card stat-card" style="border-left-color:#10b981!important">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card h-100" style="border-left-color:#10b981!important">
             <div class="card-body d-flex align-items-center gap-3">
                 <div class="stat-icon stat-icon-green">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                 </div>
                 <div>
                     <div class="display-6">{{.Stats.Projects}}</div>
-                    <div class="text-muted small">Projects</div>
+                    <div class="small text-muted">Projects in scope</div>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card stat-card" style="border-left-color:#8b5cf6!important">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card h-100" style="border-left-color:#8b5cf6!important">
             <div class="card-body d-flex align-items-center gap-3">
                 <div class="stat-icon stat-icon-purple">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
                 </div>
                 <div>
                     <div class="display-6">{{.Stats.Clients}}</div>
-                    <div class="text-muted small">OAuth Clients</div>
+                    <div class="small text-muted">OAuth clients</div>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card stat-card" style="border-left-color:#f59e0b!important">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card h-100" style="border-left-color:#f59e0b!important">
             <div class="card-body d-flex align-items-center gap-3">
                 <div class="stat-icon stat-icon-amber">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                 </div>
                 <div>
                     <div class="display-6">{{.Stats.AuditCount}}</div>
-                    <div class="text-muted small">Audit events (visible)</div>
+                    <div class="small text-muted">Visible audit events</div>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<div class="row g-3 mb-4">
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">Outcomes (success vs fail)</div>
-            <div class="card-body">
-                <table class="table table-dark table-sm mb-0">
-                    <thead><tr><th></th><th class="text-end">Today</th><th class="text-end">7d</th><th class="text-end">30d</th></tr></thead>
-                    <tbody>
-                        <tr><td><span class="badge bg-success">success</span></td><td class="text-end">{{.OutcomeStats.Success.Today}}</td><td class="text-end">{{.OutcomeStats.Success.Week}}</td><td class="text-end">{{.OutcomeStats.Success.Month}}</td></tr>
-                        <tr><td><span class="badge bg-danger">fail</span></td><td class="text-end">{{.OutcomeStats.Fail.Today}}</td><td class="text-end">{{.OutcomeStats.Fail.Week}}</td><td class="text-end">{{.OutcomeStats.Fail.Month}}</td></tr>
-                    </tbody>
-                </table>
+<div class="row g-4">
+    <div class="col-xl-8">
+        <div class="row g-3 mb-3">
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>Outcome profile</span>
+                        <span class="small text-muted text-uppercase">Today / 7d / 30d</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-dark table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Outcome</th>
+                                    <th class="text-end">Today</th>
+                                    <th class="text-end">7d</th>
+                                    <th class="text-end">30d</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><span class="badge bg-success">success</span></td>
+                                    <td class="text-end font-monospace">{{.OutcomeStats.Success.Today}}</td>
+                                    <td class="text-end font-monospace">{{.OutcomeStats.Success.Week}}</td>
+                                    <td class="text-end font-monospace">{{.OutcomeStats.Success.Month}}</td>
+                                </tr>
+                                <tr>
+                                    <td><span class="badge bg-danger">fail</span></td>
+                                    <td class="text-end font-monospace">{{.OutcomeStats.Fail.Today}}</td>
+                                    <td class="text-end font-monospace">{{.OutcomeStats.Fail.Week}}</td>
+                                    <td class="text-end font-monospace">{{.OutcomeStats.Fail.Month}}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="card-footer small text-muted">
+                        Use the failure trend with the audit stream below to separate operator mistakes from client-side breakage.
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>CSRF pressure</span>
+                        <span class="small text-muted text-uppercase">Security indicator</span>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table table-dark table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Event</th>
+                                    <th class="text-end">Today</th>
+                                    <th class="text-end">7d</th>
+                                    <th class="text-end">30d</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><code class="small">security.csrf.fail</code></td>
+                                    <td class="text-end font-monospace">{{index .CSRFSecurityStats "Today"}}</td>
+                                    <td class="text-end font-monospace">{{index .CSRFSecurityStats "Week"}}</td>
+                                    <td class="text-end font-monospace">{{index .CSRFSecurityStats "Month"}}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="card-footer small text-muted">
+                        Elevated rejection counts usually point to stale forms, broken clients, or active probing.
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card">
-            <div class="card-header">CSRF rejections (security indicator)</div>
-            <div class="card-body">
-                <table class="table table-dark table-sm mb-0">
-                    <thead><tr><th></th><th class="text-end">Today</th><th class="text-end">7d</th><th class="text-end">30d</th></tr></thead>
-                    <tbody><tr>
-                        <td>security.csrf.fail</td>
-                        <td class="text-end">{{index .CSRFSecurityStats "Today"}}</td>
-                        <td class="text-end">{{index .CSRFSecurityStats "Week"}}</td>
-                        <td class="text-end">{{index .CSRFSecurityStats "Month"}}</td>
-                    </tr></tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
 
-<div class="row g-3 mb-4">
-    <div class="col-md-6">
-        <div class="card h-100">
-            <div class="card-header">Top successful events (30d)</div>
-            <div class="card-body p-0">
-                <table class="table table-dark table-sm mb-0">
-                    <thead><tr><th>Event</th><th class="text-end">Today</th><th class="text-end">7d</th><th class="text-end">30d</th></tr></thead>
+        <div class="row g-3 mb-3">
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header">Top successful events</div>
+                    <div class="card-body p-0">
+                        <table class="table table-dark table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Event</th>
+                                    <th class="text-end">Today</th>
+                                    <th class="text-end">7d</th>
+                                    <th class="text-end">30d</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {{range .SuccessBreakdown}}
+                                <tr>
+                                    <td><code class="small">{{index . "EventType"}}</code></td>
+                                    <td class="text-end font-monospace">{{index . "Today"}}</td>
+                                    <td class="text-end font-monospace">{{index . "Week"}}</td>
+                                    <td class="text-end font-monospace">{{index . "Month"}}</td>
+                                </tr>
+                                {{else}}
+                                <tr><td colspan="4" class="text-center text-muted py-3">No success events.</td></tr>
+                                {{end}}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card h-100">
+                    <div class="card-header">Top failure events</div>
+                    <div class="card-body p-0">
+                        <table class="table table-dark table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th>Event</th>
+                                    <th class="text-end">Today</th>
+                                    <th class="text-end">7d</th>
+                                    <th class="text-end">30d</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {{range .FailBreakdown}}
+                                <tr>
+                                    <td><code class="small">{{index . "EventType"}}</code></td>
+                                    <td class="text-end font-monospace">{{index . "Today"}}</td>
+                                    <td class="text-end font-monospace">{{index . "Week"}}</td>
+                                    <td class="text-end font-monospace">{{index . "Month"}}</td>
+                                </tr>
+                                {{else}}
+                                <tr><td colspan="4" class="text-center text-muted py-3">No failure events.</td></tr>
+                                {{end}}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <div>
+                    <div>Recent audit events</div>
+                    <div class="small text-muted mt-1">Latest visible control-plane activity across authentication, approval, and admin actions.</div>
+                </div>
+                <a href="/admin/audit" class="btn btn-outline-secondary btn-sm">View all</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-dark align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Event</th>
+                            <th>Outcome</th>
+                            <th>Actor</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
                     <tbody>
-                        {{range .SuccessBreakdown}}
-                        <tr><td><code class="small">{{index . "EventType"}}</code></td><td class="text-end">{{index . "Today"}}</td><td class="text-end">{{index . "Week"}}</td><td class="text-end">{{index . "Month"}}</td></tr>
+                        {{range .RecentAudit}}
+                        <tr>
+                            <td><code class="small">{{.EventType}}</code></td>
+                            <td>
+                                {{if eq .Outcome "success"}}<span class="badge bg-success">success</span>
+                                {{else if eq .Outcome "fail"}}<span class="badge bg-danger">fail</span>
+                                {{else}}<span class="badge bg-secondary">{{.Outcome}}</span>{{end}}
+                            </td>
+                            <td class="text-muted small font-monospace">{{shortHash .ActorUUID}}</td>
+                            <td class="text-muted small">{{.CreatedAt}}</td>
+                        </tr>
                         {{else}}
-                        <tr><td colspan="4" class="text-center text-muted py-3">No success events.</td></tr>
+                        <tr><td colspan="4" class="text-center text-muted py-3">No recent events</td></tr>
                         {{end}}
                     </tbody>
                 </table>
             </div>
         </div>
     </div>
-    <div class="col-md-6">
-        <div class="card h-100">
-            <div class="card-header">Top failure events (30d)</div>
-            <div class="card-body p-0">
-                <table class="table table-dark table-sm mb-0">
-                    <thead><tr><th>Event</th><th class="text-end">Today</th><th class="text-end">7d</th><th class="text-end">30d</th></tr></thead>
-                    <tbody>
-                        {{range .FailBreakdown}}
-                        <tr><td><code class="small">{{index . "EventType"}}</code></td><td class="text-end">{{index . "Today"}}</td><td class="text-end">{{index . "Week"}}</td><td class="text-end">{{index . "Month"}}</td></tr>
-                        {{else}}
-                        <tr><td colspan="4" class="text-center text-muted py-3">No failure events.</td></tr>
-                        {{end}}
-                    </tbody>
-                </table>
+
+    <div class="col-xl-4">
+        <div class="card">
+            <div class="card-header">Quick actions</div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">Jump directly into common provisioning and investigation paths.</p>
+                <div class="d-grid gap-2">
+                    {{if index .Capabilities "manage_users"}}<a href="/admin/users/create" class="btn btn-outline-primary btn-sm">New user</a>{{end}}
+                    {{if index .Capabilities "manage_projects"}}<a href="/admin/projects/create" class="btn btn-outline-primary btn-sm">New project</a>{{end}}
+                    <a href="/admin/audit" class="btn btn-outline-secondary btn-sm">Audit log</a>
+                    {{if .CanViewApprovals}}<a href="/admin/approvals" class="btn btn-outline-secondary btn-sm">Approvals queue</a>{{end}}
+                    {{if index .Capabilities "view_maintenance"}}<a href="/admin/maintenance" class="btn btn-outline-secondary btn-sm">Maintenance</a>{{end}}
+                </div>
             </div>
         </div>
-    </div>
-</div>
 
-{{if .CanViewApprovals}}
-<div class="row g-3 mb-4">
-    <div class="col-md-6">
-        <div class="card h-100">
+        {{if .CanViewApprovals}}
+        <div class="card">
             <div class="card-header">Approvals snapshot</div>
             <div class="card-body p-0">
-                <table class="table table-dark table-sm mb-0">
-                    <thead><tr><th>Status</th><th class="text-end">Today</th><th class="text-end">7d</th><th class="text-end">30d</th></tr></thead>
+                <table class="table table-dark table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th class="text-end">Today</th>
+                            <th class="text-end">7d</th>
+                            <th class="text-end">30d</th>
+                        </tr>
+                    </thead>
                     <tbody>
-                        <tr><td><span class="badge bg-warning text-dark">pending</span></td><td class="text-end">{{.ApprovalSummary.Pending.Today}}</td><td class="text-end">{{.ApprovalSummary.Pending.Week}}</td><td class="text-end">{{.ApprovalSummary.Pending.Month}}</td></tr>
-                        <tr><td><span class="badge bg-success">approved</span></td><td class="text-end">{{.ApprovalSummary.Approved.Today}}</td><td class="text-end">{{.ApprovalSummary.Approved.Week}}</td><td class="text-end">{{.ApprovalSummary.Approved.Month}}</td></tr>
-                        <tr><td><span class="badge bg-danger">rejected</span></td><td class="text-end">{{.ApprovalSummary.Rejected.Today}}</td><td class="text-end">{{.ApprovalSummary.Rejected.Week}}</td><td class="text-end">{{.ApprovalSummary.Rejected.Month}}</td></tr>
-                        <tr><td><span class="badge bg-secondary">cancelled</span></td><td class="text-end">{{.ApprovalSummary.Cancelled.Today}}</td><td class="text-end">{{.ApprovalSummary.Cancelled.Week}}</td><td class="text-end">{{.ApprovalSummary.Cancelled.Month}}</td></tr>
+                        <tr>
+                            <td><span class="badge bg-warning text-dark">pending</span></td>
+                            <td class="text-end font-monospace">{{.ApprovalSummary.Pending.Today}}</td>
+                            <td class="text-end font-monospace">{{.ApprovalSummary.Pending.Week}}</td>
+                            <td class="text-end font-monospace">{{.ApprovalSummary.Pending.Month}}</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge bg-success">approved</span></td>
+                            <td class="text-end font-monospace">{{.ApprovalSummary.Approved.Today}}</td>
+                            <td class="text-end font-monospace">{{.ApprovalSummary.Approved.Week}}</td>
+                            <td class="text-end font-monospace">{{.ApprovalSummary.Approved.Month}}</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge bg-danger">rejected</span></td>
+                            <td class="text-end font-monospace">{{.ApprovalSummary.Rejected.Today}}</td>
+                            <td class="text-end font-monospace">{{.ApprovalSummary.Rejected.Week}}</td>
+                            <td class="text-end font-monospace">{{.ApprovalSummary.Rejected.Month}}</td>
+                        </tr>
+                        <tr>
+                            <td><span class="badge bg-secondary">cancelled</span></td>
+                            <td class="text-end font-monospace">{{.ApprovalSummary.Cancelled.Today}}</td>
+                            <td class="text-end font-monospace">{{.ApprovalSummary.Cancelled.Week}}</td>
+                            <td class="text-end font-monospace">{{.ApprovalSummary.Cancelled.Month}}</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
             <div class="card-footer small text-muted">
-                Decision SLA: median {{durationSeconds .ApprovalSLA.MedianSeconds}} · P95 {{durationSeconds .ApprovalSLA.P95Seconds}} · {{.ApprovalSLA.PendingOlderThanThreshold}} pending &gt; {{.ApprovalSLA.PendingWarningDays}}d
+                Median decision {{durationSeconds .ApprovalSLA.MedianSeconds}}. P95 {{durationSeconds .ApprovalSLA.P95Seconds}}. {{.ApprovalSLA.PendingOlderThanThreshold}} pending older than {{.ApprovalSLA.PendingWarningDays}}d.
             </div>
         </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card h-100">
+
+        <div class="card">
             <div class="card-header">Your pending requests</div>
             <div class="card-body p-0">
-                <table class="table table-dark table-sm mb-0">
-                    <thead><tr><th>Action</th><th>Submitted</th></tr></thead>
+                <table class="table table-dark table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Action</th>
+                            <th>Submitted</th>
+                        </tr>
+                    </thead>
                     <tbody>
                         {{range .MyPendingApprovals}}
-                        <tr><td><code class="small">{{.ActionType}}</code></td><td class="small text-muted">{{.CreatedAt.Format "2006-01-02 15:04"}}</td></tr>
+                        <tr>
+                            <td><code class="small">{{.ActionType}}</code></td>
+                            <td class="small text-muted">{{.CreatedAt.Format "2006-01-02 15:04"}}</td>
+                        </tr>
                         {{else}}
                         <tr><td colspan="2" class="text-center text-muted py-3">No pending requests of yours.</td></tr>
                         {{end}}
@@ -167,58 +335,23 @@
                 </table>
             </div>
         </div>
-    </div>
-</div>
-{{end}}
+        {{end}}
 
-<div class="row g-3">
-    <div class="col-md-8">
-        <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                Recent audit events
-                <a href="/admin/audit" class="btn btn-outline-secondary btn-sm">View all</a>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-dark mb-0">
-                    <thead><tr><th>Event</th><th>Outcome</th><th>Actor</th><th>Time</th></tr></thead>
-                    <tbody>
-                    {{range .RecentAudit}}
-                    <tr>
-                        <td><code class="small">{{.EventType}}</code></td>
-                        <td>
-                            {{if eq .Outcome "success"}}<span class="badge bg-success">success</span>
-                            {{else if eq .Outcome "fail"}}<span class="badge bg-danger">fail</span>
-                            {{else}}<span class="badge bg-secondary">{{.Outcome}}</span>{{end}}
-                        </td>
-                        <td class="text-muted small font-monospace">{{shortHash .ActorUUID}}</td>
-                        <td class="text-muted small">{{.CreatedAt}}</td>
-                    </tr>
-                    {{else}}
-                    <tr><td colspan="4" class="text-center text-muted py-3">No recent events</td></tr>
-                    {{end}}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="card">
-            <div class="card-header">Quick actions</div>
-            <div class="card-body">
-                <div class="d-grid gap-2">
-                    {{if index .Capabilities "manage_users"}}<a href="/admin/users/create" class="btn btn-outline-primary btn-sm">+ New user</a>{{end}}
-                    {{if index .Capabilities "manage_projects"}}<a href="/admin/projects/create" class="btn btn-outline-primary btn-sm">+ New project</a>{{end}}
-                    <a href="/admin/audit" class="btn btn-outline-secondary btn-sm">Audit log</a>
-                    {{if .CanViewApprovals}}<a href="/admin/approvals" class="btn btn-outline-secondary btn-sm">Approvals</a>{{end}}
-                    {{if index .Capabilities "view_maintenance"}}<a href="/admin/maintenance" class="btn btn-outline-secondary btn-sm">Maintenance</a>{{end}}
-                </div>
-            </div>
-        </div>
         {{if and .CanViewCryptbin .IsSuperAdmin}}
-        <div class="card mt-3">
-            <div class="card-header">CryptBin (last 24h)</div>
+        <div class="card">
+            <div class="card-header">CryptBin</div>
             <div class="card-body">
-                <p class="mb-1">{{.CryptbinStats.Created24h}} created · {{.CryptbinStats.Failed24h}} failed</p>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <div class="small text-muted text-uppercase">Created in 24h</div>
+                        <div class="display-6 fs-2 mb-0">{{.CryptbinStats.Created24h}}</div>
+                    </div>
+                    <div class="text-end">
+                        <div class="small text-muted text-uppercase">Failed in 24h</div>
+                        <div class="display-6 fs-2 mb-0 text-danger">{{.CryptbinStats.Failed24h}}</div>
+                    </div>
+                </div>
+                <p class="text-muted small mb-3">Use the admin view to inspect item volume, storage issues, and operational failures.</p>
                 <a href="/admin/cryptbin" class="btn btn-outline-light btn-sm">View items</a>
             </div>
         </div>

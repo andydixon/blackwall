@@ -1,34 +1,49 @@
 {{define "content"}}
 <div class="row mt-4">
-    <div class="col-md-8 offset-md-2">
+    <div class="col-xl-10 offset-xl-1">
         <div class="page-header"><h2>Create Project</h2></div>
-        {{if .Error}}<div class="alert alert-danger">{{.Error}}</div>{{end}}
-        <div class="card">
-            <div class="card-body">
-                <form method="POST" action="/admin/projects/create">
-                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-                    <div class="mb-3">
-                        <label class="form-label">Project name</label>
-                        <input type="text" class="form-control" name="name" required maxlength="120">
+        <p class="text-muted small mb-0">Create the project container first, then attach clients, assignments, and any custom privilege tiers.</p>
+        {{if .Error}}<div class="alert alert-danger mt-3">{{.Error}}</div>{{end}}
+        <div class="row mt-3 g-3">
+            <div class="col-lg-7">
+                <div class="card">
+                    <div class="card-header">Project identity</div>
+                    <div class="card-body">
+                        <form method="POST" action="/admin/projects/create">
+                            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                            <div class="mb-3">
+                                <label class="form-label">Project name</label>
+                                <input type="text" class="form-control" name="name" required maxlength="120">
+                            </div>
+                            <div class="mb-4">
+                                <label class="form-label">Organisation</label>
+                                <select class="form-select" name="organization_uuid" required>
+                                    <option value="">— select —</option>
+                                    {{range .Organizations}}
+                                    <option value="{{.UUID}}">{{.Name}}</option>
+                                    {{end}}
+                                </select>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">Create project</button>
+                                <a href="/admin/projects" class="btn btn-outline-secondary">Cancel</a>
+                            </div>
+                        </form>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Organisation</label>
-                        <select class="form-select" name="organization_uuid" required>
-                            <option value="">— select —</option>
-                            {{range .Organizations}}
-                            <option value="{{.UUID}}">{{.Name}}</option>
-                            {{end}}
-                        </select>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="card h-100">
+                    <div class="card-header">Provisioned automatically</div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-3">BlackWall gives each new project an initial access ladder so it can be used immediately.</p>
+                        <ul class="list-unstyled small mb-0">
+                            <li class="mb-2">Default levels: <strong>Owner</strong>, <strong>Administrator</strong>, <strong>Editor</strong>, <strong>Member</strong>, and <strong>Viewer</strong>.</li>
+                            <li class="mb-2">You can rename or extend levels after creation from the privilege management screen.</li>
+                            <li>OAuth clients and user assignments can be attached as soon as the project exists.</li>
+                        </ul>
                     </div>
-                    <p class="text-muted small">
-                        The five default privilege levels (Owner / Administrator / Editor / Member / Viewer)
-                        will be created automatically. You can rename or extend them after the project exists.
-                    </p>
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-primary">Create project</button>
-                        <a href="/admin/projects" class="btn btn-outline-secondary">Cancel</a>
-                    </div>
-                </form>
+                </div>
             </div>
         </div>
     </div>

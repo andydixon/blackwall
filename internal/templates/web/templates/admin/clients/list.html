@@ -1,14 +1,22 @@
 {{define "content"}}
-<div class="row mt-4 align-items-center">
-    <div class="col">
+<div class="row mt-4 align-items-end g-4">
+    <div class="col-lg-8">
         <div class="page-header"><h2>OAuth clients</h2></div>
-        <p class="text-muted small mb-0">Project: <a href="/admin/projects/{{.Project.UUID}}" class="text-light">{{.Project.Name}}</a></p>
+        <p class="text-muted mb-0">Project: <a href="/admin/projects/{{.Project.UUID}}" class="text-light">{{.Project.Name}}</a></p>
     </div>
-    {{if .CanManage}}
-    <div class="col-auto">
-        <a href="/admin/projects/{{.Project.UUID}}/clients/create" class="btn btn-primary">New client</a>
+    <div class="col-lg-4">
+        <div class="d-flex justify-content-lg-end align-items-center gap-3">
+            <div class="card">
+                <div class="card-body py-3">
+                    <div class="small text-muted text-uppercase mb-1">Registered clients</div>
+                    <div class="fw-semibold fs-5">{{len .Clients}}</div>
+                </div>
+            </div>
+            {{if .CanManage}}
+            <a href="/admin/projects/{{.Project.UUID}}/clients/create" class="btn btn-primary">New client</a>
+            {{end}}
+        </div>
     </div>
-    {{end}}
 </div>
 
 <div class="card mt-3">
@@ -26,10 +34,11 @@
                     </td>
                     <td>
                         {{if eq .Status "active"}}<span class="badge bg-success">Active</span>
+                        {{else if eq .Status "disabled"}}<span class="badge bg-secondary">Disabled</span>
                         {{else}}<span class="badge bg-secondary">{{.Status}}</span>{{end}}
                     </td>
                     <td><span class="text-muted small">{{.CreatedAt.Format "2006-01-02"}}</span></td>
-                    <td class="text-end"><a href="/admin/clients/{{.PublicID}}" class="btn btn-sm btn-outline-light">Manage</a></td>
+                    <td class="text-end"><a href="/admin/clients/{{.PublicID}}" class="btn btn-sm btn-outline-light">Open client</a></td>
                 </tr>
                 {{else}}
                 <tr><td colspan="6" class="text-center text-muted py-4">No clients registered yet.</td></tr>

@@ -1,13 +1,22 @@
 {{define "content"}}
-<div class="row mt-4 align-items-center">
-    <div class="col">
+<div class="row mt-4 align-items-end g-4">
+    <div class="col-lg-8">
         <div class="page-header"><h2>Users</h2></div>
+        <p class="text-muted mb-0">Manage account labels, access state, passkeys, and project assignments.</p>
     </div>
-    {{if .CanManage}}
-    <div class="col-auto">
-        <a href="/admin/users/create" class="btn btn-primary">New user</a>
+    <div class="col-lg-4">
+        <div class="d-flex justify-content-lg-end align-items-center gap-3">
+            <div class="card">
+                <div class="card-body py-3">
+                    <div class="small text-muted text-uppercase mb-1">Visible users</div>
+                    <div class="fw-semibold fs-5">{{len .Users}}</div>
+                </div>
+            </div>
+            {{if .CanManage}}
+            <a href="/admin/users/create" class="btn btn-primary">New user</a>
+            {{end}}
+        </div>
     </div>
-    {{end}}
 </div>
 
 <div class="card mt-3">
@@ -26,16 +35,14 @@
                 {{range .Users}}
                 <tr>
                     <td><a href="/admin/users/{{.UUID}}" class="text-light">{{.DisplayLabel}}</a></td>
-                    <td>{{.OrganizationName}}</td>
+                    <td><span class="text-muted">{{if .OrganizationName}}{{.OrganizationName}}{{else}}—{{end}}</span></td>
                     <td>
                         {{if eq .Status "active"}}<span class="badge bg-success">Active</span>
                         {{else if eq .Status "disabled"}}<span class="badge bg-danger">Disabled</span>
                         {{else}}<span class="badge bg-light text-dark">{{.Status}}</span>{{end}}
                     </td>
                     <td><span class="text-muted small">{{.CreatedAt.Format "2006-01-02"}}</span></td>
-                    <td class="text-end">
-                        <a href="/admin/users/{{.UUID}}" class="btn btn-sm btn-outline-light">Manage</a>
-                    </td>
+                    <td class="text-end"><a href="/admin/users/{{.UUID}}" class="btn btn-sm btn-outline-light">Open profile</a></td>
                 </tr>
                 {{else}}
                 <tr><td colspan="5" class="text-center text-muted py-4">No users to display.</td></tr>

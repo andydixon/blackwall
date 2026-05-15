@@ -12,6 +12,27 @@
 {{if .Success}}<div class="alert alert-success mt-3">{{if eq .Success "pending_approval"}}Change submitted for approval.{{else}}{{.Success}}{{end}}</div>{{end}}
 {{if .Error}}<div class="alert alert-danger mt-3">{{.Error}}</div>{{end}}
 
+<div class="row mt-3 g-3">
+    <div class="col-md-4">
+        <div class="card text-center"><div class="card-body">
+            <div class="display-6">{{len .Assignments}}</div>
+            <div class="text-muted small">Current assignments</div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center"><div class="card-body">
+            <div class="display-6">{{len .EligibleUsers}}</div>
+            <div class="text-muted small">Eligible users</div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center"><div class="card-body">
+            <div class="display-6">{{len .PrivilegeLevels}}</div>
+            <div class="text-muted small">Privilege tiers</div>
+        </div></div>
+    </div>
+</div>
+
 <div class="card mt-3">
     <div class="card-header">Current assignments ({{len .Assignments}})</div>
     <div class="card-body p-0">
@@ -57,6 +78,7 @@
 <div class="card mt-3">
     <div class="card-header">Add assignment{{if not .CanDirect}} <span class="badge bg-warning text-dark">requires approval</span>{{end}}</div>
     <div class="card-body">
+        <p class="text-muted small mb-3">Assignments bind a user to this project and place them into one of the available privilege tiers.</p>
         <form method="POST" action="/admin/projects/{{.Project.UUID}}/assignments/create" class="row g-3">
             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
             <div class="col-md-7">

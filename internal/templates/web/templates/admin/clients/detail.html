@@ -1,14 +1,15 @@
 {{define "content"}}
-<div class="row mt-4 align-items-center">
-    <div class="col">
+<div class="row mt-4 align-items-end g-4">
+    <div class="col-lg-8">
         <div class="page-header"><h2>{{.Client.Name}}</h2></div>
-        <p class="text-muted small mb-0">
+        <p class="text-muted mb-0">
             Project: <a href="/admin/projects/{{.Client.ProjectUUID}}" class="text-light">{{.Client.ProjectName}}</a> ·
             <code>{{.Client.PublicID}}</code>
             {{if .Client.Confidential}}<span class="badge bg-info text-dark ms-2">Confidential</span>{{else}}<span class="badge bg-warning text-dark ms-2">Public (PKCE)</span>{{end}}
+            {{if eq .Client.Status "active"}}<span class="badge bg-success ms-2">Active</span>{{else if eq .Client.Status "disabled"}}<span class="badge bg-secondary ms-2">Disabled</span>{{else}}<span class="badge bg-light text-dark ms-2">{{.Client.Status}}</span>{{end}}
         </p>
     </div>
-    <div class="col-auto">
+    <div class="col-lg-4 text-lg-end">
         <a href="/admin/projects/{{.Client.ProjectUUID}}/clients" class="btn btn-outline-secondary">Back</a>
     </div>
 </div>
@@ -25,6 +26,27 @@
     </div>
 </div>
 {{end}}
+
+<div class="row mt-3 g-3">
+    <div class="col-md-4">
+        <div class="card text-center"><div class="card-body">
+            <div class="display-6">{{if .Client.Confidential}}Confidential{{else}}Public{{end}}</div>
+            <div class="text-muted small">Client type</div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center"><div class="card-body">
+            <div class="display-6">{{len .Client.Scopes}}</div>
+            <div class="text-muted small">Allowed scopes</div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center"><div class="card-body">
+            <div class="display-6">{{.Client.AccessTokenLifetime}}s</div>
+            <div class="text-muted small">Access lifetime</div>
+        </div></div>
+    </div>
+</div>
 
 {{if .CanManage}}
 <form method="POST" action="/admin/clients/{{.Client.PublicID}}/update" class="card mt-3">
@@ -94,7 +116,7 @@
 <div class="card mt-3">
     <div class="card-body">
         <dl class="row mb-0">
-            <dt class="col-sm-3">Status</dt><dd class="col-sm-9">{{.Client.Status}}</dd>
+            <dt class="col-sm-3">Status</dt><dd class="col-sm-9">{{if eq .Client.Status "active"}}<span class="badge bg-success">Active</span>{{else if eq .Client.Status "disabled"}}<span class="badge bg-secondary">Disabled</span>{{else}}<span class="badge bg-light text-dark">{{.Client.Status}}</span>{{end}}</dd>
             <dt class="col-sm-3">Token type</dt><dd class="col-sm-9">{{.Client.AccessTokenType}}</dd>
             <dt class="col-sm-3">Access lifetime</dt><dd class="col-sm-9">{{.Client.AccessTokenLifetime}}s</dd>
             <dt class="col-sm-3">Refresh lifetime</dt><dd class="col-sm-9">{{.Client.RefreshTokenLifetime}}s</dd>

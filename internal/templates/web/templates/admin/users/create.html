@@ -1,41 +1,65 @@
 {{define "content"}}
 <div class="row mt-4">
-    <div class="col-md-8 offset-md-2">
+    <div class="col-xl-10 offset-xl-1">
         <div class="page-header"><h2>Create User</h2></div>
-        {{if .Error}}<div class="alert alert-danger">{{.Error}}</div>{{end}}
-        <div class="card">
-            <div class="card-body">
-                <form method="POST" action="/admin/users/create">
-                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-                    <div class="mb-3">
-                        <label class="form-label">Display label</label>
-                        <input type="text" class="form-control" name="display_label" required maxlength="120">
-                        <div class="form-text">A human-readable name shown in the audit log and OAuth consent screens. Use an email address here if you want OIDC `email` claims to derive from it.</div>
+        <p class="text-muted small mb-0">Create the identity record first, then hand the generated enrolment URL to the user so they can register their first passkey.</p>
+        {{if .Error}}<div class="alert alert-danger mt-3">{{.Error}}</div>{{end}}
+        <div class="row mt-3 g-3">
+            <div class="col-lg-7">
+                <div class="card">
+                    <div class="card-header">Identity</div>
+                    <div class="card-body">
+                        <form method="POST" action="/admin/users/create">
+                            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                            <div class="mb-3">
+                                <label class="form-label">Display label</label>
+                                <input type="text" class="form-control" name="display_label" required maxlength="120">
+                                <div class="form-text">Shown in audit logs, consent prompts, and operator tooling. Use an email address here if OIDC `email` claims should derive from it.</div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">Organisation</label>
+                                <select class="form-select" name="organization_uuid" required>
+                                    <option value="">— select —</option>
+                                    {{range .Organizations}}
+                                    <option value="{{.UUID}}">{{.Name}}</option>
+                                    {{end}}
+                                </select>
+                            </div>
+                            <div class="mb-4">
+                                <label class="form-label">Status</label>
+                                <select class="form-select" name="status">
+                                    <option value="active" selected>Active</option>
+                                    <option value="disabled">Disabled</option>
+                                </select>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary">Create user</button>
+                                <a href="/admin/users" class="btn btn-outline-secondary">Cancel</a>
+                            </div>
+                        </form>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Organisation</label>
-                        <select class="form-select" name="organization_uuid" required>
-                            <option value="">— select —</option>
-                            {{range .Organizations}}
-                            <option value="{{.UUID}}">{{.Name}}</option>
-                            {{end}}
-                        </select>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="card h-100">
+                    <div class="card-header">Provisioning sequence</div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <h6 class="mb-2">1. Account record</h6>
+                            <p class="text-muted small mb-0">The user becomes visible to admins immediately and can be assigned to projects before enrolment.</p>
+                        </div>
+                        <div class="mb-3">
+                            <h6 class="mb-2">2. Enrolment link</h6>
+                            <p class="text-muted small mb-0">A single-use 24-hour registration URL is generated after submission.</p>
+                        </div>
+                        <div>
+                            <h6 class="mb-2">3. Passkey registration</h6>
+                            <p class="text-muted small mb-0">Once the first credential is registered, the user can authenticate into portal, OAuth, and admin flows as allowed.</p>
+                        </div>
                     </div>
-                    <div class="mb-3">
-                        <label class="form-label">Status</label>
-                        <select class="form-select" name="status">
-                            <option value="active" selected>Active</option>
-                            <option value="disabled">Disabled</option>
-                        </select>
-                    </div>
-                    <div class="d-flex gap-2">
-                        <button type="submit" class="btn btn-primary">Create user</button>
-                        <a href="/admin/users" class="btn btn-outline-secondary">Cancel</a>
-                    </div>
-                </form>
+                </div>
             </div>
         </div>
-        <p class="text-muted small mt-3">A 24-hour enrolment link will be generated automatically; share it with the user so they can register their first WebAuthn credential.</p>
     </div>
 </div>
 {{end}}

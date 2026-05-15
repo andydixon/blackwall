@@ -12,6 +12,22 @@
 {{if .Success}}<div class="alert alert-success mt-3">{{.Success}}</div>{{end}}
 {{if .Error}}<div class="alert alert-danger mt-3">{{.Error}}</div>{{end}}
 
+<div class="row mt-3 g-3">
+    <div class="col-md-4">
+        <div class="card text-center"><div class="card-body">
+            <div class="display-6">{{len .Levels}}</div>
+            <div class="text-muted small">Defined levels</div>
+        </div></div>
+    </div>
+    <div class="col-md-8">
+        <div class="card h-100">
+            <div class="card-body">
+                <p class="text-muted small mb-0">Lower-numbered levels represent stronger authority. Keep the ladder compact and predictable so assignment reviews stay legible.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="card mt-3">
     <div class="card-header">Existing levels</div>
     <div class="card-body p-0">

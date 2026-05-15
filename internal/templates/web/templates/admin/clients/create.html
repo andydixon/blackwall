@@ -1,69 +1,94 @@
 {{define "content"}}
 <div class="row mt-4">
-    <div class="col-md-10 offset-md-1">
+    <div class="col-xl-10 offset-xl-1">
         <div class="page-header"><h2>Create OAuth client</h2></div>
         <p class="text-muted small">Project: <a href="/admin/projects/{{.Project.UUID}}" class="text-light">{{.Project.Name}}</a></p>
-        {{if .Error}}<div class="alert alert-danger">{{.Error}}</div>{{end}}
+        {{if .Error}}<div class="alert alert-danger mt-3">{{.Error}}</div>{{end}}
 
-        <form method="POST" action="/admin/projects/{{.Project.UUID}}/clients/create" class="card">
-            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <div class="card-body">
-                <div class="row g-3">
-                    <div class="col-md-8">
-                        <label class="form-label">Client name</label>
-                        <input type="text" class="form-control" name="name" required maxlength="120">
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Client type</label>
-                        <select class="form-select" name="client_type">
-                            <option value="confidential">Confidential (server-side, with secret)</option>
-                            <option value="public">Public (browser/native app, PKCE only)</option>
-                        </select>
-                    </div>
+        <div class="row mt-3 g-3">
+            <div class="col-lg-8">
+                <form method="POST" action="/admin/projects/{{.Project.UUID}}/clients/create" class="card">
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    <div class="card-header">Client configuration</div>
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-8">
+                                <label class="form-label">Client name</label>
+                                <input type="text" class="form-control" name="name" required maxlength="120">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Client type</label>
+                                <select class="form-select" name="client_type">
+                                    <option value="confidential">Confidential (server-side, with secret)</option>
+                                    <option value="public">Public (browser/native app, PKCE only)</option>
+                                </select>
+                            </div>
 
-                    <div class="col-md-12">
-                        <label class="form-label">Redirect URIs <span class="text-muted">(one per line)</span></label>
-                        <textarea class="form-control font-monospace" name="redirect_uris" rows="3" placeholder="https://app.example.com/callback"></textarea>
-                    </div>
+                            <div class="col-md-12">
+                                <label class="form-label">Redirect URIs <span class="text-muted">(one per line)</span></label>
+                                <textarea class="form-control font-monospace" name="redirect_uris" rows="3" placeholder="https://app.example.com/callback"></textarea>
+                            </div>
 
-                    <div class="col-md-6">
-                        <label class="form-label">Allowed scopes <span class="text-muted">(one per line)</span></label>
-                        <textarea class="form-control font-monospace" name="scopes" rows="4" placeholder="openid&#10;profile&#10;email&#10;offline_access"></textarea>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="form-label">Allowed grants <span class="text-muted">(one per line)</span></label>
-                        <textarea class="form-control font-monospace" name="grants" rows="4">authorization_code
+                            <div class="col-md-6">
+                                <label class="form-label">Allowed scopes <span class="text-muted">(one per line)</span></label>
+                                <textarea class="form-control font-monospace" name="scopes" rows="4" placeholder="openid&#10;profile&#10;email&#10;offline_access"></textarea>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Allowed grants <span class="text-muted">(one per line)</span></label>
+                                <textarea class="form-control font-monospace" name="grants" rows="4">authorization_code
 refresh_token</textarea>
-                    </div>
+                            </div>
 
-                    <div class="col-md-3">
-                        <label class="form-label">Access token type</label>
-                        <select class="form-select" name="access_token_type">
-                            <option value="jwt" selected>JWT (signed)</option>
-                            <option value="opaque">Opaque (DB lookup)</option>
-                        </select>
+                            <div class="col-md-3">
+                                <label class="form-label">Access token type</label>
+                                <select class="form-select" name="access_token_type">
+                                    <option value="jwt" selected>JWT (signed)</option>
+                                    <option value="opaque">Opaque (DB lookup)</option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Access token lifetime <span class="text-muted">(s)</span></label>
+                                <input type="number" class="form-control" name="access_token_lifetime" value="3600" min="60" max="86400">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Refresh lifetime <span class="text-muted">(s)</span></label>
+                                <input type="number" class="form-control" name="refresh_token_lifetime" value="2592000" min="3600">
+                            </div>
+                            <div class="col-md-3 d-flex align-items-end">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="oidcEnabled" name="oidc_enabled" value="1" checked>
+                                    <label class="form-check-label" for="oidcEnabled">OIDC enabled</label>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Access token lifetime <span class="text-muted">(s)</span></label>
-                        <input type="number" class="form-control" name="access_token_lifetime" value="3600" min="60" max="86400">
+                    <div class="card-footer text-end">
+                        <a href="/admin/projects/{{.Project.UUID}}/clients" class="btn btn-outline-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">Create client</button>
                     </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Refresh lifetime <span class="text-muted">(s)</span></label>
-                        <input type="number" class="form-control" name="refresh_token_lifetime" value="2592000" min="3600">
-                    </div>
-                    <div class="col-md-3 d-flex align-items-end">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" id="oidcEnabled" name="oidc_enabled" value="1" checked>
-                            <label class="form-check-label" for="oidcEnabled">OIDC enabled</label>
+                </form>
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card h-100">
+                    <div class="card-header">Recommended defaults</div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <h6 class="mb-2">Public clients</h6>
+                            <p class="text-muted small mb-0">Use for browser and native apps. They should rely on PKCE and must not depend on a shared client secret.</p>
+                        </div>
+                        <div class="mb-3">
+                            <h6 class="mb-2">Confidential clients</h6>
+                            <p class="text-muted small mb-0">Use for server-side services that can store credentials safely and exchange tokens directly.</p>
+                        </div>
+                        <div>
+                            <h6 class="mb-2">JWT access tokens</h6>
+                            <p class="text-muted small mb-0">Preferred for modern relying parties that validate signatures locally and call `/oauth/userinfo` for claims.</p>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="card-footer text-end">
-                <a href="/admin/projects/{{.Project.UUID}}/clients" class="btn btn-outline-secondary">Cancel</a>
-                <button type="submit" class="btn btn-primary">Create client</button>
-            </div>
-        </form>
+        </div>
     </div>
 </div>
 {{end}}

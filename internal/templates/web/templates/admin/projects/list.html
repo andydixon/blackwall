@@ -1,13 +1,22 @@
 {{define "content"}}
-<div class="row mt-4 align-items-center">
-    <div class="col">
+<div class="row mt-4 align-items-end g-4">
+    <div class="col-lg-8">
         <div class="page-header"><h2>Projects</h2></div>
+        <p class="text-muted mb-0">Review project state, client registrations, assignments, and privilege ladders.</p>
     </div>
-    {{if .CanManage}}
-    <div class="col-auto">
-        <a href="/admin/projects/create" class="btn btn-primary">New project</a>
+    <div class="col-lg-4">
+        <div class="d-flex justify-content-lg-end align-items-center gap-3">
+            <div class="card">
+                <div class="card-body py-3">
+                    <div class="small text-muted text-uppercase mb-1">Visible projects</div>
+                    <div class="fw-semibold fs-5">{{len .Projects}}</div>
+                </div>
+            </div>
+            {{if .CanManage}}
+            <a href="/admin/projects/create" class="btn btn-primary">New project</a>
+            {{end}}
+        </div>
     </div>
-    {{end}}
 </div>
 
 <div class="card mt-3">
@@ -28,7 +37,7 @@
                     <td><span class="text-muted">{{if .OrgName}}{{.OrgName}}{{else}}—{{end}}</span></td>
                     <td>
                         {{if eq .Status "active"}}<span class="badge bg-success">Active</span>
-                        {{else if eq .Status "inactive"}}<span class="badge bg-secondary">Inactive</span>
+                        {{else if eq .Status "disabled"}}<span class="badge bg-secondary">Disabled</span>
                         {{else}}<span class="badge bg-light text-dark">{{.Status}}</span>{{end}}
                     </td>
                     <td class="text-end">

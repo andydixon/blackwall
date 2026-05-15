@@ -25,10 +25,13 @@ RUN go mod download
 COPY . .
 
 ARG VERSION=dev
+ARG GIT_TAG=dev
+ARG GIT_COMMIT_SHORT=unknown
+ARG BUILD_DATE=unknown
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -trimpath \
-    -ldflags="-s -w -X main.Version=${VERSION}" \
+    -ldflags="-s -w -X blackwall/internal/buildinfo.VersionTag=${GIT_TAG} -X blackwall/internal/buildinfo.CommitShort=${GIT_COMMIT_SHORT} -X blackwall/internal/buildinfo.BuildDate=${BUILD_DATE}" \
     -o /out/blackwall \
     ./cmd/blackwall
 

@@ -2,7 +2,10 @@
 <div class="row mt-4 g-4">
     <div class="col-lg-3">
         <div class="card sticky-top" style="top: 1rem;">
-            <div class="card-header"><h5 class="mb-0">User Guide</h5></div>
+            <div class="card-header"><h5 class="mb-0">Operator Guide</h5></div>
+            <div class="card-body border-bottom">
+                <p class="text-muted small mb-0">Operational notes, platform reference, and runbook-style guidance for administering BlackWall safely.</p>
+            </div>
             <div class="list-group list-group-flush">
                 {{range .DocsPages}}
                 <a href="/admin/docs/{{.Slug}}" class="list-group-item list-group-item-action bg-transparent {{if eq .Slug $.CurrentSlug}}active{{else}}text-light{{end}}">
@@ -17,13 +20,13 @@
     <div class="col-lg-9">
         <div class="card mb-3">
             <div class="card-body">
-                <h2 class="mb-2">{{.CurrentTitle}}</h2>
-                {{if .CurrentSummary}}<p class="text-muted mb-0">{{.CurrentSummary}}</p>{{end}}
+                <div class="page-header"><h2>{{.CurrentTitle}}</h2></div>
+                {{if .CurrentSummary}}<p class="text-muted mb-0 mt-2">{{.CurrentSummary}}</p>{{end}}
             </div>
         </div>
 
         <div class="card mb-3">
-            <div class="card-body">
+            <div class="card-body admin-doc-body">
                 {{template "doc_body" .}}
             </div>
         </div>

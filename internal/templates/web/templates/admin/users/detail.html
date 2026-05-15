@@ -1,10 +1,10 @@
 {{define "content"}}
-<div class="row mt-4 align-items-center">
-    <div class="col">
+<div class="row mt-4 align-items-end g-4">
+    <div class="col-lg-8">
         <div class="page-header"><h2>{{.User.DisplayLabel}}</h2></div>
-        <p class="text-muted small mb-0"><code>{{.User.UUID}}</code></p>
+        <p class="text-muted mb-0"><code>{{.User.UUID}}</code> · {{.User.OrganizationName}} {{if eq .User.Status "active"}}<span class="badge bg-success ms-2">Active</span>{{else if eq .User.Status "disabled"}}<span class="badge bg-secondary ms-2">Disabled</span>{{else}}<span class="badge bg-light text-dark ms-2">{{.User.Status}}</span>{{end}}</p>
     </div>
-    <div class="col-auto">
+    <div class="col-lg-4 text-lg-end">
         <a href="/admin/users/{{.User.UUID}}/claims" class="btn btn-outline-light">Custom claims</a>
         <a href="/admin/users" class="btn btn-outline-secondary">Back</a>
     </div>
@@ -22,6 +22,27 @@
     </div>
 </div>
 {{end}}
+
+<div class="row mt-3 g-3">
+    <div class="col-md-4">
+        <div class="card text-center"><div class="card-body">
+            <div class="display-6">{{len .Credentials}}</div>
+            <div class="text-muted small">Registered passkeys</div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center"><div class="card-body">
+            <div class="display-6">{{len .Assignments}}</div>
+            <div class="text-muted small">Project assignments</div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center"><div class="card-body">
+            <div class="display-6">{{if eq .User.Status "active"}}Active{{else}}Disabled{{end}}</div>
+            <div class="text-muted small">Account state</div>
+        </div></div>
+    </div>
+</div>
 
 <div class="row mt-3 g-3">
     <div class="col-md-6">
@@ -49,7 +70,8 @@
                 </form>
                 {{else}}
                 <dl class="row mb-0">
-                    <dt class="col-sm-4">Status</dt><dd class="col-sm-8">{{.User.Status}}</dd>
+                    <dt class="col-sm-4">Display label</dt><dd class="col-sm-8">{{.User.DisplayLabel}}</dd>
+                    <dt class="col-sm-4">Status</dt><dd class="col-sm-8">{{if eq .User.Status "active"}}<span class="badge bg-success">Active</span>{{else if eq .User.Status "disabled"}}<span class="badge bg-secondary">Disabled</span>{{else}}<span class="badge bg-light text-dark">{{.User.Status}}</span>{{end}}</dd>
                     <dt class="col-sm-4">Organisation</dt><dd class="col-sm-8">{{.User.OrganizationName}}</dd>
                 </dl>
                 {{end}}
@@ -107,7 +129,7 @@
 <div class="card mt-3">
     <div class="card-header">Project assignments ({{len .Assignments}})</div>
     <div class="card-body p-0">
-        <table class="table table-dark table-sm mb-0">
+        <table class="table table-dark table-sm mb-0 align-middle">
             <thead><tr><th>Project</th><th>Privilege</th></tr></thead>
             <tbody>
                 {{range .Assignments}}

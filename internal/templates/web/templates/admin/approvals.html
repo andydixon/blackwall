@@ -1,8 +1,22 @@
 {{define "content"}}
-<div class="row mt-4 align-items-center">
-    <div class="col">
+<div class="row mt-4 align-items-end g-4">
+    <div class="col-lg-8">
         <div class="page-header"><h2>Approvals</h2></div>
-        <p class="text-muted small mb-0">{{.TotalCount}} matching · page {{.Page}} of {{.TotalPages}}</p>
+        <p class="text-muted mb-0">Review queued decisions, triage stale requests, and maintain a clean approval trail across privileged changes.</p>
+    </div>
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="small text-muted text-uppercase mb-2">Queue state</div>
+                <div class="d-flex justify-content-between align-items-end">
+                    <div>
+                        <div class="display-6 fs-2 mb-0">{{.TotalCount}}</div>
+                        <div class="small text-muted">matching requests</div>
+                    </div>
+                    <div class="text-end small text-muted">page {{.Page}} of {{.TotalPages}}</div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -32,39 +46,71 @@
     </div></div></div>
 </div>
 
-<form method="GET" action="/admin/approvals" class="card mt-3">
-    <div class="card-body">
-        <div class="row g-3">
-            <div class="col-md-2">
-                <label class="form-label small">Status</label>
-                <select class="form-select form-select-sm" name="status">
-                    <option value="">all</option>
-                    <option value="pending" {{if eq .Filters.Status "pending"}}selected{{end}}>pending</option>
-                    <option value="approved" {{if eq .Filters.Status "approved"}}selected{{end}}>approved</option>
-                    <option value="rejected" {{if eq .Filters.Status "rejected"}}selected{{end}}>rejected</option>
-                    <option value="cancelled" {{if eq .Filters.Status "cancelled"}}selected{{end}}>cancelled</option>
-                </select>
+<div class="row mt-3 g-3">
+    <div class="col-xl-8">
+        <form method="GET" action="/admin/approvals" class="card h-100">
+            <div class="card-header">Decision filters</div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">Filter by state, action family, project context, and submission window before deciding or exporting a queue slice.</p>
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label small">Status</label>
+                        <select class="form-select form-select-sm" name="status">
+                            <option value="">all</option>
+                            <option value="pending" {{if eq .Filters.Status "pending"}}selected{{end}}>pending</option>
+                            <option value="approved" {{if eq .Filters.Status "approved"}}selected{{end}}>approved</option>
+                            <option value="rejected" {{if eq .Filters.Status "rejected"}}selected{{end}}>rejected</option>
+                            <option value="cancelled" {{if eq .Filters.Status "cancelled"}}selected{{end}}>cancelled</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Action type contains</label>
+                        <input type="text" class="form-control form-control-sm" name="action_type" value="{{.Filters.ActionType}}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">Project UUID</label>
+                        <input type="text" class="form-control form-control-sm" name="project_uuid" value="{{.Filters.ProjectUUID}}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Date from</label>
+                        <input type="date" class="form-control form-control-sm" name="date_from" value="{{.Filters.DateFrom}}">
+                    </div>
+                    <div class="col-md-10">
+                        <label class="form-label small">Date to</label>
+                        <input type="date" class="form-control form-control-sm" name="date_to" value="{{.Filters.DateTo}}">
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-sm btn-primary w-100">Apply</button>
+                    </div>
+                </div>
             </div>
-            <div class="col-md-3">
-                <label class="form-label small">Action type contains</label>
-                <input type="text" class="form-control form-control-sm" name="action_type" value="{{.Filters.ActionType}}">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small">Project UUID</label>
-                <input type="text" class="form-control form-control-sm" name="project_uuid" value="{{.Filters.ProjectUUID}}">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small">Date from</label>
-                <input type="date" class="form-control form-control-sm" name="date_from" value="{{.Filters.DateFrom}}">
-            </div>
-            <div class="col-md-2 d-flex align-items-end">
-                <button type="submit" class="btn btn-sm btn-primary w-100">Apply</button>
+        </form>
+    </div>
+    <div class="col-xl-4">
+        <div class="card h-100">
+            <div class="card-header">Decision discipline</div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">Approve only when the requested state is already understood and auditable. Rejections should carry a short machine-readable reason plus operator context.</p>
+                <div class="small text-muted text-uppercase mb-2">SLA watch</div>
+                <div class="d-flex justify-content-between small mb-2">
+                    <span>Median decision</span>
+                    <span class="font-monospace">{{durationSeconds .SLA.MedianSeconds}}</span>
+                </div>
+                <div class="d-flex justify-content-between small mb-2">
+                    <span>P95 decision</span>
+                    <span class="font-monospace">{{durationSeconds .SLA.P95Seconds}}</span>
+                </div>
+                <div class="d-flex justify-content-between small">
+                    <span>Older than {{.SLA.PendingWarningDays}}d</span>
+                    <span class="font-monospace">{{.SLA.PendingOlderThanThreshold}}</span>
+                </div>
             </div>
         </div>
     </div>
-</form>
+</div>
 
 <div class="card mt-3">
+    <div class="card-header">Matching requests</div>
     <div class="card-body p-0">
         <table class="table table-dark table-sm align-middle mb-0">
             <thead><tr><th>When</th><th>Action</th><th>Status</th><th>Requester</th><th>Project</th><th></th></tr></thead>

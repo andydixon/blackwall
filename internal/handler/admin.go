@@ -18,6 +18,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 
+	"blackwall/internal/buildinfo"
 	"blackwall/internal/config"
 	"blackwall/internal/security"
 	"blackwall/internal/service"
@@ -38,7 +39,11 @@ func (h *AdminHandler) LoginForm(w http.ResponseWriter, r *http.Request) {
 	sess, _ := security.GetSession(w, r)
 	csrf := security.GenerateCSRF(sess)
 	sess.Save()
-	templates.Standalone(w, "admin/login.html", map[string]interface{}{"CSRFToken": csrf})
+	templates.Standalone(w, "admin/login.html", map[string]interface{}{
+		"CSRFToken": csrf,
+		"Version":   buildinfo.DisplayVersion(),
+		"BuildDate": buildinfo.BuildDate,
+	})
 }
 
 func (h *AdminHandler) LoginChallenge(w http.ResponseWriter, r *http.Request) {
@@ -910,11 +915,11 @@ func (h *AdminHandler) UserUpdate(w http.ResponseWriter, r *http.Request) {
 			})
 		} else {
 			payload := map[string]interface{}{
-				"target_user_uuid":   userUUID,
-				"target_user_id":     userID,
-				"new_status":         status,
-				"current_status":     currentStatus,
-				"requested_at":       time.Now().UTC().Format(time.RFC3339),
+				"target_user_uuid": userUUID,
+				"target_user_id":   userID,
+				"new_status":       status,
+				"current_status":   currentStatus,
+				"requested_at":     time.Now().UTC().Format(time.RFC3339),
 			}
 			id, err := h.App.Approval.Create("user.status.change", payload, actorID, nil)
 			if err != nil {
@@ -1097,8 +1102,8 @@ func (h *AdminHandler) DeleteCredential(w http.ResponseWriter, r *http.Request) 
 //     different per-user attributes without leaking across projects).
 
 // UserClaims renders the claims management page for a single user. It shows:
-//   * the user-level claim table (cross-project)
-//   * one project-scoped claim table per project the user is assigned to
+//   - the user-level claim table (cross-project)
+//   - one project-scoped claim table per project the user is assigned to
 //     AND the actor can see in their scope.
 func (h *AdminHandler) UserClaims(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.requireAdminAuth(w, r); !ok {
@@ -1576,11 +1581,11 @@ func (h *AdminHandler) ProjectStore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	audit.LogSuccess("admin.project.create", service.AuditMeta{
-		"actor_user_id":    actorID,
-		"target_type":      "project",
-		"target_id":        projID,
+		"actor_user_id":     actorID,
+		"target_type":       "project",
+		"target_id":         projID,
 		"target_project_id": projID,
-		"project_uuid":     projectUUID,
+		"project_uuid":      projectUUID,
 	})
 	sess.Save()
 	redirect(w, r, "/admin/projects/"+projectUUID+"?success=created")
@@ -2222,15 +2227,15 @@ func (h *AdminHandler) AssignmentUpdate(w http.ResponseWriter, r *http.Request) 
 	canDirect := h.canActorActDirectly(r, "assignment_mutations_direct")
 	if security.ShouldRequireAssignmentApproval(canDirect) {
 		payload := map[string]interface{}{
-			"target_type":     "assignment",
-			"operation":       "update",
-			"assignment_id":   assignmentID,
-			"project_uuid":    projectUUID,
-			"project_id":      projectID,
-			"target_user_id":  userID,
-			"current_level":   currentLevel,
-			"new_level":       level,
-			"requested_at":    time.Now().UTC().Format(time.RFC3339),
+			"target_type":    "assignment",
+			"operation":      "update",
+			"assignment_id":  assignmentID,
+			"project_uuid":   projectUUID,
+			"project_id":     projectID,
+			"target_user_id": userID,
+			"current_level":  currentLevel,
+			"new_level":      level,
+			"requested_at":   time.Now().UTC().Format(time.RFC3339),
 		}
 		id, err := h.App.Approval.Create("assignment.update", payload, actorID, &projectID)
 		if err != nil {
@@ -2683,13 +2688,13 @@ func (h *AdminHandler) ClientUpdate(w http.ResponseWriter, r *http.Request) {
 
 	if security.ShouldRequireClientSettingsApproval(canDirect, current, requested) {
 		payloadBytes := map[string]interface{}{
-			"target_type":             "oauth_client",
-			"oauth_client_public_id":  clientPublicID,
-			"oauth_client_id":         clientID,
-			"project_id":              projectID,
-			"current":                 current,
-			"requested":               requested,
-			"requested_at":            time.Now().UTC().Format(time.RFC3339),
+			"target_type":            "oauth_client",
+			"oauth_client_public_id": clientPublicID,
+			"oauth_client_id":        clientID,
+			"project_id":             projectID,
+			"current":                current,
+			"requested":              requested,
+			"requested_at":           time.Now().UTC().Format(time.RFC3339),
 		}
 		id, err := h.App.Approval.Create("client.update", payloadBytes, actorID, &projectID)
 		if err != nil {
@@ -3600,9 +3605,9 @@ func (h *AdminHandler) CryptbinDelete(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := storage.DeleteItem(id); err != nil {
 		audit.LogFail("admin.cryptbin.delete.fail", service.AuditMeta{
-			"actor_user_id": actorID,
-			"target_type":   "cryptbin",
-			"target_id":     int64(0),
+			"actor_user_id":  actorID,
+			"target_type":    "cryptbin",
+			"target_id":      int64(0),
 			"failure_reason": err.Error(),
 		})
 		sess.Save()
@@ -3907,6 +3912,7 @@ func (h *AdminHandler) DocsHome(w http.ResponseWriter, r *http.Request) {
 //   - impersonator_user_id MUST be present (only set during an active switch
 //     by a super-admin via OrganizationSwitchAdmin)
 //   - the actor returns to the user_id they had before the switch
+//
 // so the only state change possible is restoring an existing trusted ID.
 func (h *AdminHandler) SwitchRestore(w http.ResponseWriter, r *http.Request) {
 	sess, _ := security.GetSession(w, r)

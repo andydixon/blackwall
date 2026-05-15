@@ -17,6 +17,28 @@
     {{else}}{{.Error}}{{end}}
 </div>{{end}}
 
+<div class="row mt-3 g-3">
+    <div class="col-md-4">
+        <div class="card text-center"><div class="card-body">
+            <div class="display-6">{{len .UserClaims}}</div>
+            <div class="text-muted small">User-level claims</div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card text-center"><div class="card-body">
+            <div class="display-6">{{len .ProjectClaimSets}}</div>
+            <div class="text-muted small">Project claim sets</div>
+        </div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <p class="text-muted small mb-0">Project-scoped claims override user-level claims with the same key whenever a token is issued for that project.</p>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="card mt-3">
     <div class="card-header">
         User-level claims <span class="text-muted small">(emitted in every token for this user, regardless of project)</span>

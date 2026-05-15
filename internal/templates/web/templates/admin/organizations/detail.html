@@ -1,10 +1,10 @@
 {{define "content"}}
-<div class="row mt-4 align-items-center">
-    <div class="col">
+<div class="row mt-4 align-items-end g-4">
+    <div class="col-lg-8">
         <div class="page-header"><h2>{{.Org.Name}}</h2></div>
-        <p class="text-muted small mb-0"><code class="small">{{.Org.UUID}}</code> · slug <code>{{.Org.Slug}}</code></p>
+        <p class="text-muted mb-0"><code class="small">{{.Org.UUID}}</code> · slug <code>{{.Org.Slug}}</code> · status <span class="text-light">{{.Org.Status}}</span></p>
     </div>
-    <div class="col-auto">
+    <div class="col-lg-4 text-lg-end">
         <a href="/admin/organisations" class="btn btn-outline-secondary">Back</a>
     </div>
 </div>
@@ -34,61 +34,66 @@
     </div>
 </div>
 
-{{if .CanManage}}
-<div class="card mt-3">
-    <div class="card-header">Settings</div>
-    <div class="card-body">
-        <form method="POST" action="/admin/organisations/{{.Org.UUID}}/update" class="row g-3">
-            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <div class="col-md-6">
-                <label class="form-label">Name</label>
-                <input type="text" class="form-control" name="name" value="{{.Org.Name}}">
+<div class="row mt-3 g-3">
+    {{if .CanManage}}
+    <div class="col-xl-7">
+        <div class="card h-100">
+            <div class="card-header">Settings</div>
+            <div class="card-body">
+                <form method="POST" action="/admin/organisations/{{.Org.UUID}}/update" class="row g-3">
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    <div class="col-md-7">
+                        <label class="form-label">Name</label>
+                        <input type="text" class="form-control" name="name" value="{{.Org.Name}}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Status</label>
+                        <select class="form-select" name="status">
+                            <option value="active" {{if eq .Org.Status "active"}}selected{{end}}>Active</option>
+                            <option value="disabled" {{if eq .Org.Status "disabled"}}selected{{end}}>Disabled</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">Save</button>
+                    </div>
+                </form>
             </div>
-            <div class="col-md-3">
-                <label class="form-label">Status</label>
-                <select class="form-select" name="status">
-                    <option value="active" {{if eq .Org.Status "active"}}selected{{end}}>Active</option>
-                    <option value="disabled" {{if eq .Org.Status "disabled"}}selected{{end}}>Disabled</option>
-                </select>
-            </div>
-            <div class="col-md-3 d-flex align-items-end">
-                <button type="submit" class="btn btn-primary w-100">Save</button>
-            </div>
-        </form>
+        </div>
     </div>
-</div>
-{{end}}
-
-{{if .CanSwitchAdmin}}
-<div class="card mt-3">
-    <div class="card-header">Switch organisation admin</div>
-    <div class="card-body">
-        <form method="POST" action="/admin/organisations/{{.Org.UUID}}/switch-admin" class="row g-3">
-            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <div class="col-md-9">
-                <label class="form-label">New admin user</label>
-                <select class="form-select" name="user_uuid" required>
-                    <option value="">— select —</option>
-                    {{range .AdminCandidates}}
-                    <option value="{{.UUID}}">{{.Label}}</option>
-                    {{end}}
-                </select>
+    {{end}}
+    {{if .CanSwitchAdmin}}
+    <div class="col-xl-5">
+        <div class="card h-100">
+            <div class="card-header">Switch organisation admin</div>
+            <div class="card-body">
+                <form method="POST" action="/admin/organisations/{{.Org.UUID}}/switch-admin" class="row g-3">
+                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                    <div class="col-12">
+                        <label class="form-label">New admin user</label>
+                        <select class="form-select" name="user_uuid" required>
+                            <option value="">— select —</option>
+                            {{range .AdminCandidates}}
+                            <option value="{{.UUID}}">{{.Label}}</option>
+                            {{end}}
+                        </select>
+                    </div>
+                    <div class="col-12 d-grid">
+                        <button type="submit" class="btn btn-warning">Switch admin</button>
+                    </div>
+                </form>
+                <p class="text-muted small mt-3 mb-0">The previous admin keeps organisation membership but loses the admin-derived capability matrix.</p>
             </div>
-            <div class="col-md-3 d-flex align-items-end">
-                <button type="submit" class="btn btn-warning w-100">Switch admin</button>
-            </div>
-        </form>
-        <p class="text-muted small mt-2 mb-0">The previous admin keeps their org membership but loses the operator capability matrix derived from being the admin.</p>
+        </div>
     </div>
+    {{end}}
 </div>
-{{end}}
 
 <div class="row mt-3 g-3">
     <div class="col-md-6">
         <div class="card h-100">
             <div class="card-header">Projects</div>
             <div class="card-body p-0">
-                <table class="table table-dark table-sm mb-0">
+                <table class="table table-dark table-sm mb-0 align-middle">
                     <thead><tr><th>Name</th><th>Status</th></tr></thead>
                     <tbody>
                         {{range .Projects}}
@@ -105,7 +110,7 @@
         <div class="card h-100">
             <div class="card-header">Users</div>
             <div class="card-body p-0">
-                <table class="table table-dark table-sm mb-0">
+                <table class="table table-dark table-sm mb-0 align-middle">
                     <thead><tr><th>Display label</th><th>Status</th></tr></thead>
                     <tbody>
                         {{range .Users}}

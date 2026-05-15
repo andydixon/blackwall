@@ -1,67 +1,90 @@
 {{define "content"}}
-<div class="row mt-4 align-items-center">
-    <div class="col">
+<div class="row mt-4 align-items-end g-4">
+    <div class="col-lg-8">
         <div class="page-header"><h2>Audit log</h2></div>
-        <p class="text-muted small mb-0">{{.TotalCount}} entries match — page {{.Page}} of {{.TotalPages}}</p>
+        <p class="text-muted mb-0">Trace administrative mutations, authentication outcomes, and system-side security signals from one filtered event stream.</p>
     </div>
-    <div class="col-auto">
-        <a href="/admin/audit/export?{{range $k, $v := .Filters}}{{if $v}}{{$k}}={{$v}}&{{end}}{{end}}" class="btn btn-outline-light">
-            Export CSV
-        </a>
-    </div>
-</div>
-
-<form method="GET" action="/admin/audit" class="card mt-3">
-    <div class="card-body">
-        <div class="row g-3">
-            <div class="col-md-3">
-                <label class="form-label small">Event type contains</label>
-                <input type="text" class="form-control form-control-sm" name="event_type" value="{{index .Filters "event_type"}}">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small">Outcome</label>
-                <select class="form-select form-select-sm" name="outcome">
-                    <option value="">all</option>
-                    <option value="success" {{if eq (index .Filters "outcome") "success"}}selected{{end}}>success</option>
-                    <option value="fail" {{if eq (index .Filters "outcome") "fail"}}selected{{end}}>fail</option>
-                    <option value="info" {{if eq (index .Filters "outcome") "info"}}selected{{end}}>info</option>
-                </select>
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small">Actor user UUID</label>
-                <input type="text" class="form-control form-control-sm" name="actor_user_uuid" value="{{index .Filters "actor_user_uuid"}}">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small">Project UUID</label>
-                <input type="text" class="form-control form-control-sm" name="project_uuid" value="{{index .Filters "project_uuid"}}">
-            </div>
-            <div class="col-md-2">
-                <label class="form-label small">Correlation ID</label>
-                <input type="text" class="form-control form-control-sm" name="correlation_id" value="{{index .Filters "correlation_id"}}">
-            </div>
-            <div class="col-md-1 d-flex align-items-end">
-                <button type="submit" class="btn btn-sm btn-primary w-100">Apply</button>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small">From (YYYY-MM-DD)</label>
-                <input type="date" class="form-control form-control-sm" name="date_from" value="{{index .Filters "date_from"}}">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small">To (YYYY-MM-DD)</label>
-                <input type="date" class="form-control form-control-sm" name="date_to" value="{{index .Filters "date_to"}}">
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small">Target type</label>
-                <input type="text" class="form-control form-control-sm" name="target_type" value="{{index .Filters "target_type"}}">
-            </div>
-            <div class="col-md-3 d-flex align-items-end">
-                <a href="/admin/audit" class="btn btn-sm btn-outline-secondary w-100">Clear</a>
+    <div class="col-lg-4">
+        <div class="card h-100">
+            <div class="card-body d-flex justify-content-between align-items-end">
+                <div>
+                    <div class="small text-muted text-uppercase mb-2">Current slice</div>
+                    <div class="display-6 fs-2 mb-0">{{.TotalCount}}</div>
+                    <div class="small text-muted">matching entries</div>
+                </div>
+                <div class="text-end">
+                    <div class="small text-muted mb-3">page {{.Page}} of {{.TotalPages}}</div>
+                    <a href="/admin/audit/export?{{range $k, $v := .Filters}}{{if $v}}{{$k}}={{$v}}&{{end}}{{end}}" class="btn btn-outline-light btn-sm">Export CSV</a>
+                </div>
             </div>
         </div>
     </div>
-</form>
+</div>
+
+<div class="row mt-3 g-3">
+    <div class="col-xl-9">
+        <form method="GET" action="/admin/audit" class="card h-100">
+            <div class="card-header">Event filters</div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">Slice the stream by actor, project, outcome, correlation, target family, or reporting window before exporting or reviewing incidents.</p>
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label small">Event type contains</label>
+                        <input type="text" class="form-control form-control-sm" name="event_type" value="{{index .Filters "event_type"}}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">Outcome</label>
+                        <select class="form-select form-select-sm" name="outcome">
+                            <option value="">all</option>
+                            <option value="success" {{if eq (index .Filters "outcome") "success"}}selected{{end}}>success</option>
+                            <option value="fail" {{if eq (index .Filters "outcome") "fail"}}selected{{end}}>fail</option>
+                            <option value="info" {{if eq (index .Filters "outcome") "info"}}selected{{end}}>info</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">Actor user UUID</label>
+                        <input type="text" class="form-control form-control-sm" name="actor_user_uuid" value="{{index .Filters "actor_user_uuid"}}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">Project UUID</label>
+                        <input type="text" class="form-control form-control-sm" name="project_uuid" value="{{index .Filters "project_uuid"}}">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label small">Correlation ID</label>
+                        <input type="text" class="form-control form-control-sm" name="correlation_id" value="{{index .Filters "correlation_id"}}">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small">Target type</label>
+                        <input type="text" class="form-control form-control-sm" name="target_type" value="{{index .Filters "target_type"}}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">From</label>
+                        <input type="date" class="form-control form-control-sm" name="date_from" value="{{index .Filters "date_from"}}">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small">To</label>
+                        <input type="date" class="form-control form-control-sm" name="date_to" value="{{index .Filters "date_to"}}">
+                    </div>
+                    <div class="col-md-1 d-flex align-items-end">
+                        <button type="submit" class="btn btn-sm btn-primary w-100">Apply</button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+    <div class="col-xl-3">
+        <div class="card h-100">
+            <div class="card-header">Audit guidance</div>
+            <div class="card-body">
+                <p class="text-muted small mb-3">Use event type plus correlation ID first. Narrow by actor or project only after you know which request family you are following.</p>
+                <a href="/admin/audit" class="btn btn-outline-secondary btn-sm w-100">Clear filters</a>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="card mt-3">
+    <div class="card-header">Matching audit entries</div>
     <div class="card-body p-0">
         <table class="table table-dark table-sm mb-0 align-middle">
             <thead><tr><th>When</th><th>Event</th><th>Outcome</th><th>Actor</th><th>Project</th><th>Target</th><th>IP</th><th>Correlation</th></tr></thead>

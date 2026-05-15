@@ -1,21 +1,41 @@
 {{define "content"}}
 <div class="row mt-4">
-    <div class="col-md-8 offset-md-2">
+    <div class="col-xl-10 offset-xl-1">
         <div class="page-header"><h2>Error trace decoder</h2></div>
-        <p class="text-muted small">Paste an opaque trace code shown to an end-user to reveal the original event identifier you can search the audit log for.</p>
+        <p class="text-muted small mb-0">Decode opaque user-facing trace strings back into the underlying event identifier you can search in the audit stream.</p>
 
-        <div class="card">
-            <div class="card-body">
-                <form method="POST" action="/admin/error-trace" class="row g-3">
-                    <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-                    <div class="col-12">
-                        <label class="form-label">Trace code</label>
-                        <textarea class="form-control font-monospace" name="code" rows="2" required>{{.Code}}</textarea>
+        <div class="row mt-3 g-3">
+            <div class="col-lg-7">
+                <div class="card">
+                    <div class="card-header">Decode trace</div>
+                    <div class="card-body">
+                        <form method="POST" action="/admin/error-trace" class="row g-3">
+                            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                            <div class="col-12">
+                                <label class="form-label">Trace code</label>
+                                <textarea class="form-control font-monospace" name="code" rows="2" required>{{.Code}}</textarea>
+                            </div>
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary">Decode</button>
+                            </div>
+                        </form>
                     </div>
-                    <div class="col-12">
-                        <button type="submit" class="btn btn-primary">Decode</button>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="card h-100">
+                    <div class="card-header">Usage</div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <h6 class="mb-2">Support workflow</h6>
+                            <p class="text-muted small mb-0">Ask the user for the trace string shown on-screen, decode it here, then search the resulting event or correlation material in the audit log.</p>
+                        </div>
+                        <div>
+                            <h6 class="mb-2">Safety</h6>
+                            <p class="text-muted small mb-0">Decoded values are diagnostic identifiers only. They should not be treated as user-safe strings for disclosure or transport.</p>
+                        </div>
                     </div>
-                </form>
+                </div>
             </div>
         </div>
 
