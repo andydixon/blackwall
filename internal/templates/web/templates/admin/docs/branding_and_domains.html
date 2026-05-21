@@ -1,0 +1,37 @@
+{{define "doc_body"}}
+<p>Per-organisation branding lets the login surface carry the customer's logo, colour, and a supporting message — so users don't see a generic "BlackWall" page when signing into their own org's tools. Custom domains let the login URL itself live on the customer's domain.</p>
+
+<h5>Where to edit</h5>
+<p>Open <code>/admin/organisations/&#123;uuid&#125;</code>. Two cards:</p>
+<ul>
+    <li><em>Branding &amp; login experience</em> — logo URL, primary colour (hex), support email, and a multi-line login message.</li>
+    <li><em>Custom domains</em> — register hostnames the customer wants to point at BlackWall.</li>
+</ul>
+<p>Both require <code>manage_organizations</code>.</p>
+
+<h5>Branding fields</h5>
+<dl class="row mb-0">
+    <dt class="col-sm-3">Logo URL</dt>
+    <dd class="col-sm-9">Absolute https URL the login template loads as an <code>&lt;img&gt;</code>. Host externally (S3, CDN); we don't host uploads.</dd>
+    <dt class="col-sm-3">Primary colour</dt>
+    <dd class="col-sm-9"><code>#RRGGBB</code> hex. Applied to primary buttons and the login card's accent line.</dd>
+    <dt class="col-sm-3">Login message</dt>
+    <dd class="col-sm-9">Up to 2 KiB of plain text shown above the WebAuthn prompt — use this for "Welcome to ACME corp" or compliance notices.</dd>
+    <dt class="col-sm-3">Support email</dt>
+    <dd class="col-sm-9">Rendered as a help link on the login card.</dd>
+</dl>
+
+<h5>Custom domains</h5>
+<p>Mapping <code>login.customer.com → BlackWall</code> is a two-step process:</p>
+<ol>
+    <li><strong>DNS + TLS:</strong> the customer (or operator) configures DNS to point at BlackWall and provisions a TLS certificate for the host. BlackWall does not provision certificates itself.</li>
+    <li><strong>Map:</strong> add the hostname under <em>Custom domains</em>. It starts unverified. Click <em>Verify</em> once DNS resolution is confirmed.</li>
+</ol>
+<p>Once verified, inbound requests with that <code>Host</code> header automatically pick up the org's branding overlay. The OIDC issuer URL is unchanged — only the login UI is rebranded.</p>
+
+<h5>Fallback behaviour</h5>
+<p>If a request arrives on a host that doesn't match any verified custom domain, the platform default branding is used. Existing organisations without any branding fields set are unaffected — they continue to render the default UI.</p>
+
+<h5>Gated by the project flag</h5>
+<p>Custom branding is only applied to projects whose <code>custom_branding_enabled</code> feature flag is on. New projects start with it on; pre-v3 projects start with it off. See <a href="/admin/docs/feature-flags" class="text-light">Feature flags</a>.</p>
+{{end}}

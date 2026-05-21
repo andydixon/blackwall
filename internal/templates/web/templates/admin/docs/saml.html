@@ -1,0 +1,59 @@
+{{define "doc_body"}}
+<p>BlackWall acts as a SAML 2.0 Identity Provider for downstream SaaS apps that still speak SAML — half the enterprise SaaS catalogue. The flow reuses the existing WebAuthn login, so users never see a second authentication surface.</p>
+
+<h5>Per-project SP registry</h5>
+<p>Each project has its own list of registered Service Providers, managed at <code>/admin/projects/&#123;uuid&#125;/saml</code>. Requires <code>view_projects</code> to see, <code>manage_projects</code> to register.</p>
+
+<h5>IdP endpoints to share with the SP</h5>
+<dl class="row mb-0">
+    <dt class="col-sm-3">Metadata URL</dt>
+    <dd class="col-sm-9"><code>https://&lt;your-blackwall&gt;/saml/projects/&#123;uuid&#125;/metadata</code></dd>
+    <dt class="col-sm-3">SSO endpoint</dt>
+    <dd class="col-sm-9"><code>https://&lt;your-blackwall&gt;/saml/projects/&#123;uuid&#125;/sso</code> (both HTTP-Redirect and HTTP-POST bindings on the same URL)</dd>
+    <dt class="col-sm-3">Response binding</dt>
+    <dd class="col-sm-9">HTTP-POST to the SP's Assertion Consumer Service (ACS) URL.</dd>
+    <dt class="col-sm-3">Signature</dt>
+    <dd class="col-sm-9">RSA-SHA256, exclusive XML canonicalisation, signs both <code>Response</code> and embedded <code>Assertion</code>.</dd>
+</dl>
+
+<h5>Registering an SP</h5>
+<ol>
+    <li>From the SP-side, obtain its <strong>Entity ID</strong> and <strong>ACS URL</strong> (sometimes called the "Consumer URL" or "Reply URL").</li>
+    <li>In BlackWall, open the project's <em>SAML</em> page and click into the form at the bottom.</li>
+    <li>Choose a NameID format — most apps want <code>emailAddress</code>. <code>persistent</code> is the right pick when the SP wants a stable opaque ID that doesn't change if the user's email changes.</li>
+    <li>Fill in the <em>Attribute map</em>. Each line is <code>saml_attr=source</code>. Sources can be:
+        <ul>
+            <li><code>display_label</code> — the user's primary label (typically their email).</li>
+            <li>Any custom OIDC claim name — pulls from the merged claim store, so org/project default claims feed straight into SAML attributes.</li>
+        </ul>
+    </li>
+    <li>Optional: paste the SP's signing certificate PEM to enforce signed AuthnRequests. Most major SaaS apps don't sign theirs, so this is usually blank.</li>
+</ol>
+
+<h5>SP-initiated flow</h5>
+<ol>
+    <li>Browser visits the SP. SP redirects to BlackWall's SSO endpoint with a <code>SAMLRequest</code>.</li>
+    <li>BlackWall parses the AuthnRequest, looks up the SP by Entity ID, and stashes the request ID and ACS URL in the user's session.</li>
+    <li>If not already logged in, the user is bounced through <code>/portal/login</code> for WebAuthn auth and returned here.</li>
+    <li>BlackWall mints a signed Response containing a signed Assertion, then renders an auto-submitting HTML form that POSTs the Response to the SP's ACS URL.</li>
+</ol>
+
+<h5>Security properties</h5>
+<ul>
+    <li>The AuthnRequest's <code>AssertionConsumerServiceURL</code> (when present) must match the registered ACS URL exactly. This prevents an attacker from making us POST our signed assertion to their server.</li>
+    <li>The Audience defaults to the SP's Entity ID, so the assertion can't be replayed against a different SP.</li>
+    <li>Subject confirmation has <code>NotOnOrAfter</code> = +5 minutes; Conditions has the same window.</li>
+    <li>Self-signed signing cert is generated from the active JWT key, so JWKS and SAML metadata advertise the same key identity. When you move JWT signing to a KMS (see <a href="/admin/docs/kms-signer" class="text-light">KMS-pluggable signing</a>), SAML signing follows.</li>
+</ul>
+
+<h5>What's intentionally not implemented</h5>
+<ul>
+    <li>Single Logout (SLO) — out of scope until a customer needs it.</li>
+    <li>IdP-initiated SSO — every modern SP supports SP-initiated and the security model is cleaner.</li>
+    <li>Encrypted assertions — TLS already protects in transit and we don't have a use case where the receiving SP can decrypt-but-not-TLS-terminate.</li>
+    <li>HTTP-Artifact binding — vanishingly rare; not worth the complexity.</li>
+</ul>
+
+<h5>Audit</h5>
+<p>Every issued response logs as <code>saml.response.issued</code> with the SP entity_id, project, and actor user. SP registry mutations log as <code>admin.saml.sp.create</code> / <code>admin.saml.sp.delete</code>.</p>
+{{end}}

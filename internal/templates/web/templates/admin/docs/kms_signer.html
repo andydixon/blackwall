@@ -1,0 +1,54 @@
+{{define "doc_body"}}
+<p>By default BlackWall stores its JWT signing key as an RSA private key in the <code>jwt_signing_keys</code> table. That's fine for development and most single-operator deployments, but it's a SOC 2 / FedRAMP / HIPAA finding waiting to happen: an attacker with database access can mint tokens that say anything.</p>
+
+<p>The <code>Signer</code> interface in <code>internal/service/signer.go</code> abstracts the signing operation so the private key can live outside the process — in AWS KMS, GCP KMS, HashiCorp Vault, or any HSM with a SIGN/VERIFY profile.</p>
+
+<h5>The interface</h5>
+<pre class="bg-black text-light p-3 small mb-0"><code>type Signer interface {
+    KeyID() string
+    Algorithm() string                  // "RS256"
+    PublicKey() *rsa.PublicKey          // for JWKS export
+    Sign(data []byte) ([]byte, error)
+    Verify(data, sig []byte) error
+}</code></pre>
+
+<p>Today's implementations:</p>
+<ul>
+    <li><code>LocalDBSigner</code> — the existing path. Private key materialised into the process at boot.</li>
+    <li><code>kmsSignerStub</code> — placeholder that fails loudly if the operator selects a cloud backend in config but the matching build tag wasn't enabled. Misconfigured deployments crash at the first token mint rather than silently falling back.</li>
+</ul>
+
+<h5>Adding a real backend</h5>
+<p>The pattern for each cloud is intentionally similar — the signer just dispatches the SHA-256 digest of <code>data</code> and returns the cloud's signature bytes. Live behind a build tag so the cloud SDK only inflates the binary for operators who actually need it.</p>
+
+<h6>AWS KMS</h6>
+<ol>
+    <li>Create a KMS key with <code>KeySpec=RSA_2048</code>, <code>KeyUsage=SIGN_VERIFY</code>.</li>
+    <li>Implement <code>internal/service/signer_aws.go</code> behind <code>//go:build kms_aws</code>:
+        <ul>
+            <li><code>Sign</code>: call <code>kms.Sign</code> with <code>SigningAlgorithm=RSASSA_PKCS1_V1_5_SHA_256</code>, <code>MessageType=DIGEST</code>, sending the local SHA-256 of <code>data</code>.</li>
+            <li><code>PublicKey</code>: fetch <code>kms.GetPublicKey</code> once at boot and cache.</li>
+            <li><code>KeyID</code>: the KMS key ARN or alias.</li>
+        </ul>
+    </li>
+    <li>Build with <code>go build -tags kms_aws ./cmd/blackwall</code>.</li>
+</ol>
+
+<h6>GCP KMS</h6>
+<p>Same shape, behind <code>//go:build kms_gcp</code>. Use <code>cloudkms.AsymmetricSign</code> with <code>RSA_SIGN_PKCS1_2048_SHA256</code>.</p>
+
+<h6>HashiCorp Vault Transit</h6>
+<p>Behind <code>//go:build kms_vault</code>. Use the Transit engine's <code>sign</code> endpoint with <code>signature_algorithm=pkcs1v15</code> and <code>hash_algorithm=sha2-256</code>.</p>
+
+<h5>What ALSO moves with the signer</h5>
+<p>Because the audit chain checkpoint signature goes through the same <code>JWTManager.SignBytes</code>, switching JWT signing to KMS automatically moves checkpoint signing to KMS too. SAML metadata + assertion signing similarly use the JWT key, so the entire signing posture migrates together.</p>
+
+<h5>Key rotation</h5>
+<p>KMS backends version their keys natively (AWS schedules rotation, GCP versions explicitly, Vault has a rotate operation). Today BlackWall's JWKS endpoint reflects whatever the active <code>jwt_signing_keys</code> rows say — when you move to KMS, the KMS-backed signer should publish its current public key version into a row so the JWKS endpoint sees it. Plan to advertise <strong>both the previous and the current public keys</strong> during the overlap window so in-flight tokens continue to verify.</p>
+
+<h5>What stays in-process even with KMS</h5>
+<ul>
+    <li>Token <em>verification</em> is still done locally via the cached public key — KMS round-trips per verify would be cost-prohibitive at production traffic.</li>
+    <li>Session cookies, CSRF, and the audit chain row hashing all use symmetric crypto unrelated to the signing key.</li>
+</ul>
+{{end}}

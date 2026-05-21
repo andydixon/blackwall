@@ -1,0 +1,37 @@
+{{define "doc_body"}}
+<p>Admin API tokens are bearer credentials for the JSON admin API at <code>/api/v1/*</code>, the SCIM 2.0 surface at <code>/scim/v2/*</code>, and the Terraform provider. Each token is bound to a specific user and inherits that user's admin capabilities <em>at request time</em> — there is no token-side capability escalation. Revoking a user's admin role takes effect for their tokens on the next request.</p>
+
+<h5>Where to manage them</h5>
+<p>Open <code>/admin/api-tokens</code> (super-admin nav link <em>API tokens</em>). Requires <code>manage_roles</code>.</p>
+
+<h5>Format and storage</h5>
+<ul>
+    <li>Plaintext shape: <code>bw_admin_&lt;32 base64url chars&gt;</code>.</li>
+    <li>The full plaintext is shown <strong>once</strong> at creation. The server stores only a SHA-256 hash plus a 12-character prefix for UI identification.</li>
+    <li>Lost a token? Revoke and reissue — there is no recovery path.</li>
+</ul>
+
+<h5>Using a token</h5>
+<pre class="bg-black text-light p-3 small mb-0"><code>curl -H "Authorization: Bearer bw_admin_..." \
+     https://auth.example.com/api/v1/projects</code></pre>
+
+<h5>Expiry</h5>
+<p>Optional. Without an expiry, the token lives until manually revoked or until the owning user is deleted. For automation we recommend short-lived rotated tokens; for one-off admin scripts, no expiry is fine.</p>
+
+<h5>Scopes</h5>
+<p>The <code>scopes</code> field is currently advisory — a token with <code>admin:full</code> inherits the user's full admin capability set. Narrower scope strings (e.g. <code>scim:read</code>) are stored but not yet enforced at request time. Future versions will gate endpoints on declared scopes; choose conservative scopes today so a later upgrade doesn't unexpectedly tighten existing automations.</p>
+
+<h5>Audit</h5>
+<p>Every token mutation logs to the audit chain:</p>
+<ul>
+    <li><code>admin.token.create</code> — actor, token public_id, scopes, optional expiry.</li>
+    <li><code>admin.token.revoke</code> — actor, token public_id.</li>
+</ul>
+<p>Every API request authenticated by a token contributes the actor user to the audit event for the underlying mutation — for example, a SCIM-driven user create logs <code>scim.user.create</code> with <code>actor_user_id</code> set to the token owner.</p>
+
+<h5>See also</h5>
+<ul>
+    <li><a href="/admin/docs/scim" class="text-light">SCIM 2.0 Provisioning</a> — drives users in from an upstream HRIS using this token format.</li>
+    <li><a href="/admin/docs/terraform" class="text-light">Terraform Provider</a> — declarative resource management against <code>/api/v1</code>.</li>
+</ul>
+{{end}}

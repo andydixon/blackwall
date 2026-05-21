@@ -1,0 +1,84 @@
+{{define "doc_body"}}
+<p>The <code>terraform-provider-blackwall</code> module under <code>tools/terraform-provider-blackwall/</code> lets you manage BlackWall resources declaratively. It targets the same JSON admin API as everything else (<code>/api/v1/*</code>) so the security model is identical to a curl-based automation.</p>
+
+<h5>When to reach for this</h5>
+<ul>
+    <li>You're standing up the same set of projects / OAuth clients / claim defaults across multiple BlackWall environments (dev, staging, prod).</li>
+    <li>You want PR-reviewed identity config changes — Terraform plan output gives you a diff to approve.</li>
+    <li>You're already running Terraform for everything else and want one less click-ops surface.</li>
+</ul>
+
+<h5>Resources implemented today</h5>
+<ul>
+    <li><code>blackwall_project</code> — project lifecycle (create / read / update / disable).</li>
+    <li><code>blackwall_oauth_client</code> — OAuth client config (full CRUD; secret returned once at create).</li>
+    <li><code>blackwall_claim_default</code> — per-project default OIDC claim.</li>
+    <li><code>blackwall_webhook_endpoint</code> — webhook receiver registration with HMAC signing.</li>
+    <li><code>blackwall_saml_service_provider</code> — SAML SP registry (create / read / delete; updates trigger recreate).</li>
+    <li><code>data.blackwall_organization</code> — slug → UUID lookup.</li>
+</ul>
+
+<h5>Resources arriving next</h5>
+<ul>
+    <li><code>blackwall_admin_token</code> — mint admin API tokens declaratively.</li>
+</ul>
+
+<h5>Build &amp; install locally</h5>
+<pre class="bg-black text-light p-3 small mb-0"><code>cd tools/terraform-provider-blackwall
+go mod tidy
+go build -o terraform-provider-blackwall .
+
+PLUGIN_DIR="$HOME/.terraform.d/plugins/blackwall.io/identity/blackwall/0.1.0/$(go env GOOS)_$(go env GOARCH)"
+mkdir -p "$PLUGIN_DIR"
+cp terraform-provider-blackwall "$PLUGIN_DIR/"</code></pre>
+
+<h5>Configuration</h5>
+<pre class="bg-black text-light p-3 small mb-0"><code>terraform {
+  required_providers {
+    blackwall = {
+      source = "blackwall.io/identity/blackwall"
+    }
+  }
+}
+
+provider "blackwall" {
+  host  = "https://auth.example.com"   # or env BLACKWALL_HOST
+  token = "bw_admin_..."               # or env BLACKWALL_TOKEN
+}</code></pre>
+
+<h5>Grafana project worked example</h5>
+<pre class="bg-black text-light p-3 small mb-0"><code>data "blackwall_organization" "acme" {
+  slug = "acme"
+}
+
+resource "blackwall_claim_default" "grafana_preferred_username" {
+  project_uuid = "11111111-2222-3333-4444-555555555555"
+  key          = "preferred_username"
+  value        = "team-grafana"
+}
+
+resource "blackwall_claim_default" "grafana_groups" {
+  project_uuid = "11111111-2222-3333-4444-555555555555"
+  key          = "groups"
+  # JSON literal — emitted as a real array in the token.
+  value = jsonencode(["editors", "viewers"])
+}
+
+resource "blackwall_webhook_endpoint" "audit_sink" {
+  project_uuid = "11111111-2222-3333-4444-555555555555"
+  target_url   = "https://audit.example.com/blackwall"
+  description  = "Production audit sink"
+  events       = ["*"]
+}</code></pre>
+
+<h5>State considerations</h5>
+<ul>
+    <li>The webhook <code>secret</code> field is computed and sensitive; Terraform state files must be encrypted at rest.</li>
+    <li>Drift detection works on Read: if someone edits a claim default in the admin UI, the next <code>terraform plan</code> will detect the drift and offer to revert.</li>
+</ul>
+
+<h5>See also</h5>
+<ul>
+    <li><a href="/admin/docs/api-tokens" class="text-light">Admin API Tokens</a> — how to mint the bearer token Terraform consumes.</li>
+</ul>
+{{end}}

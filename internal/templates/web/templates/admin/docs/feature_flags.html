@@ -1,0 +1,29 @@
+{{define "doc_body"}}
+<p>Each project carries an independent set of feature toggles that govern which enterprise surfaces apply. New projects start with the modern defaults turned <strong>on</strong>; projects that existed before the v3 schema migration start with everything <strong>off</strong>, so upgrading BlackWall never silently changes behaviour for an in-flight tenant.</p>
+
+<h5>Where to edit</h5>
+<p>Open <code>/admin/projects/&#123;uuid&#125;</code> → <em>Feature flags</em> card. Requires <code>manage_projects</code>.</p>
+
+<h5>The flags</h5>
+<dl class="row mb-0">
+    <dt class="col-sm-4">webhooks_enabled</dt>
+    <dd class="col-sm-8">Gate the outbound webhook dispatcher. Registered endpoints can still be edited while off; nothing gets delivered until on. See <a href="/admin/docs/webhooks" class="text-light">Webhooks</a>.</dd>
+    <dt class="col-sm-4">db_sessions_enabled</dt>
+    <dd class="col-sm-8">Records each authenticated session in the <code>user_sessions</code> table so it can be revoked server-side. With this off, only the cookie's natural expiry ends a session. See <a href="/admin/docs/sessions" class="text-light">Server-Backed Sessions</a>.</dd>
+    <dt class="col-sm-4">max_concurrent_sessions</dt>
+    <dd class="col-sm-8">When &gt; 0 and DB sessions are on, capping a user to N parallel sessions across this project. A login that would exceed N revokes the oldest session first. <code>0</code> means unbounded.</dd>
+    <dt class="col-sm-4">custom_branding_enabled</dt>
+    <dd class="col-sm-8">Pull the organisation's branding overlay onto login screens served for this project. See <a href="/admin/docs/branding-and-domains" class="text-light">Branding and Custom Domains</a>.</dd>
+    <dt class="col-sm-4">step_up_required</dt>
+    <dd class="col-sm-8">Reserved for the upcoming step-up auth surface (force a fresh WebAuthn touch for high-impact actions). Off by default; turning it on without the step-up surface in place is a no-op.</dd>
+</dl>
+
+<h5>Backwards-compat behaviour summary</h5>
+<table class="table table-dark table-sm">
+    <thead><tr><th>Project age</th><th>webhooks</th><th>db_sessions</th><th>branding</th><th>step_up</th></tr></thead>
+    <tbody>
+        <tr><td>Created before migration v3</td><td>off</td><td>off</td><td>off</td><td>off</td></tr>
+        <tr><td>Created after migration v3</td><td>on</td><td>on</td><td>on</td><td>off</td></tr>
+    </tbody>
+</table>
+{{end}}

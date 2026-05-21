@@ -1,0 +1,50 @@
+{{define "doc_body"}}
+<p>SCIM 2.0 (RFC 7643 + RFC 7644) is the standard upstream identity providers (Workday, Okta, Entra ID, BambooHR, Rippling, Google Workspace, …) use to push user-lifecycle changes into downstream apps. BlackWall exposes <code>/scim/v2/Users</code> so any of these can provision, update, and deprovision users without an operator copying them by hand.</p>
+
+<h5>Base URL and authentication</h5>
+<ul>
+    <li><strong>Base URL:</strong> <code>https://&lt;your-blackwall&gt;/scim/v2</code></li>
+    <li><strong>Auth:</strong> <code>Authorization: Bearer bw_admin_...</code> (see <a href="/admin/docs/api-tokens" class="text-light">Admin API Tokens</a>).</li>
+    <li><strong>Target project:</strong> <code>X-BlackWall-Project: &lt;project-uuid&gt;</code> — every SCIM operation is scoped to one project; this is the project users get assigned to on create.</li>
+</ul>
+
+<h5>Endpoints implemented</h5>
+<table class="table table-dark table-sm">
+    <thead><tr><th>Method &amp; path</th><th>Behaviour</th></tr></thead>
+    <tbody>
+        <tr><td><code>GET /Users</code></td><td>List with optional <code>filter</code>, <code>startIndex</code>, <code>count</code>.</td></tr>
+        <tr><td><code>POST /Users</code></td><td>Create. Conflict on duplicate <code>externalId</code>.</td></tr>
+        <tr><td><code>GET /Users/&#123;id&#125;</code></td><td>Read by user UUID.</td></tr>
+        <tr><td><code>PUT /Users/&#123;id&#125;</code></td><td>Full replace.</td></tr>
+        <tr><td><code>PATCH /Users/&#123;id&#125;</code></td><td>Operations array (replace, add).</td></tr>
+        <tr><td><code>DELETE /Users/&#123;id&#125;</code></td><td>Deactivates — does <strong>not</strong> hard-delete.</td></tr>
+        <tr><td><code>GET /ServiceProviderConfig</code></td><td>Capability discovery.</td></tr>
+        <tr><td><code>GET /ResourceTypes</code></td><td>Lists supported resource types (currently just User).</td></tr>
+        <tr><td><code>GET /Schemas</code></td><td>Lists supported schemas.</td></tr>
+    </tbody>
+</table>
+
+<h5>Filter operators supported</h5>
+<ul>
+    <li><code>eq</code> — exact match. <code>userName eq "alice@example.com"</code></li>
+    <li><code>sw</code> — starts with. <code>userName sw "alice"</code></li>
+    <li><code>co</code> — contains. <code>userName co "@example.com"</code></li>
+    <li><code>pr</code> — present (non-null, non-empty). <code>externalId pr</code></li>
+    <li><code>and</code> joins clauses.</li>
+</ul>
+<p>Filterable attributes: <code>userName</code>, <code>externalId</code>, <code>id</code>, <code>active</code>. Disjunction (<code>or</code>) and bracketed grouping are not yet supported — every IdP we surveyed only emits conjunctions.</p>
+
+<h5>Why DELETE doesn't delete</h5>
+<p>A runaway HRIS connector that bulk-fires DELETE shouldn't be able to wipe an organisation's identity store. <code>DELETE /Users/&#123;id&#125;</code> sets the user's status to <code>disabled</code> — the row, audit lineage, and credentials remain. To actually remove a user, do it from the admin UI with the approval workflow.</p>
+
+<h5>External ID mapping</h5>
+<p>Most IdPs identify users by their own ID space, not your UUID. We round-trip that via the <code>externalId</code> field — on create, we map <code>(project, externalId) → user</code>. Subsequent <code>PUT</code>/<code>PATCH</code> from the same IdP can address the user by either <code>id</code> (your UUID) or <code>externalId</code>.</p>
+
+<h5>Audit</h5>
+<p>Every SCIM mutation logs as <code>scim.user.create</code>, <code>scim.user.replace</code>, <code>scim.user.patch</code>, or <code>scim.user.deactivate</code>, with <code>actor_user_id</code> set to the token owner.</p>
+
+<h5>Smoke test</h5>
+<pre class="bg-black text-light p-3 small mb-0"><code>curl -H "Authorization: Bearer bw_admin_..." \
+     -H "X-BlackWall-Project: 11111111-2222-3333-4444-555555555555" \
+     "https://auth.example.com/scim/v2/ServiceProviderConfig"</code></pre>
+{{end}}

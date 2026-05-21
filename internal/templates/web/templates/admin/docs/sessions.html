@@ -1,0 +1,33 @@
+{{define "doc_body"}}
+<p>By default, BlackWall sessions are encrypted cookies — fast, scalable, but invisible to the server until they expire naturally. When a project enables <strong>db_sessions_enabled</strong>, each login additionally writes a <code>user_sessions</code> row that:</p>
+<ul>
+    <li>can be listed (admin sees every active session for a user),</li>
+    <li>can be revoked instantly (the next request that presents that cookie is rejected),</li>
+    <li>counts against a per-user cap (<code>max_concurrent_sessions</code>).</li>
+</ul>
+
+<h5>Where to manage them</h5>
+<ul>
+    <li><strong>Admin view:</strong> <code>/admin/users/&#123;uuid&#125;/sessions</code> — see, revoke one, or revoke all sessions for a user. Requires <code>manage_users</code>.</li>
+    <li><strong>End-user view:</strong> the portal at <code>/portal</code> shows the user's own active sessions (coming in the next portal pass).</li>
+</ul>
+
+<h5>Concurrent-session cap</h5>
+<p>When the cap is set to <em>N &gt; 0</em>, a fresh login that would push the user above N revokes the oldest active session first. The user on the oldest session is signed out at their next request. Useful for license-style "single active device" controls.</p>
+
+<h5>What revocation actually does</h5>
+<ol>
+    <li>The <code>user_sessions</code> row's <code>revoked_at</code> is set to NOW.</li>
+    <li>On the user's next request, the auth middleware looks up the row and refuses the request because it's revoked.</li>
+    <li>The session cookie remains in the user's browser until it naturally expires (per the cookie's MaxAge), but it carries no authority.</li>
+</ol>
+
+<h5>What revocation does NOT do</h5>
+<ul>
+    <li>It does not kill OAuth tokens issued during that session — those have their own <code>oauth_access_tokens</code> + <code>oauth_refresh_tokens</code> rows and lifecycles. To kill those, revoke the access/refresh tokens via the OAuth UI.</li>
+    <li>It does not log the user out of <em>other</em> projects unless you revoke their sessions there too.</li>
+</ul>
+
+<h5>Forced sign-out everywhere</h5>
+<p>The <em>Revoke all</em> button on the per-user sessions page kills every active session for that user across all projects. Use it after a credential delete, a status change to <code>disabled</code>, or any other action that should require re-authentication.</p>
+{{end}}

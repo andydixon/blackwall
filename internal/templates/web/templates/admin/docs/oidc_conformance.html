@@ -1,0 +1,71 @@
+{{define "doc_body"}}
+<p>This page tracks where BlackWall sits relative to the OpenID Foundation's conformance suite, what's already covered, and which gaps remain before a Basic OP / OP+PKCE certification submission.</p>
+
+<h5>Why certification matters</h5>
+<p>The OpenID Foundation publishes a self-hosted conformance test suite at <code>conformance.openid.net</code>. Passing the relevant profile and submitting the results earns the right to use the "OpenID Certified" mark — a meaningful signal in enterprise security questionnaires and a prerequisite for some procurement processes.</p>
+
+<h5>Profile we target</h5>
+<p><strong>Basic OP + PKCE.</strong> This is the response_type=code + S256 PKCE profile, which is what every modern SP uses. The full FAPI / Financial profiles are out of scope for the foreseeable future.</p>
+
+<h5>What's covered today</h5>
+<ul>
+    <li><strong>Discovery doc</strong> at <code>/.well-known/openid-configuration</code> — emits issuer, all endpoint URLs, supported response_types, grant_types, subject_types, signing algs, scopes, token endpoint auth methods, code_challenge_methods, claims, claim_types, and explicit <code>false</code> values for unsupported features (claims_parameter, request_parameter, request_uri_parameter). Also advertises supported prompt and display values plus service documentation URIs.</li>
+    <li><strong>JWKS</strong> at <code>/oauth/jwks</code> — RSA public keys with stable <code>kid</code>.</li>
+    <li><strong>response_type=code</strong> with mandatory <strong>PKCE S256</strong>.</li>
+    <li><strong>nonce</strong> required on OIDC requests, echoed in the ID token.</li>
+    <li><strong>at_hash</strong> emitted in the ID token, computed per spec (leftmost half of SHA-256 of access token).</li>
+    <li><strong>state</strong> round-tripped through the redirect.</li>
+    <li><strong>Error responses</strong> redirected to the redirect_uri with <code>error</code> + <code>error_description</code> + <code>state</code>.</li>
+    <li><strong>prompt=none</strong> returns <code>login_required</code> when the user isn't authenticated, rather than rendering a login page.</li>
+    <li><strong>prompt=login</strong> forces a fresh WebAuthn authentication regardless of session state.</li>
+    <li><strong>Reserved claim protection</strong> — custom claims can never override <code>iss</code>, <code>sub</code>, <code>aud</code>, <code>exp</code>, <code>iat</code>, <code>nbf</code>, <code>jti</code>, <code>nonce</code>, <code>at_hash</code>, etc., even if an operator tries to set them.</li>
+    <li><strong>userinfo endpoint</strong> verifies <code>openid</code> scope and bearer-token freshness (revocation, expiry, audience).</li>
+    <li><strong>Token revocation</strong> at <code>/oauth/revoke</code> and <strong>introspection</strong> at <code>/oauth/introspect</code>.</li>
+    <li><strong>Confidential and public clients</strong> — confidential clients authenticate via <code>client_secret_post</code> or <code>client_secret_basic</code>; public clients via <code>none</code> + PKCE.</li>
+</ul>
+
+<h5>Known gaps before submission</h5>
+<ul>
+    <li><strong><code>id_token_hint</code> evaluation.</strong> When prompt=none arrives with id_token_hint, we should verify the hint is parseable, was issued by us, and the sub matches the current session. Today we honour prompt=none but don't cross-check id_token_hint. Fix is local to <code>OAuthHandler.Authorize</code>.</li>
+    <li><strong><code>max_age</code> evaluation.</strong> If the request includes max_age=N and the session's <code>auth_time</code> is older than N seconds, force a fresh WebAuthn authentication. We track <code>auth_time</code> in the JWT but don't enforce max_age at the authorize endpoint yet.</li>
+    <li><strong><code>acr_values</code>.</strong> Spec says if the SP requests an ACR we support, we should echo it in the <code>acr</code> claim. We don't emit an <code>acr</code> claim at all. Single-class deployments can fix this by always emitting <code>"urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport"</code>; richer step-up flows can map ACR values to required authenticators.</li>
+    <li><strong><code>request</code> and <code>request_uri</code> parameters.</strong> Currently disabled in the discovery doc, which is conformant — but a future profile may require either. PAR (Pushed Authorization Requests, RFC 9126) is the right modernisation.</li>
+    <li><strong>response_mode=form_post.</strong> Advertised in discovery, but not implemented in <code>Authorize</code>'s code-issuance path. Today we always redirect; the suite will exercise form_post and need an HTML form response.</li>
+    <li><strong>End-session endpoint</strong> for RP-initiated logout. Not implemented. Spec calls for an <code>end_session_endpoint</code> in discovery (currently omitted, which is also valid — but enterprise SPs increasingly expect it).</li>
+    <li><strong>Backchannel logout.</strong> Not implemented. Pairs naturally with the existing webhook infrastructure.</li>
+    <li><strong>Signed userinfo.</strong> We always return userinfo as JSON. Advertising signed userinfo lets SPs verify integrity end-to-end; not in the basic conformance profile though.</li>
+</ul>
+
+<h5>Running the suite locally</h5>
+<ol>
+    <li>Clone the OpenID Foundation conformance suite: <code>git clone https://gitlab.com/openid/conformance-suite.git</code>. Build with <code>./run-tests.sh</code> per its README.</li>
+    <li>Create a confidential OAuth client in BlackWall via the admin UI or Terraform:
+        <ul>
+            <li>Grants: <code>authorization_code</code>, <code>refresh_token</code></li>
+            <li>Redirect URIs: the suite gives you a callback URL when you start a test plan.</li>
+            <li>Scopes: <code>openid profile email offline_access</code></li>
+            <li>OIDC enabled: yes</li>
+            <li>Access token type: jwt</li>
+        </ul>
+    </li>
+    <li>In the suite UI, configure the test plan with:
+        <ul>
+            <li>Discovery URL: <code>https://&lt;your-blackwall&gt;/.well-known/openid-configuration</code></li>
+            <li>Client ID and client_secret from above</li>
+            <li>PKCE method: S256</li>
+        </ul>
+    </li>
+    <li>Run the <em>Basic Certification Profile</em> test plan first. Each failing test points at a specific OIDC clause to fix.</li>
+    <li>Once green, re-run the <em>OP+PKCE</em> profile. Address remaining failures, repeat.</li>
+    <li>Submit the green test log to the OpenID Foundation for certification per <a href="https://openid.net/certification/" target="_blank" rel="noopener">openid.net/certification</a>.</li>
+</ol>
+
+<h5>Audit log signal</h5>
+<p>Every conformance suite request shows up in the audit log under <code>oauth.authorize.begin</code>, <code>oauth.token.exchange</code>, <code>oauth.token.refresh</code>, or <code>oidc.userinfo.success</code> — useful when you're debugging which specific test the suite is failing on.</p>
+
+<h5>See also</h5>
+<ul>
+    <li><a href="/admin/docs/oauth-clients" class="text-light">OAuth Clients</a> — registering the test client the conformance suite drives.</li>
+    <li><a href="/admin/docs/custom-claims" class="text-light">Custom OIDC Claims</a> — how claims merge into ID tokens / userinfo; the suite verifies our reserved-claim protection.</li>
+</ul>
+{{end}}

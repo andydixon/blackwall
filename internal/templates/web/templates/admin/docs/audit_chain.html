@@ -1,0 +1,29 @@
+{{define "doc_body"}}
+<p>BlackWall's audit log is hash-chained per row: every <code>audit_log</code> entry stores <code>chain_hash = SHA-256(prev_hash || canonical_payload)</code>. That makes it impossible to alter an old row without invalidating every later row's hash. What chain_hash alone <em>doesn't</em> catch is wholesale truncation or replacement of the entire table; an attacker who can replay a clean snapshot can avoid hash drift.</p>
+
+<p><strong>Audit chain checkpoints</strong> close that gap. A periodic job records the tip of the log as a signed triple <code>(last_audit_id, row_count, last_chain_hash)</code>, signed with the platform's active JWT key. Once published outside the database (S3 with versioning, a transparency log, your SIEM), any silent rewrite between checkpoints becomes detectable.</p>
+
+<h5>Where to manage them</h5>
+<ul>
+    <li><strong>Super-admin only:</strong> open <code>/admin/audit/checkpoints</code> or click <em>Chain</em> in the navbar.</li>
+    <li>Click <em>Create checkpoint now</em> to force a checkpoint outside the periodic schedule.</li>
+    <li>The <em>Verify</em> action recomputes the tip and confirms the signature is still valid under a known signing key. Drift surfaces as a structured failure message.</li>
+</ul>
+
+<h5>What verification proves</h5>
+<ol>
+    <li><strong>Tip stability:</strong> the row at <code>last_audit_id</code> still has the recorded <code>chain_hash</code>.</li>
+    <li><strong>Row count stability:</strong> the number of rows up to and including the tip matches what we signed.</li>
+    <li><strong>Signature validity:</strong> the recorded signature still validates against an active or retired signing key. If the signing key has been rotated out completely, retain the old public key for verification.</li>
+</ol>
+
+<h5>Operational guidance</h5>
+<ul>
+    <li>Run the checkpoint job at least daily; hourly is fine.</li>
+    <li><strong>Ship checkpoints off-host immediately.</strong> A checkpoint in the same database it attests is only useful as a hint — an attacker with write access can manipulate both. Push to S3 (Object Lock + versioning), a transparency log, or your SIEM's WORM-style storage. Record the destination in <code>exported_to</code>.</li>
+    <li>If a verification fails, freeze further audit writes (operationally — there's no automatic switch yet) and investigate. The first bad row's ID gives you the boundary.</li>
+</ul>
+
+<h5>What the signature uses</h5>
+<p>The same RSA private key as JWT signing. Reuse is intentional: the audit chain shares a security boundary with token issuance, so a compromise that lets an attacker rewrite audit rows also gives them token-issuance capability anyway. When you move JWT signing to a cloud KMS (see <a href="/admin/docs/kms-signer" class="text-light">KMS-pluggable signing</a>), checkpoint signing follows automatically.</p>
+{{end}}
