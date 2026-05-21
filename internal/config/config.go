@@ -134,6 +134,13 @@ func Get() *Config {
 	return global
 }
 
+// Set replaces the process-global config. Intended for tests that need to
+// pin specific values (e.g. AppURL) without spinning up the YAML loader.
+// Production code should never call this; the boot path uses Load().
+func Set(c *Config) {
+	global = c
+}
+
 func defaults() *Config {
 	return &Config{
 		AppEnv:                          "production",

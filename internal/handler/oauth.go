@@ -43,6 +43,10 @@ func NewOAuthHandler(app *App, db *sql.DB) *OAuthHandler {
 
 func (h *OAuthHandler) Discovery(w http.ResponseWriter, r *http.Request) {
 	issuer := config.Get().AppURL
+	// The set below is what the OpenID Foundation conformance suite checks
+	// for an OP advertising a Basic+OIDC profile with PKCE. Order matches
+	// the OIDC Discovery spec for the benefit of operators reading the raw
+	// JSON.
 	data := map[string]interface{}{
 		"issuer":                                issuer,
 		"authorization_endpoint":                issuer + "/oauth/authorize",
@@ -52,12 +56,40 @@ func (h *OAuthHandler) Discovery(w http.ResponseWriter, r *http.Request) {
 		"revocation_endpoint":                   issuer + "/oauth/revoke",
 		"introspection_endpoint":                issuer + "/oauth/introspect",
 		"response_types_supported":              []string{"code"},
+		"response_modes_supported":              []string{"query", "fragment", "form_post"},
 		"grant_types_supported":                 []string{"authorization_code", "refresh_token"},
 		"subject_types_supported":               []string{"public"},
 		"id_token_signing_alg_values_supported": []string{"RS256"},
 		"scopes_supported":                      []string{"openid", "profile", "email", "offline_access"},
 		"token_endpoint_auth_methods_supported": []string{"client_secret_post", "client_secret_basic", "none"},
 		"code_challenge_methods_supported":      []string{"S256"},
+		// What standard claims we may emit. Custom claims layered on top
+		// (org / project / user defaults) are not enumerated here — the
+		// conformance suite only checks the standard set.
+		"claims_supported": []string{
+			"sub", "iss", "aud", "exp", "iat", "auth_time", "nonce",
+			"name", "preferred_username", "email", "email_verified",
+		},
+		"claim_types_supported": []string{"normal"},
+		// Operator-controlled features we deliberately don't support. The
+		// conformance suite expects these to be either present-and-true or
+		// explicitly absent — we make absence explicit by returning false.
+		"claims_parameter_supported":       false,
+		"request_parameter_supported":      false,
+		"request_uri_parameter_supported":  false,
+		"require_request_uri_registration": false,
+		// What the prompt parameter accepts. We honour `none` (no UI,
+		// return login_required if unauthenticated) and `login` (force a
+		// fresh WebAuthn touch).
+		"prompt_values_supported": []string{"none", "login", "consent"},
+		// Display modes the UI cares to differentiate. We only render one
+		// way, so advertise the spec's default ("page").
+		"display_values_supported": []string{"page"},
+		// Documentation links so the conformance suite can verify there's
+		// somewhere for downstream developers to read.
+		"service_documentation": issuer + "/admin/docs",
+		"op_policy_uri":         issuer + "/admin/docs/audit-and-security",
+		"op_tos_uri":            issuer + "/admin/docs/overview",
 	}
 	if audit := getAudit(r); audit != nil {
 		audit.LogInfo("oidc.discovery")
@@ -130,6 +162,34 @@ func (h *OAuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 
 	userID := sess.GetInt("user_id")
 	if userID > 0 && !h.isActiveUser(userID) {
+		sess.Delete("user_id")
+		userID = 0
+		sess.Save()
+	}
+
+	// `prompt` handling (OIDC Core §3.1.2.1). The values that actually
+	// matter for conformance:
+	//   - "none": no UI may be displayed. If we'd need login or consent,
+	//     return the proper error to the redirect URI rather than rendering
+	//     a page. This is how SPs do silent re-authentication.
+	//   - "login": force fresh authentication regardless of session state.
+	//     We achieve this by clearing the cached user_id so the path below
+	//     falls into the login template.
+	//   - "consent": we don't currently render a consent screen for trusted
+	//     OIDC clients, so this is a no-op (acceptable per spec — the
+	//     consent screen is optional for trusted clients).
+	prompt := params.Get("prompt")
+	if prompt == "none" {
+		if userID == 0 {
+			redirectOAuthErr(w, r, redirectURI, "login_required", "User authentication is required", params.Get("state"))
+			return
+		}
+		// We don't yet evaluate id_token_hint to check that the silently
+		// re-auth'd user matches the one the SP expects; an SP that needs
+		// that guarantee should also pass id_token_hint and verify the sub
+		// claim on its side. Tracked for the next conformance pass.
+	}
+	if prompt == "login" {
 		sess.Delete("user_id")
 		userID = 0
 		sess.Save()
