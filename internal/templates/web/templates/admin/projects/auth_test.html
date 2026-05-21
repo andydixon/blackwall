@@ -1,0 +1,107 @@
+{{define "content"}}
+<div class="row mt-4 align-items-center">
+    <div class="col">
+        <div class="page-header"><h2>Authentication sandbox</h2></div>
+        <p class="text-muted small mb-0">Project: <a href="/admin/projects/{{.Project.UUID}}" class="text-light">{{.Project.Name}}</a></p>
+    </div>
+    <div class="col-auto">
+        <a href="/admin/projects/{{.Project.UUID}}" class="btn btn-outline-secondary">Back to project</a>
+    </div>
+</div>
+
+{{if .Error}}<div class="alert alert-warning mt-3">{{.Error}}</div>{{end}}
+
+<div class="card mt-3">
+    <div class="card-header">Pick a user</div>
+    <div class="card-body">
+        <p class="text-muted small">Select an assigned user and the OAuth scopes you want to simulate. BlackWall builds the exact JSON it would return from <code>/oauth/userinfo</code> for that user under this project — including all merged custom claims.</p>
+        <form method="GET" action="/admin/projects/{{.Project.UUID}}/test" class="row g-3 align-items-end">
+            <div class="col-md-6">
+                <label class="form-label">User</label>
+                <select class="form-select" name="user_uuid" required>
+                    <option value="">— select an assigned user —</option>
+                    {{range .Users}}
+                    <option value="{{.UUID}}" {{if $.SelectedUser}}{{if eq .UUID $.SelectedUser.UUID}}selected{{end}}{{end}}>{{.DisplayLabel}}</option>
+                    {{end}}
+                </select>
+                {{if not .Users}}<div class="form-text text-warning">No users assigned to this project. Assign one first.</div>{{end}}
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Scopes</label>
+                <div class="d-flex flex-wrap gap-3">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="scope" value="openid" id="scope-openid" {{if .ScopeOpenID}}checked{{end}}>
+                        <label class="form-check-label" for="scope-openid"><code>openid</code></label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="scope" value="profile" id="scope-profile" {{if .ScopeProfile}}checked{{end}}>
+                        <label class="form-check-label" for="scope-profile"><code>profile</code></label>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" name="scope" value="email" id="scope-email" {{if .ScopeEmail}}checked{{end}}>
+                        <label class="form-check-label" for="scope-email"><code>email</code></label>
+                    </div>
+                </div>
+            </div>
+            <div class="col-12 d-flex gap-2">
+                <button type="submit" class="btn btn-primary">Run preview</button>
+                <a href="/admin/projects/{{.Project.UUID}}/test" class="btn btn-outline-secondary">Reset</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+{{if .SelectedUser}}
+<div class="card mt-3">
+    <div class="card-header">
+        <code>/oauth/userinfo</code> response for
+        <a href="/admin/users/{{.SelectedUser.UUID}}" class="text-light">{{.SelectedUser.DisplayLabel}}</a>
+    </div>
+    <div class="card-body">
+        <p class="text-muted small mb-2">Pretty-printed JSON — what a downstream OIDC client would receive after exchanging an authorization code for tokens issued under this project.</p>
+        <pre class="bg-black text-light p-3 rounded border border-secondary small mb-0"><code>{{.PreviewJSON}}</code></pre>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">Source of each claim</div>
+    <div class="card-body p-0">
+        <table class="table table-dark table-sm mb-0 align-middle">
+            <thead>
+                <tr>
+                    <th>Key</th>
+                    <th>Value</th>
+                    <th>Source</th>
+                    <th>Note</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .ClaimRows}}
+                <tr>
+                    <td><code>{{.Key}}</code></td>
+                    <td><code class="small">{{.Value}}</code></td>
+                    <td>
+                        {{if eq .Source "standard"}}<span class="badge bg-light text-dark">standard</span>
+                        {{else if eq .Source "org_default"}}<span class="badge bg-secondary">org default</span>
+                        {{else if eq .Source "project_default"}}<span class="badge bg-primary">project default</span>
+                        {{else if eq .Source "user"}}<span class="badge bg-info text-dark">user-level</span>
+                        {{else if eq .Source "user_project"}}<span class="badge bg-success">user × project</span>
+                        {{else}}<span class="badge bg-warning text-dark">{{.Source}}</span>{{end}}
+                    </td>
+                    <td class="small text-muted">{{.Note}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer small text-muted">
+        Precedence (broadest → narrowest, later wins): organisation default → project default → user-level → user × project.
+        Standard fields (<code>sub</code>, <code>name</code>, <code>preferred_username</code>, <code>email</code>, <code>email_verified</code>) are issuer-controlled and cannot be overridden by custom claims.
+    </div>
+</div>
+{{end}}
+
+<div class="alert alert-info mt-3 small">
+    <strong>Note:</strong> the sandbox simulates the merged userinfo response without going through WebAuthn or the real OAuth redirect flow — it shows what BlackWall <em>would</em> emit for the chosen user under this project. To exercise the live flow end-to-end, use a registered OAuth client of this project from its own consumer application.
+</div>
+{{end}}

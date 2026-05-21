@@ -39,6 +39,32 @@
     </div>
 </div>
 
+{{if .OrgDefaultClaims}}
+<div class="card mt-3">
+    <div class="card-header">
+        Inherited organisation defaults
+        <span class="text-muted small">(applied to every user in
+        {{if .Org.UUID}}<a href="/admin/organisations/{{.Org.UUID}}" class="text-light">{{.Org.Name}}</a>{{else}}this organisation{{end}};
+        edit on the organisation page)</span>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-dark table-sm mb-0 align-middle">
+            <thead><tr><th>Key</th><th>Value</th><th class="text-end">Updated</th></tr></thead>
+            <tbody>
+                {{range .OrgDefaultClaims}}
+                <tr class="text-muted">
+                    <td><code>{{.Key}}</code></td>
+                    <td><code class="small">{{.Value}}</code></td>
+                    <td class="text-end small">{{if .UpdatedAt.Valid}}{{.UpdatedAt.Time.Format "2006-01-02 15:04"}}{{end}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer small text-muted">Read-only here. A matching key set below (user-level or project-level) will override these for this user.</div>
+</div>
+{{end}}
+
 <div class="card mt-3">
     <div class="card-header">
         User-level claims <span class="text-muted small">(emitted in every token for this user, regardless of project)</span>
@@ -88,6 +114,22 @@
         Project: <a href="/admin/projects/{{$set.ProjectUUID}}" class="text-light">{{$set.ProjectName}}</a>
         <span class="text-muted small">(emitted only when the issued token is bound to this project)</span>
     </div>
+    {{if $set.DefaultClaims}}
+    <div class="card-body p-0 border-bottom border-secondary">
+        <table class="table table-dark table-sm mb-0 align-middle">
+            <thead><tr><th colspan="3" class="text-muted small fw-normal">Inherited project defaults — <a href="/admin/projects/{{$set.ProjectUUID}}" class="text-light">edit on project page</a></th></tr></thead>
+            <tbody>
+                {{range $set.DefaultClaims}}
+                <tr class="text-muted">
+                    <td><code>{{.Key}}</code></td>
+                    <td><code class="small">{{.Value}}</code></td>
+                    <td class="text-end small">{{if .UpdatedAt.Valid}}{{.UpdatedAt.Time.Format "2006-01-02 15:04"}}{{end}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{end}}
     <div class="card-body p-0">
         <table class="table table-dark table-sm mb-0 align-middle">
             <thead><tr><th>Key</th><th>Value</th><th class="text-end">Updated</th><th></th></tr></thead>
@@ -106,7 +148,7 @@
                     </td>
                 </tr>
                 {{else}}
-                <tr><td colspan="4" class="text-center text-muted py-3">No project-scoped claims for this user.</td></tr>
+                <tr><td colspan="4" class="text-center text-muted py-3">No per-user project-scoped claims for this user.</td></tr>
                 {{end}}
             </tbody>
         </table>
@@ -133,7 +175,9 @@
 {{end}}
 
 <div class="alert alert-info mt-3 small">
-    <strong>Precedence:</strong> project-scoped claims override user-level ones with the same key in tokens issued for that project. Reserved OIDC / JWT claim names (sub, iss, aud, exp, iat, nbf, nonce, at_hash, scope, etc.) cannot be set — they are always issuer-controlled.<br>
+    <strong>Precedence (broadest → narrowest, later layer wins):</strong>
+    organisation defaults → project defaults → user-level → user × project.
+    Reserved OIDC / JWT claim names (sub, iss, aud, exp, iat, nbf, nonce, at_hash, scope, etc.) cannot be set — they are always issuer-controlled.<br>
     <strong>Value format:</strong> if the value parses as a JSON literal (number, boolean, array, object) it's emitted with that JSON type; otherwise it's emitted as a string.
 </div>
 {{end}}

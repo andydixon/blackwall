@@ -1115,13 +1115,13 @@ func (h *AdminHandler) UserClaims(w http.ResponseWriter, r *http.Request) {
 	scope := h.scopeFor(r)
 	userUUID := chi.URLParam(r, "userUuid")
 
-	var userID int
-	var userLabel string
+	var userID, orgID int
+	var userLabel, orgName string
 	var targetOrgUUID sql.NullString
-	err := h.DB.QueryRow(`SELECT u.id, u.display_label, o.uuid
+	err := h.DB.QueryRow(`SELECT u.id, u.display_label, o.id, o.uuid, o.name
 	                     FROM users u
 	                     LEFT JOIN organizations o ON o.id = u.organization_id
-	                     WHERE u.uuid = ?`, userUUID).Scan(&userID, &userLabel, &targetOrgUUID)
+	                     WHERE u.uuid = ?`, userUUID).Scan(&userID, &userLabel, &orgID, &targetOrgUUID, &orgName)
 	if err != nil {
 		http.NotFound(w, r)
 		return
@@ -1131,16 +1131,20 @@ func (h *AdminHandler) UserClaims(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	orgDefaults, _ := h.App.Claims.ListOrgDefaults(orgID)
 	userClaims, _ := h.App.Claims.ListUserClaims(userID)
 
 	// Per-project tables: only projects the user is assigned to AND the
 	// actor can access. Filtering both ways prevents an org admin from
-	// reading a different org's project claims via this page.
+	// reading a different org's project claims via this page. For each
+	// project we also surface the project-level defaults read-only so the
+	// admin can see exactly what the user inherits from the template.
 	type projectClaimSet struct {
-		ProjectID   int
-		ProjectUUID string
-		ProjectName string
-		Claims      []service.OIDCClaim
+		ProjectID     int
+		ProjectUUID   string
+		ProjectName   string
+		Claims        []service.OIDCClaim
+		DefaultClaims []service.OIDCClaim
 	}
 	var projectSets []projectClaimSet
 	prows, _ := h.DB.Query(`SELECT p.id, p.uuid, p.name
@@ -1158,14 +1162,18 @@ func (h *AdminHandler) UserClaims(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 			cl, _ := h.App.Claims.ListProjectClaims(userID, pid)
+			pdefs, _ := h.App.Claims.ListProjectDefaults(pid)
 			projectSets = append(projectSets, projectClaimSet{
-				ProjectID: pid, ProjectUUID: puuid, ProjectName: pname, Claims: cl,
+				ProjectID: pid, ProjectUUID: puuid, ProjectName: pname,
+				Claims: cl, DefaultClaims: pdefs,
 			})
 		}
 	}
 
 	data := h.adminBaseData(w, r, "Claims: "+userLabel)
 	data["User"] = map[string]interface{}{"UUID": userUUID, "DisplayLabel": userLabel, "ID": userID}
+	data["Org"] = map[string]interface{}{"UUID": targetOrgUUID.String, "Name": orgName, "ID": orgID}
+	data["OrgDefaultClaims"] = orgDefaults
 	data["UserClaims"] = userClaims
 	data["ProjectClaimSets"] = projectSets
 	data["Success"] = r.URL.Query().Get("success")
@@ -1436,6 +1444,425 @@ func (h *AdminHandler) UserProjectClaimDelete(w http.ResponseWriter, r *http.Req
 	redirect(w, r, "/admin/users/"+userUUID+"/claims?success=deleted")
 }
 
+
+// ─── Default OIDC claim templates ────────────────────────────────────────────
+//
+// Two additional layers sit BENEATH the per-user claims above:
+//   * organisation defaults: applied to every user in the org
+//   * project defaults: applied whenever a token is bound to that project
+// Both are merged into MergedClaims at token issue time and overridden by
+// any matching per-user value.
+
+// OrgClaimDefaultUpsert sets or updates an organisation-level default claim.
+// Gated by the same manage_organizations capability that controls other
+// org-wide settings — these claims apply to every user in the org.
+func (h *AdminHandler) OrgClaimDefaultUpsert(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := h.requireAdminAuth(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireCapability(w, r, "manage_organizations") {
+		return
+	}
+	scope := h.scopeFor(r)
+	orgUUID := chi.URLParam(r, "organizationUuid")
+	audit := getAudit(r)
+
+	if err := r.ParseForm(); err != nil {
+		redirect(w, r, "/admin/organisations/"+orgUUID+"?error=bad_request")
+		return
+	}
+	sess, _ := security.GetSession(w, r)
+	if !security.ValidateCSRF(sess, r.FormValue("csrf_token")) {
+		audit.LogFail("security.csrf.fail", service.AuditMeta{"failure_reason": "admin.claims.org.upsert"})
+		sess.Save()
+		redirect(w, r, "/admin/organisations/"+orgUUID+"?error=csrf")
+		return
+	}
+	if !scope.CanAccessOrganizationUUID(orgUUID) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	var orgID int
+	h.DB.QueryRow(`SELECT id FROM organizations WHERE uuid=?`, orgUUID).Scan(&orgID)
+	if orgID == 0 {
+		http.NotFound(w, r)
+		return
+	}
+
+	key := strings.TrimSpace(r.FormValue("claim_key"))
+	value := r.FormValue("claim_value")
+	if err := h.App.Claims.SetOrgDefault(orgID, key, value); err != nil {
+		audit.LogFail("admin.claims.org.upsert.fail", service.AuditMeta{
+			"actor_user_id":   actorID,
+			"organization_id": orgID,
+			"claim_key":       key,
+			"failure_reason":  err.Error(),
+		})
+		sess.Save()
+		redirect(w, r, "/admin/organisations/"+orgUUID+"?error=claim_invalid")
+		return
+	}
+	audit.LogSuccess("admin.claims.org.upsert", service.AuditMeta{
+		"actor_user_id":     actorID,
+		"organization_id":   orgID,
+		"organization_uuid": orgUUID,
+		"target_type":       "organization_oidc_claim_default",
+		"target_id":         int64(orgID),
+		"claim_key":         key,
+	})
+	sess.Save()
+	redirect(w, r, "/admin/organisations/"+orgUUID+"?success=claim_updated")
+}
+
+// OrgClaimDefaultDelete removes an organisation-level default claim.
+func (h *AdminHandler) OrgClaimDefaultDelete(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := h.requireAdminAuth(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireCapability(w, r, "manage_organizations") {
+		return
+	}
+	scope := h.scopeFor(r)
+	orgUUID := chi.URLParam(r, "organizationUuid")
+	audit := getAudit(r)
+
+	if err := r.ParseForm(); err != nil {
+		redirect(w, r, "/admin/organisations/"+orgUUID+"?error=bad_request")
+		return
+	}
+	sess, _ := security.GetSession(w, r)
+	if !security.ValidateCSRF(sess, r.FormValue("csrf_token")) {
+		sess.Save()
+		redirect(w, r, "/admin/organisations/"+orgUUID+"?error=csrf")
+		return
+	}
+	if !scope.CanAccessOrganizationUUID(orgUUID) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	var orgID int
+	h.DB.QueryRow(`SELECT id FROM organizations WHERE uuid=?`, orgUUID).Scan(&orgID)
+	if orgID == 0 {
+		http.NotFound(w, r)
+		return
+	}
+
+	key := strings.TrimSpace(r.FormValue("claim_key"))
+	if err := h.App.Claims.DeleteOrgDefault(orgID, key); err == nil {
+		audit.LogSuccess("admin.claims.org.delete", service.AuditMeta{
+			"actor_user_id":     actorID,
+			"organization_id":   orgID,
+			"organization_uuid": orgUUID,
+			"target_type":       "organization_oidc_claim_default",
+			"target_id":         int64(orgID),
+			"claim_key":         key,
+		})
+	}
+	sess.Save()
+	redirect(w, r, "/admin/organisations/"+orgUUID+"?success=claim_deleted")
+}
+
+// ProjectClaimDefaultUpsert sets or updates a project-level default claim.
+// Gated by manage_projects — these claims apply to every token issued for
+// the project regardless of which user is signing in.
+func (h *AdminHandler) ProjectClaimDefaultUpsert(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := h.requireAdminAuth(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireCapability(w, r, "manage_projects") {
+		return
+	}
+	scope := h.scopeFor(r)
+	projectUUID := chi.URLParam(r, "projectUuid")
+	audit := getAudit(r)
+
+	if err := r.ParseForm(); err != nil {
+		redirect(w, r, "/admin/projects/"+projectUUID+"?error=bad_request")
+		return
+	}
+	sess, _ := security.GetSession(w, r)
+	if !security.ValidateCSRF(sess, r.FormValue("csrf_token")) {
+		audit.LogFail("security.csrf.fail", service.AuditMeta{"failure_reason": "admin.claims.project_default.upsert"})
+		sess.Save()
+		redirect(w, r, "/admin/projects/"+projectUUID+"?error=csrf")
+		return
+	}
+	if !scope.CanAccessProjectUUID(projectUUID) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	var projectID int
+	h.DB.QueryRow(`SELECT id FROM projects WHERE uuid=?`, projectUUID).Scan(&projectID)
+	if projectID == 0 {
+		http.NotFound(w, r)
+		return
+	}
+
+	key := strings.TrimSpace(r.FormValue("claim_key"))
+	value := r.FormValue("claim_value")
+	if err := h.App.Claims.SetProjectDefault(projectID, key, value); err != nil {
+		audit.LogFail("admin.claims.project_default.upsert.fail", service.AuditMeta{
+			"actor_user_id":  actorID,
+			"project_id":     projectID,
+			"project_uuid":   projectUUID,
+			"claim_key":      key,
+			"failure_reason": err.Error(),
+		})
+		sess.Save()
+		redirect(w, r, "/admin/projects/"+projectUUID+"?error=claim_invalid")
+		return
+	}
+	audit.LogSuccess("admin.claims.project_default.upsert", service.AuditMeta{
+		"actor_user_id": actorID,
+		"project_id":    projectID,
+		"project_uuid":  projectUUID,
+		"target_type":   "project_oidc_claim_default",
+		"target_id":     int64(projectID),
+		"claim_key":     key,
+	})
+	sess.Save()
+	redirect(w, r, "/admin/projects/"+projectUUID+"?success=claim_updated")
+}
+
+// ProjectClaimDefaultDelete removes a project-level default claim.
+func (h *AdminHandler) ProjectClaimDefaultDelete(w http.ResponseWriter, r *http.Request) {
+	actorID, ok := h.requireAdminAuth(w, r)
+	if !ok {
+		return
+	}
+	if !h.requireCapability(w, r, "manage_projects") {
+		return
+	}
+	scope := h.scopeFor(r)
+	projectUUID := chi.URLParam(r, "projectUuid")
+	audit := getAudit(r)
+
+	if err := r.ParseForm(); err != nil {
+		redirect(w, r, "/admin/projects/"+projectUUID+"?error=bad_request")
+		return
+	}
+	sess, _ := security.GetSession(w, r)
+	if !security.ValidateCSRF(sess, r.FormValue("csrf_token")) {
+		sess.Save()
+		redirect(w, r, "/admin/projects/"+projectUUID+"?error=csrf")
+		return
+	}
+	if !scope.CanAccessProjectUUID(projectUUID) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	var projectID int
+	h.DB.QueryRow(`SELECT id FROM projects WHERE uuid=?`, projectUUID).Scan(&projectID)
+	if projectID == 0 {
+		http.NotFound(w, r)
+		return
+	}
+
+	key := strings.TrimSpace(r.FormValue("claim_key"))
+	if err := h.App.Claims.DeleteProjectDefault(projectID, key); err == nil {
+		audit.LogSuccess("admin.claims.project_default.delete", service.AuditMeta{
+			"actor_user_id": actorID,
+			"project_id":    projectID,
+			"project_uuid":  projectUUID,
+			"target_type":   "project_oidc_claim_default",
+			"target_id":     int64(projectID),
+			"claim_key":     key,
+		})
+	}
+	sess.Save()
+	redirect(w, r, "/admin/projects/"+projectUUID+"?success=claim_deleted")
+}
+
+// ─── Project authentication sandbox ──────────────────────────────────────────
+//
+// Renders a "what would /oauth/userinfo emit for user X?" preview against this
+// project. Mirrors the exact construction used by handler/oauth.go:UserInfo so
+// the displayed JSON matches what a downstream OIDC client would actually see.
+// Crucially, it also surfaces the *source* of every custom claim so the admin
+// can verify the org→project→user→user×project precedence is doing what they
+// expect.
+
+// ProjectAuthTest renders the sandbox page. With no user selected it shows the
+// picker; with ?user_uuid= it additionally runs the preview and displays the
+// resulting userinfo + source breakdown.
+func (h *AdminHandler) ProjectAuthTest(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.requireAdminAuth(w, r); !ok {
+		return
+	}
+	if !h.requireCapability(w, r, "view_projects") {
+		return
+	}
+	scope := h.scopeFor(r)
+	projectUUID := chi.URLParam(r, "projectUuid")
+	if !scope.CanAccessProjectUUID(projectUUID) {
+		w.WriteHeader(http.StatusForbidden)
+		return
+	}
+
+	var projectID int
+	var projectName string
+	err := h.DB.QueryRow(`SELECT id, name FROM projects WHERE uuid=?`, projectUUID).Scan(&projectID, &projectName)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Resolve which scopes the admin wants to simulate. Default to the OIDC
+	// happy-path set so the preview always shows the standard fields the
+	// downstream app would see in production.
+	scopeSelection := r.URL.Query()["scope"]
+	if len(scopeSelection) == 0 {
+		scopeSelection = []string{"openid", "profile", "email"}
+	}
+	scopeSet := map[string]bool{}
+	for _, s := range scopeSelection {
+		scopeSet[s] = true
+	}
+
+	// Users assigned to this project, filtered by the actor's admin scope.
+	// We use the same pattern as UserClaims so the visibility rules are
+	// identical: an org admin sees only users they can already reach.
+	type pickUser struct {
+		UUID         string
+		DisplayLabel string
+	}
+	var users []pickUser
+	urows, _ := h.DB.Query(`SELECT u.uuid, u.display_label
+	                        FROM user_project_roles upr
+	                        JOIN users u ON u.id = upr.user_id
+	                        WHERE upr.project_id = ? AND u.status='active'
+	                        ORDER BY u.display_label`, projectID)
+	if urows != nil {
+		defer urows.Close()
+		for urows.Next() {
+			var pu pickUser
+			urows.Scan(&pu.UUID, &pu.DisplayLabel)
+			users = append(users, pu)
+		}
+	}
+
+	data := h.adminBaseData(w, r, "Auth sandbox: "+projectName)
+	data["Project"] = map[string]interface{}{
+		"UUID": projectUUID, "Name": projectName, "ID": projectID,
+	}
+	data["Users"] = users
+	data["ScopeOpenID"] = scopeSet["openid"]
+	data["ScopeProfile"] = scopeSet["profile"]
+	data["ScopeEmail"] = scopeSet["email"]
+	data["ScopeList"] = scopeSelection
+
+	// If a target user is specified, build the preview. Validation rules
+	// match the real OAuth path: openid scope is required for any userinfo
+	// to be returned at all, and the user must be assigned to the project.
+	selectedUUID := strings.TrimSpace(r.URL.Query().Get("user_uuid"))
+	if selectedUUID != "" {
+		var userID int
+		var userLabel string
+		var targetOrgUUID sql.NullString
+		h.DB.QueryRow(`SELECT u.id, u.display_label, o.uuid
+		               FROM users u
+		               LEFT JOIN organizations o ON o.id = u.organization_id
+		               WHERE u.uuid = ? AND u.status='active'`, selectedUUID).Scan(&userID, &userLabel, &targetOrgUUID)
+		if userID == 0 || !h.actorCanReachUser(scope, userID, targetOrgUUID.String) {
+			data["Error"] = "User not found or out of scope."
+			templates.AdminPage(w, "projects/auth_test.html", data)
+			return
+		}
+		var assigned int
+		h.DB.QueryRow(`SELECT 1 FROM user_project_roles WHERE user_id=? AND project_id=? LIMIT 1`,
+			userID, projectID).Scan(&assigned)
+		if assigned != 1 {
+			data["Error"] = "User is not assigned to this project — assign them first."
+			templates.AdminPage(w, "projects/auth_test.html", data)
+			return
+		}
+
+		if !scopeSet["openid"] {
+			data["Error"] = "openid scope is required for a userinfo response."
+			templates.AdminPage(w, "projects/auth_test.html", data)
+			return
+		}
+
+		userinfo, sources := h.buildUserInfoPreview(userID, projectID, userLabel, selectedUUID, scopeSet)
+
+		// Pretty-print the userinfo JSON for the result panel.
+		pretty, _ := json.MarshalIndent(userinfo, "", "  ")
+
+		// Build a flat per-claim row list for the source breakdown, marking
+		// the standard issuer-controlled fields explicitly so the admin sees
+		// why those can't be overridden by custom claims.
+		type claimRow struct {
+			Key    string
+			Value  string
+			Source string
+			Note   string
+		}
+		var rows []claimRow
+		for key, val := range userinfo {
+			valJSON, _ := json.Marshal(val)
+			src, ok := sources[key]
+			note := ""
+			if !ok {
+				src = "standard"
+				switch key {
+				case "sub":
+					note = "Issuer-controlled: the user's stable UUID."
+				case "name", "preferred_username":
+					note = "Profile scope: the user's display label."
+				case "email", "email_verified":
+					note = "Email scope: present because the display label parses as an email."
+				}
+			}
+			rows = append(rows, claimRow{Key: key, Value: string(valJSON), Source: src, Note: note})
+		}
+
+		data["SelectedUser"] = map[string]interface{}{"UUID": selectedUUID, "DisplayLabel": userLabel}
+		data["PreviewJSON"] = string(pretty)
+		data["ClaimRows"] = rows
+	}
+
+	templates.AdminPage(w, "projects/auth_test.html", data)
+}
+
+// buildUserInfoPreview reproduces handler/oauth.go:UserInfo's response shape
+// for the given (user, project, scopes) without going through HTTP/JWT. Keeps
+// the preview faithful to what a downstream OIDC client would actually see.
+//
+// Returns the userinfo map AND a key→source map covering only the *custom*
+// claims (standard fields like sub/name/email aren't in the source map because
+// they're issued by BlackWall, not configured by the admin).
+func (h *AdminHandler) buildUserInfoPreview(userID, projectID int, userLabel, userUUID string, scopes map[string]bool) (map[string]interface{}, map[string]string) {
+	userinfo := map[string]interface{}{"sub": userUUID}
+	if scopes["profile"] {
+		userinfo["name"] = userLabel
+		userinfo["preferred_username"] = userLabel
+	}
+	if scopes["email"] && isEmailAddr(userLabel) {
+		userinfo["email"] = userLabel
+		userinfo["email_verified"] = true
+	}
+	custom, sources, _ := h.App.Claims.MergedClaimsWithSources(userID, projectID)
+	// Apply the same "standard fields win" rule that mergeCustomClaims
+	// enforces at runtime — drop any custom claim that would clobber a
+	// reserved-by-userinfo key. This is belt-and-braces; the service-level
+	// ValidateClaimKey already blocks these on write.
+	standard := map[string]bool{"sub": true, "name": true, "preferred_username": true, "email": true, "email_verified": true}
+	for k, v := range custom {
+		if standard[k] {
+			continue
+		}
+		userinfo[k] = v
+	}
+	return userinfo, sources
+}
+
 // ─── Projects ─────────────────────────────────────────────────────────────────
 
 // ProjectsList shows projects the actor can manage. Super-admins see all;
@@ -1631,8 +2058,13 @@ func (h *AdminHandler) ProjectDetail(w http.ResponseWriter, r *http.Request) {
 		"PrivilegeCount":  privilegeCount,
 	}
 
+	// Default OIDC claims for the project — rendered as their own card on
+	// the detail page so admins can manage them alongside other settings.
+	defaultClaims, _ := h.App.Claims.ListProjectDefaults(id)
+
 	data := h.adminBaseData(w, r, "Project: "+name)
 	data["Project"] = project
+	data["DefaultClaims"] = defaultClaims
 	data["CanManage"] = security.HasCapability(scope.AdminRole, "manage_projects")
 	data["CanDirectStatus"] = security.HasCapability(scope.AdminRole, "change_project_status_direct")
 	data["CanDirectSettings"] = security.HasCapability(scope.AdminRole, "update_project_settings_direct")
@@ -3151,6 +3583,10 @@ func (h *AdminHandler) OrganizationDetail(w http.ResponseWriter, r *http.Request
 		rows.Close()
 	}
 
+	// Default OIDC claims for the organisation — broadest layer, applied to
+	// every user in the org unless a narrower layer overrides.
+	defaultClaims, _ := h.App.Claims.ListOrgDefaults(id)
+
 	data := h.adminBaseData(w, r, "Org: "+name)
 	data["Org"] = map[string]interface{}{
 		"UUID": orgUUID, "Name": name, "Slug": slug, "Status": status,
@@ -3160,6 +3596,7 @@ func (h *AdminHandler) OrganizationDetail(w http.ResponseWriter, r *http.Request
 	data["Projects"] = projects
 	data["Users"] = users
 	data["AdminCandidates"] = candidates
+	data["DefaultClaims"] = defaultClaims
 	data["CanManage"] = security.HasCapability(scope.AdminRole, "manage_organizations")
 	data["CanSwitchAdmin"] = security.HasCapability(scope.AdminRole, "switch_organization_admin")
 	data["Success"] = r.URL.Query().Get("success")

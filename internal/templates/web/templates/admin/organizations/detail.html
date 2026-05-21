@@ -9,8 +9,8 @@
     </div>
 </div>
 
-{{if .Success}}<div class="alert alert-success mt-3">{{.Success}}</div>{{end}}
-{{if .Error}}<div class="alert alert-danger mt-3">{{.Error}}</div>{{end}}
+{{if .Success}}<div class="alert alert-success mt-3">{{if eq .Success "claim_updated"}}Default claim saved.{{else if eq .Success "claim_deleted"}}Default claim deleted.{{else}}{{.Success}}{{end}}</div>{{end}}
+{{if .Error}}<div class="alert alert-danger mt-3">{{if eq .Error "claim_invalid"}}Invalid claim key or value. Keys must match <code>[a-z][a-z0-9_]&#123;0,79&#125;</code> and not be a reserved OIDC name.{{else if eq .Error "csrf"}}Session expired — refresh and try again.{{else}}{{.Error}}{{end}}</div>{{end}}
 
 <div class="row mt-3 g-3">
     <div class="col-md-4">
@@ -123,5 +123,53 @@
             </div>
         </div>
     </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">
+        Default OIDC claims <span class="text-muted small">(broadest layer — merged into every token for every user in this organisation, overridden by project- or user-level values)</span>
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-dark table-sm mb-0 align-middle">
+            <thead><tr><th>Key</th><th>Value</th><th class="text-end">Updated</th><th></th></tr></thead>
+            <tbody>
+                {{range .DefaultClaims}}
+                <tr>
+                    <td><code>{{.Key}}</code></td>
+                    <td><code class="small">{{.Value}}</code></td>
+                    <td class="text-end small text-muted">{{if .UpdatedAt.Valid}}{{.UpdatedAt.Time.Format "2006-01-02 15:04"}}{{end}}</td>
+                    <td class="text-end">
+                        {{if $.CanManage}}
+                        <form method="POST" action="/admin/organisations/{{$.Org.UUID}}/claim-defaults/delete" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                            <input type="hidden" name="claim_key" value="{{.Key}}">
+                            <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete default claim {{.Key}}?')" type="submit">Delete</button>
+                        </form>
+                        {{end}}
+                    </td>
+                </tr>
+                {{else}}
+                <tr><td colspan="4" class="text-center text-muted py-3">No default claims set for this organisation.</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{if .CanManage}}
+    <div class="card-footer">
+        <form method="POST" action="/admin/organisations/{{.Org.UUID}}/claim-defaults" class="row g-2">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <div class="col-md-3">
+                <input type="text" class="form-control form-control-sm font-monospace" name="claim_key" placeholder="claim_key" required maxlength="80" pattern="[a-z][a-z0-9_]{0,79}">
+            </div>
+            <div class="col-md-7">
+                <input type="text" class="form-control form-control-sm" name="claim_value" placeholder='value or JSON literal: "acme" / 42 / true / ["a","b"]' required maxlength="4096">
+            </div>
+            <div class="col-md-2 d-grid">
+                <button type="submit" class="btn btn-sm btn-primary">Add / update</button>
+            </div>
+        </form>
+        <p class="text-muted small mt-2 mb-0">Reserved OIDC names (sub, iss, aud, exp, iat, nbf, nonce, at_hash, scope, etc.) cannot be set. JSON literals round-trip into the token with their original type.</p>
+    </div>
+    {{end}}
 </div>
 {{end}}

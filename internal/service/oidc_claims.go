@@ -8,14 +8,19 @@ import (
 	"strings"
 )
 
-// OIDCClaimsService manages two layers of custom OIDC claims merged into
-// every ID token and /oauth/userinfo response:
+// OIDCClaimsService manages four layers of custom OIDC claims merged into
+// every ID token and /oauth/userinfo response, listed from broadest to
+// narrowest (later layers overlay earlier ones with the same key):
 //
-//  1. **User-level** (`user_oidc_claims`) — apply to every token issued for
-//     the user, regardless of project.
-//  2. **Project-scoped** (`user_project_oidc_claims`) — apply only when the
-//     token is issued in the context of that specific project; merged ON TOP
-//     of the user-level claims so a project can override a user-wide value.
+//  1. **Org defaults** (`organization_oidc_claim_defaults`) — apply to every
+//     token for any user in the organisation, regardless of project.
+//  2. **Project defaults** (`project_oidc_claim_defaults`) — apply when the
+//     token is bound to a specific project; merged on top of org defaults so
+//     a project template can override an org-wide value.
+//  3. **User-level** (`user_oidc_claims`) — per-user values that ride on
+//     every token for that user, regardless of project. Override templates.
+//  4. **User × project** (`user_project_oidc_claims`) — per-user overrides
+//     scoped to a single project; the narrowest layer, wins over everything.
 //
 // We refuse to write OIDC-reserved claim names (sub, iss, aud, etc.) so a
 // custom claim can't shadow a security-critical one. Values are stored as
@@ -128,13 +133,98 @@ func (s *OIDCClaimsService) ListProjectClaims(userID, projectID int) ([]OIDCClai
 		userID, projectID)
 }
 
+// SetOrgDefault upserts an organisation-level default claim. Applies to every
+// token issued for any user in the org unless a narrower layer overrides.
+func (s *OIDCClaimsService) SetOrgDefault(orgID int, key, value string) error {
+	if err := ValidateClaimKey(key); err != nil {
+		return err
+	}
+	if len(value) > 4096 {
+		return errors.New("claim value must be 4096 bytes or fewer")
+	}
+	_, err := s.db.Exec(`INSERT INTO organization_oidc_claim_defaults (organization_id, claim_key, claim_value)
+		VALUES (?, ?, ?)
+		ON DUPLICATE KEY UPDATE claim_value = VALUES(claim_value)`,
+		orgID, key, value)
+	return err
+}
+
+// DeleteOrgDefault removes an org-level default claim. No-op if not set.
+func (s *OIDCClaimsService) DeleteOrgDefault(orgID int, key string) error {
+	_, err := s.db.Exec(`DELETE FROM organization_oidc_claim_defaults WHERE organization_id=? AND claim_key=?`, orgID, key)
+	return err
+}
+
+// ListOrgDefaults returns every org-level default claim for the organisation.
+func (s *OIDCClaimsService) ListOrgDefaults(orgID int) ([]OIDCClaim, error) {
+	return s.queryClaims(`SELECT claim_key, claim_value, updated_at
+		FROM organization_oidc_claim_defaults WHERE organization_id=? ORDER BY claim_key`, orgID)
+}
+
+// SetProjectDefault upserts a project-level default claim. Applies to every
+// token bound to this project (any user) unless a per-user layer overrides.
+func (s *OIDCClaimsService) SetProjectDefault(projectID int, key, value string) error {
+	if err := ValidateClaimKey(key); err != nil {
+		return err
+	}
+	if len(value) > 4096 {
+		return errors.New("claim value must be 4096 bytes or fewer")
+	}
+	_, err := s.db.Exec(`INSERT INTO project_oidc_claim_defaults (project_id, claim_key, claim_value)
+		VALUES (?, ?, ?)
+		ON DUPLICATE KEY UPDATE claim_value = VALUES(claim_value)`,
+		projectID, key, value)
+	return err
+}
+
+// DeleteProjectDefault removes a project-level default claim. No-op if not set.
+func (s *OIDCClaimsService) DeleteProjectDefault(projectID int, key string) error {
+	_, err := s.db.Exec(`DELETE FROM project_oidc_claim_defaults WHERE project_id=? AND claim_key=?`, projectID, key)
+	return err
+}
+
+// ListProjectDefaults returns every project-level default claim.
+func (s *OIDCClaimsService) ListProjectDefaults(projectID int) ([]OIDCClaim, error) {
+	return s.queryClaims(`SELECT claim_key, claim_value, updated_at
+		FROM project_oidc_claim_defaults WHERE project_id=? ORDER BY claim_key`, projectID)
+}
+
 // MergedClaims returns the effective claim set for tokens issued to userID in
-// the context of projectID. User-level claims form the base; project-level
-// claims overlay (a project setting wins over a user-wide setting with the
-// same key). Values are decoded into typed shapes so JSON booleans / numbers
-// / arrays round-trip correctly into the JWT.
+// the context of projectID. Layers are merged broadest→narrowest so the
+// narrower layer overrides a same-keyed value from a wider one:
+//
+//  1. org defaults  2. project defaults  3. user-level  4. user × project
+//
+// projectID may be 0 to skip the project-bound layers. Values are decoded
+// into typed shapes so JSON booleans / numbers / arrays round-trip correctly
+// into the JWT.
 func (s *OIDCClaimsService) MergedClaims(userID, projectID int) (map[string]interface{}, error) {
 	out := map[string]interface{}{}
+
+	// Resolve the user's organisation once so we can pull org defaults. We
+	// silently skip the org layer if the lookup fails — the user may have
+	// been deleted between the token mint and the claim resolution, and we
+	// must not let claim merging fail an otherwise valid login.
+	var orgID int
+	if err := s.db.QueryRow(`SELECT organization_id FROM users WHERE id=?`, userID).Scan(&orgID); err == nil && orgID > 0 {
+		orgDefaults, err := s.ListOrgDefaults(orgID)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range orgDefaults {
+			out[c.Key] = decodeClaimValue(c.Value)
+		}
+	}
+
+	if projectID > 0 {
+		projectDefaults, err := s.ListProjectDefaults(projectID)
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range projectDefaults {
+			out[c.Key] = decodeClaimValue(c.Value)
+		}
+	}
 
 	userClaims, err := s.ListUserClaims(userID)
 	if err != nil {
@@ -162,6 +252,70 @@ type OIDCClaim struct {
 	Key       string
 	Value     string
 	UpdatedAt sql.NullTime
+}
+
+// Claim source identifiers used by MergedClaimsWithSources to attribute each
+// effective claim to the layer that produced it. The order mirrors the merge
+// precedence (broadest first) so callers can sort by precedence cleanly.
+const (
+	ClaimSourceOrgDefault     = "org_default"
+	ClaimSourceProjectDefault = "project_default"
+	ClaimSourceUser           = "user"
+	ClaimSourceUserProject    = "user_project"
+)
+
+// MergedClaimsWithSources behaves like MergedClaims but also returns a map of
+// claim_key → source identifier (see Claim source* constants) so an admin can
+// see exactly which layer produced each effective value. The source map only
+// records the *winning* layer per key — that's what the token actually carries.
+func (s *OIDCClaimsService) MergedClaimsWithSources(userID, projectID int) (map[string]interface{}, map[string]string, error) {
+	out := map[string]interface{}{}
+	src := map[string]string{}
+
+	var orgID int
+	if err := s.db.QueryRow(`SELECT organization_id FROM users WHERE id=?`, userID).Scan(&orgID); err == nil && orgID > 0 {
+		orgDefaults, err := s.ListOrgDefaults(orgID)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, c := range orgDefaults {
+			out[c.Key] = decodeClaimValue(c.Value)
+			src[c.Key] = ClaimSourceOrgDefault
+		}
+	}
+
+	if projectID > 0 {
+		projectDefaults, err := s.ListProjectDefaults(projectID)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, c := range projectDefaults {
+			out[c.Key] = decodeClaimValue(c.Value)
+			src[c.Key] = ClaimSourceProjectDefault
+		}
+	}
+
+	userClaims, err := s.ListUserClaims(userID)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, c := range userClaims {
+		out[c.Key] = decodeClaimValue(c.Value)
+		src[c.Key] = ClaimSourceUser
+	}
+
+	if projectID > 0 {
+		projectClaims, err := s.ListProjectClaims(userID, projectID)
+		if err != nil {
+			return nil, nil, err
+		}
+		for _, c := range projectClaims {
+			out[c.Key] = decodeClaimValue(c.Value)
+			src[c.Key] = ClaimSourceUserProject
+		}
+	}
+
+	return out, src, nil
 }
 
 func (s *OIDCClaimsService) queryClaims(q string, args ...interface{}) ([]OIDCClaim, error) {

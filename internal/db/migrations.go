@@ -66,6 +66,44 @@ var migrations = []migration{
 			return err
 		},
 	},
+	{
+		Version:     2,
+		Description: "Default OIDC claims at organisation and project level (templates merged into every user)",
+		Apply: func(db *sql.DB) error {
+			// Organisation-level default claims: form the lowest precedence
+			// layer, applied to every token issued for a user in this org
+			// regardless of project. Per-user values still override.
+			_, err := db.Exec(`CREATE TABLE IF NOT EXISTS organization_oidc_claim_defaults (
+				id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+				organization_id BIGINT UNSIGNED NOT NULL,
+				claim_key VARCHAR(80) NOT NULL,
+				claim_value TEXT NOT NULL,
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+				UNIQUE KEY uk_org_claim_default (organization_id, claim_key),
+				FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE,
+				INDEX idx_org_claim_default (organization_id, claim_key)
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`)
+			if err != nil {
+				return err
+			}
+			// Project-level default claims: overlay org defaults whenever a
+			// token is bound to this project. Per-user values still override
+			// these in turn (narrowest layer wins).
+			_, err = db.Exec(`CREATE TABLE IF NOT EXISTS project_oidc_claim_defaults (
+				id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+				project_id BIGINT UNSIGNED NOT NULL,
+				claim_key VARCHAR(80) NOT NULL,
+				claim_value TEXT NOT NULL,
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+				UNIQUE KEY uk_project_claim_default (project_id, claim_key),
+				FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+				INDEX idx_project_claim_default (project_id, claim_key)
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`)
+			return err
+		},
+	},
 }
 
 // Migrate applies every pending migration in order under a single tracking

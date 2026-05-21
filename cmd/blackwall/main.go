@@ -241,6 +241,17 @@ func main() {
 		r.Post("/users/{userUuid}/projects/{projectUuid}/claims", adminHandler.UserProjectClaimUpsert)
 		r.Post("/users/{userUuid}/projects/{projectUuid}/claims/delete", adminHandler.UserProjectClaimDelete)
 
+		// Default OIDC claim templates (org-wide and project-wide). Merged
+		// into every user's tokens beneath the per-user layers above.
+		r.Post("/organisations/{organizationUuid}/claim-defaults", adminHandler.OrgClaimDefaultUpsert)
+		r.Post("/organisations/{organizationUuid}/claim-defaults/delete", adminHandler.OrgClaimDefaultDelete)
+		r.Post("/projects/{projectUuid}/claim-defaults", adminHandler.ProjectClaimDefaultUpsert)
+		r.Post("/projects/{projectUuid}/claim-defaults/delete", adminHandler.ProjectClaimDefaultDelete)
+
+		// Project authentication sandbox: preview what /oauth/userinfo
+		// would emit for any user in the project, with per-claim source.
+		r.Get("/projects/{projectUuid}/test", adminHandler.ProjectAuthTest)
+
 		// Projects
 		r.Get("/projects", adminHandler.ProjectsList)
 		r.Get("/projects/create", adminHandler.ProjectCreate)
