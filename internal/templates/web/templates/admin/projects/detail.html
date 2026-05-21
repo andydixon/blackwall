@@ -10,6 +10,7 @@
     </div>
     <div class="col-lg-4 text-lg-end">
         <a href="/admin/projects/{{.Project.UUID}}/test" class="btn btn-outline-info">Auth sandbox</a>
+        <a href="/admin/projects/{{.Project.UUID}}/webhooks" class="btn btn-outline-light">Webhooks</a>
         <a href="/admin/projects" class="btn btn-outline-secondary">Back</a>
     </div>
 </div>
@@ -73,6 +74,48 @@
         {{end}}
     </div>
 </div>
+
+{{if and .CanManage .Features}}
+<div class="card mt-3">
+    <div class="card-header">Feature flags</div>
+    <div class="card-body">
+        <form method="POST" action="/admin/projects/{{.Project.UUID}}/features" class="row g-3">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <div class="col-md-4">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="webhooks_enabled" value="1" id="ff-webhooks" {{if .Features.WebhooksEnabled}}checked{{end}}>
+                    <label class="form-check-label" for="ff-webhooks">Webhooks</label>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="db_sessions_enabled" value="1" id="ff-sessions" {{if .Features.DBSessionsEnabled}}checked{{end}}>
+                    <label class="form-check-label" for="ff-sessions">DB-backed sessions</label>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="custom_branding_enabled" value="1" id="ff-branding" {{if .Features.CustomBrandingEnabled}}checked{{end}}>
+                    <label class="form-check-label" for="ff-branding">Custom branding</label>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small">Max concurrent sessions <span class="text-muted">(0 = no cap)</span></label>
+                <input type="number" class="form-control form-control-sm" name="max_concurrent_sessions" value="{{.Features.MaxConcurrentSessions}}" min="0" max="100">
+            </div>
+            <div class="col-md-4">
+                <div class="form-check form-switch mt-4">
+                    <input class="form-check-input" type="checkbox" name="step_up_required" value="1" id="ff-stepup" {{if .Features.StepUpRequired}}checked{{end}}>
+                    <label class="form-check-label" for="ff-stepup">Step-up auth for sensitive ops</label>
+                </div>
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary">Save feature flags</button>
+            </div>
+        </form>
+    </div>
+</div>
+{{end}}
 
 <div class="card mt-3">
     <div class="card-header">

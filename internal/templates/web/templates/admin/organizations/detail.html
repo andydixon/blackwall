@@ -125,6 +125,74 @@
     </div>
 </div>
 
+{{if .CanManage}}
+<div class="card mt-3">
+    <div class="card-header">Branding & login experience</div>
+    <div class="card-body">
+        <form method="POST" action="/admin/organisations/{{.Org.UUID}}/branding" class="row g-3">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <div class="col-md-6">
+                <label class="form-label">Logo URL</label>
+                <input type="url" class="form-control form-control-sm" name="logo_url" placeholder="https://...">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Primary colour</label>
+                <input type="text" class="form-control form-control-sm" name="primary_color" placeholder="#0ea5e9" pattern="#[0-9a-fA-F]{6}">
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">Support email</label>
+                <input type="email" class="form-control form-control-sm" name="support_email" placeholder="support@example.com">
+            </div>
+            <div class="col-12">
+                <label class="form-label">Login message <span class="text-muted small">(optional — shown above the WebAuthn prompt)</span></label>
+                <textarea class="form-control form-control-sm" name="login_message" rows="2" maxlength="2048"></textarea>
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-primary">Save branding</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">Custom domains</div>
+    <div class="card-body p-0">
+        <table class="table table-dark table-sm mb-0 align-middle">
+            <thead><tr><th>Hostname</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+                {{range .CustomDomains}}
+                <tr>
+                    <td><code>{{.hostname}}</code></td>
+                    <td>{{if .verified}}<span class="badge bg-success">verified</span>{{else}}<span class="badge bg-warning text-dark">unverified</span>{{end}}</td>
+                    <td class="text-end">
+                        <form method="POST" action="/admin/organisations/{{$.Org.UUID}}/domains/delete" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                            <input type="hidden" name="hostname" value="{{.hostname}}">
+                            <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Remove this domain mapping?')" type="submit">Remove</button>
+                        </form>
+                    </td>
+                </tr>
+                {{else}}
+                <tr><td colspan="3" class="text-center text-muted py-3">No custom domains registered.</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer">
+        <form method="POST" action="/admin/organisations/{{.Org.UUID}}/domains/add" class="row g-2">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <div class="col-md-9">
+                <input type="text" class="form-control form-control-sm" name="hostname" placeholder="login.customer.com" required>
+            </div>
+            <div class="col-md-3 d-grid">
+                <button type="submit" class="btn btn-sm btn-primary">Register</button>
+            </div>
+        </form>
+        <p class="text-muted small mt-2 mb-0">DNS + SSL is the operator's responsibility. Domains start unverified; flip to verified after confirming DNS is in place.</p>
+    </div>
+</div>
+{{end}}
+
 <div class="card mt-3">
     <div class="card-header">
         Default OIDC claims <span class="text-muted small">(broadest layer — merged into every token for every user in this organisation, overridden by project- or user-level values)</span>

@@ -675,6 +675,8 @@
                     <li class="nav-item"><a class="nav-link" href="/admin/organisations">Orgs</a></li>
                     <li class="nav-item"><a class="nav-link" href="/admin/cryptbin">Cryptbin</a></li>
                     <li class="nav-item"><a class="nav-link" href="/admin/maintenance">Maintenance</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/admin/audit/checkpoints">Chain</a></li>
+                    <li class="nav-item"><a class="nav-link" href="/admin/api-tokens">API tokens</a></li>
                     {{end}}
                     {{if or (eq .CurrentAdminRole "super_admin") (eq .CurrentAdminRole "auditor")}}
                     <li class="nav-item"><a class="nav-link" href="/admin/error-trace">Errors</a></li>

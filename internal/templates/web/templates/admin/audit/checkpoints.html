@@ -1,0 +1,48 @@
+{{define "content"}}
+<div class="row mt-4 align-items-center">
+    <div class="col">
+        <div class="page-header"><h2>Audit chain checkpoints</h2></div>
+        <p class="text-muted small mb-0">Signed snapshots of the audit log tip — used to detect silent truncation or rewriting between checkpoints.</p>
+    </div>
+    <div class="col-auto">
+        <a href="/admin/audit" class="btn btn-outline-secondary">Audit log</a>
+        <form method="POST" action="/admin/audit/checkpoints/create" class="d-inline">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <button class="btn btn-primary">Create checkpoint now</button>
+        </form>
+    </div>
+</div>
+
+{{if .Success}}<div class="alert alert-success mt-3">{{if eq .Success "created"}}Checkpoint written.{{else}}{{.Success}}{{end}}</div>{{end}}
+{{if .Error}}<div class="alert alert-danger mt-3">{{.Error}}</div>{{end}}
+
+<div class="card mt-3">
+    <div class="card-header">Recent checkpoints (newest first)</div>
+    <div class="card-body p-0">
+        <table class="table table-dark table-sm mb-0 align-middle">
+            <thead><tr><th>ID</th><th>Tip audit row</th><th>Row count</th><th>Chain hash</th><th>Key ID</th><th>Created</th><th>Exported</th><th></th></tr></thead>
+            <tbody>
+                {{range .Checkpoints}}
+                <tr>
+                    <td>#{{.ID}}</td>
+                    <td>{{.LastAuditID}}</td>
+                    <td>{{.RowCount}}</td>
+                    <td><code class="small">{{slice .LastChainHash 0 16}}…</code></td>
+                    <td><code class="small">{{.SigningKeyID}}</code></td>
+                    <td class="small">{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
+                    <td class="small">{{if .ExportedTo.Valid}}<code>{{.ExportedTo.String}}</code>{{else}}<span class="text-muted">—</span>{{end}}</td>
+                    <td class="text-end">
+                        <a class="btn btn-sm btn-outline-light" href="/admin/audit/checkpoints/{{.ID}}/verify" target="_blank">Verify</a>
+                    </td>
+                </tr>
+                {{else}}
+                <tr><td colspan="8" class="text-center text-muted py-3">No checkpoints written yet.</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    <div class="card-footer small text-muted">
+        <strong>How verification works:</strong> the verifier walks the chain back to the checkpointed tip, recomputes <code>chain_hash</code>, and confirms the signature on (last_id, row_count, last_chain_hash) was produced by a known JWT signing key. Any silent edit between checkpoints surfaces as a mismatch.
+    </div>
+</div>
+{{end}}

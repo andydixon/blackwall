@@ -303,6 +303,36 @@ func main() {
 		// Audit
 		r.Get("/audit", adminHandler.AuditLog)
 		r.Get("/audit/export", adminHandler.AuditExport)
+
+		// Audit chain checkpoints (tamper-evidence)
+		r.Get("/audit/checkpoints", adminHandler.AuditCheckpoints)
+		r.Post("/audit/checkpoints/create", adminHandler.AuditCheckpointCreate)
+		r.Get("/audit/checkpoints/{id}/verify", adminHandler.AuditCheckpointVerify)
+
+		// Webhooks (per-project)
+		r.Get("/projects/{projectUuid}/webhooks", adminHandler.WebhookList)
+		r.Post("/projects/{projectUuid}/webhooks/create", adminHandler.WebhookCreate)
+		r.Post("/projects/{projectUuid}/webhooks/{endpointId}/update", adminHandler.WebhookUpdate)
+		r.Post("/projects/{projectUuid}/webhooks/{endpointId}/delete", adminHandler.WebhookDelete)
+		r.Get("/projects/{projectUuid}/webhooks/{endpointId}/deliveries", adminHandler.WebhookDeliveries)
+
+		// Per-project feature flags
+		r.Post("/projects/{projectUuid}/features", adminHandler.ProjectFeatureFlagsUpdate)
+
+		// Session management (per user)
+		r.Get("/users/{userUuid}/sessions", adminHandler.UserSessions)
+		r.Post("/users/{userUuid}/sessions/revoke", adminHandler.UserSessionRevoke)
+		r.Post("/users/{userUuid}/sessions/revoke-all", adminHandler.UserSessionRevokeAll)
+
+		// Org branding + custom domains
+		r.Post("/organisations/{organizationUuid}/branding", adminHandler.OrgBrandingUpdate)
+		r.Post("/organisations/{organizationUuid}/domains/add", adminHandler.OrgDomainAdd)
+		r.Post("/organisations/{organizationUuid}/domains/delete", adminHandler.OrgDomainDelete)
+
+		// Admin API tokens (for JSON API / Terraform / SCIM consumers)
+		r.Get("/api-tokens", adminHandler.AdminTokens)
+		r.Post("/api-tokens/create", adminHandler.AdminTokenCreate)
+		r.Post("/api-tokens/{publicId}/revoke", adminHandler.AdminTokenRevoke)
 	})
 
 	// 404 handler

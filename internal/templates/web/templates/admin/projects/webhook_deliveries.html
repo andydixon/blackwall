@@ -1,0 +1,39 @@
+{{define "content"}}
+<div class="row mt-4 align-items-center">
+    <div class="col">
+        <div class="page-header"><h2>Webhook deliveries</h2></div>
+        <p class="text-muted small mb-0"><code>{{.Endpoint.TargetURL}}</code></p>
+    </div>
+    <div class="col-auto">
+        <a href="/admin/projects/{{.Project.UUID}}/webhooks" class="btn btn-outline-secondary">Back to webhooks</a>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">Last 100 attempts</div>
+    <div class="card-body p-0">
+        <table class="table table-dark table-sm mb-0 align-middle">
+            <thead><tr><th>Event</th><th>Status</th><th>Attempts</th><th>HTTP</th><th>Excerpt</th><th>When</th></tr></thead>
+            <tbody>
+                {{range .Deliveries}}
+                <tr>
+                    <td><code class="small">{{.event_type}}</code><br><span class="text-muted small">{{.event_id}}</span></td>
+                    <td>
+                        {{if eq .status "succeeded"}}<span class="badge bg-success">success</span>
+                        {{else if eq .status "pending"}}<span class="badge bg-info text-dark">pending</span>
+                        {{else if eq .status "exhausted"}}<span class="badge bg-danger">exhausted</span>
+                        {{else}}<span class="badge bg-warning text-dark">{{.status}}</span>{{end}}
+                    </td>
+                    <td>{{.attempts}}</td>
+                    <td>{{.last_status_code}}</td>
+                    <td class="small"><code>{{.excerpt}}</code></td>
+                    <td class="small">{{.updated_at}}</td>
+                </tr>
+                {{else}}
+                <tr><td colspan="6" class="text-center text-muted py-3">No deliveries yet.</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{end}}

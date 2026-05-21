@@ -2007,6 +2007,13 @@ func (h *AdminHandler) ProjectStore(w http.ResponseWriter, r *http.Request) {
 			projID, lv.Level, lv.Name)
 	}
 
+	// Enable enterprise-tier defaults for newly created projects (webhooks,
+	// DB-backed sessions, custom branding on). Existing projects keep the
+	// "all off" backfill values applied by migration v3.
+	if h.App.Features != nil {
+		_ = h.App.Features.EnsureForNewProject(int(projID))
+	}
+
 	audit.LogSuccess("admin.project.create", service.AuditMeta{
 		"actor_user_id":     actorID,
 		"target_type":       "project",
@@ -2061,10 +2068,15 @@ func (h *AdminHandler) ProjectDetail(w http.ResponseWriter, r *http.Request) {
 	// Default OIDC claims for the project — rendered as their own card on
 	// the detail page so admins can manage them alongside other settings.
 	defaultClaims, _ := h.App.Claims.ListProjectDefaults(id)
+	var features service.ProjectFeatures
+	if h.App.Features != nil {
+		features, _ = h.App.Features.Get(id)
+	}
 
 	data := h.adminBaseData(w, r, "Project: "+name)
 	data["Project"] = project
 	data["DefaultClaims"] = defaultClaims
+	data["Features"] = features
 	data["CanManage"] = security.HasCapability(scope.AdminRole, "manage_projects")
 	data["CanDirectStatus"] = security.HasCapability(scope.AdminRole, "change_project_status_direct")
 	data["CanDirectSettings"] = security.HasCapability(scope.AdminRole, "update_project_settings_direct")
@@ -3586,6 +3598,10 @@ func (h *AdminHandler) OrganizationDetail(w http.ResponseWriter, r *http.Request
 	// Default OIDC claims for the organisation — broadest layer, applied to
 	// every user in the org unless a narrower layer overrides.
 	defaultClaims, _ := h.App.Claims.ListOrgDefaults(id)
+	var customDomains []map[string]interface{}
+	if h.App.Branding != nil {
+		customDomains, _ = h.App.Branding.ListCustomDomains(id)
+	}
 
 	data := h.adminBaseData(w, r, "Org: "+name)
 	data["Org"] = map[string]interface{}{
@@ -3597,6 +3613,7 @@ func (h *AdminHandler) OrganizationDetail(w http.ResponseWriter, r *http.Request
 	data["Users"] = users
 	data["AdminCandidates"] = candidates
 	data["DefaultClaims"] = defaultClaims
+	data["CustomDomains"] = customDomains
 	data["CanManage"] = security.HasCapability(scope.AdminRole, "manage_organizations")
 	data["CanSwitchAdmin"] = security.HasCapability(scope.AdminRole, "switch_organization_admin")
 	data["Success"] = r.URL.Query().Get("success")
