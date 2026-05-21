@@ -335,6 +335,33 @@ func main() {
 		r.Post("/api-tokens/{publicId}/revoke", adminHandler.AdminTokenRevoke)
 	})
 
+	// JSON admin API — bearer-token authenticated. Separate route prefix
+	// so the auth middleware doesn't have to discriminate between cookie
+	// and bearer flows. Consumers: the Terraform provider, SCIM
+	// receivers, and any operator's automation.
+	r.Route("/api/v1", func(r chi.Router) {
+		r.Use(adminHandler.AdminAPIBearerAuth)
+		r.Get("/organizations", adminHandler.APIListOrganizations)
+		r.Get("/projects", adminHandler.APIListProjects)
+		r.Post("/projects", adminHandler.APICreateProject)
+		r.Get("/projects/{projectUuid}", adminHandler.APIGetProject)
+		r.Patch("/projects/{projectUuid}", adminHandler.APIPatchProject)
+		r.Delete("/projects/{projectUuid}", adminHandler.APIDeleteProject)
+		r.Get("/projects/{projectUuid}/oauth_clients", adminHandler.APIListOAuthClients)
+		r.Post("/projects/{projectUuid}/oauth_clients", adminHandler.APICreateOAuthClient)
+		r.Get("/oauth_clients/{clientId}", adminHandler.APIGetOAuthClient)
+		r.Patch("/oauth_clients/{clientId}", adminHandler.APIPatchOAuthClient)
+		r.Delete("/oauth_clients/{clientId}", adminHandler.APIDeleteOAuthClient)
+		r.Get("/projects/{projectUuid}/claim_defaults", adminHandler.APIListClaimDefaults)
+		r.Put("/projects/{projectUuid}/claim_defaults", adminHandler.APIUpsertClaimDefault)
+		r.Delete("/projects/{projectUuid}/claim_defaults", adminHandler.APIDeleteClaimDefault)
+		r.Get("/projects/{projectUuid}/webhooks", adminHandler.APIListWebhooks)
+		r.Post("/projects/{projectUuid}/webhooks", adminHandler.APICreateWebhook)
+		r.Patch("/projects/{projectUuid}/webhooks/{endpointId}", adminHandler.APIPatchWebhook)
+		r.Delete("/projects/{projectUuid}/webhooks/{endpointId}", adminHandler.APIDeleteWebhook)
+		r.Get("/users", adminHandler.APIListUsers)
+	})
+
 	// 404 handler
 	r.NotFound(func(w http.ResponseWriter, r *http.Request) {
 		templates.Standalone(w, "error.html", map[string]interface{}{
