@@ -1,0 +1,96 @@
+{{define "content"}}
+<div class="row mt-4 align-items-center">
+    <div class="col">
+        <div class="page-header"><h2>SAML 2.0 service providers</h2></div>
+        <p class="text-muted small mb-0">Project: <a href="/admin/projects/{{.Project.UUID}}" class="text-light">{{.Project.Name}}</a></p>
+    </div>
+    <div class="col-auto">
+        <a href="/admin/projects/{{.Project.UUID}}" class="btn btn-outline-secondary">Back to project</a>
+    </div>
+</div>
+
+{{if .Success}}<div class="alert alert-success mt-3">{{if eq .Success "created"}}Service provider registered.{{else if eq .Success "deleted"}}Service provider removed.{{else}}{{.Success}}{{end}}</div>{{end}}
+{{if .Error}}<div class="alert alert-danger mt-3">{{.Error}}</div>{{end}}
+
+<div class="card mt-3">
+    <div class="card-header">IdP endpoints for this project</div>
+    <div class="card-body">
+        <p class="mb-2 small text-muted">Provide these URLs to the SP-side configuration in your downstream application.</p>
+        <dl class="row mb-0">
+            <dt class="col-sm-3">Metadata URL</dt>
+            <dd class="col-sm-9"><code>{{.MetadataURL}}</code></dd>
+            <dt class="col-sm-3">SSO endpoint</dt>
+            <dd class="col-sm-9"><code>{{.SSOUrl}}</code></dd>
+            <dt class="col-sm-3">Bindings</dt>
+            <dd class="col-sm-9"><code>HTTP-Redirect</code>, <code>HTTP-POST</code> (request) · <code>HTTP-POST</code> (response)</dd>
+            <dt class="col-sm-3">Signature</dt>
+            <dd class="col-sm-9">RSA-SHA256 · exclusive-c14n · signs both Response and embedded Assertion</dd>
+        </dl>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">Registered service providers</div>
+    <div class="card-body p-0">
+        <table class="table table-dark table-sm mb-0 align-middle">
+            <thead><tr><th>Entity ID</th><th>ACS URL</th><th>NameID format</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+                {{range .SPs}}
+                <tr>
+                    <td><code class="small">{{.EntityID}}</code></td>
+                    <td><code class="small">{{.ACSURL}}</code></td>
+                    <td><code class="small">{{.NameIDFormat}}</code></td>
+                    <td>{{if eq .Status "active"}}<span class="badge bg-success">Active</span>{{else}}<span class="badge bg-secondary">Disabled</span>{{end}}</td>
+                    <td class="text-end">
+                        {{if $.CanManage}}
+                        <form method="POST" action="/admin/projects/{{$.Project.UUID}}/saml/{{.PublicID}}/delete" class="d-inline">
+                            <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                            <button class="btn btn-sm btn-outline-danger" onclick="return confirm('Remove this SP?')" type="submit">Delete</button>
+                        </form>
+                        {{end}}
+                    </td>
+                </tr>
+                {{else}}
+                <tr><td colspan="5" class="text-center text-muted py-3">No SAML SPs registered yet.</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{if .CanManage}}
+    <div class="card-footer">
+        <form method="POST" action="/admin/projects/{{.Project.UUID}}/saml/create" class="row g-2">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <div class="col-md-6">
+                <label class="form-label small">Entity ID (the SP's identifier)</label>
+                <input type="text" class="form-control form-control-sm" name="entity_id" placeholder="https://app.example.com/saml/metadata" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small">ACS URL (where we POST the Response)</label>
+                <input type="url" class="form-control form-control-sm" name="acs_url" placeholder="https://app.example.com/saml/acs" required>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small">NameID format</label>
+                <select class="form-select form-select-sm" name="name_id_format">
+                    <option value="urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress">emailAddress (default)</option>
+                    <option value="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent">persistent</option>
+                    <option value="urn:oasis:names:tc:SAML:2.0:nameid-format:transient">transient</option>
+                    <option value="urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified">unspecified</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label small">Audience <span class="text-muted">(defaults to Entity ID)</span></label>
+                <input type="text" class="form-control form-control-sm" name="audience" placeholder="optional">
+            </div>
+            <div class="col-12">
+                <label class="form-label small">Attribute map <span class="text-muted">(one per line: <code>saml_attr=source</code>)</span></label>
+                <textarea class="form-control form-control-sm font-monospace" name="attribute_map" rows="4" placeholder="email=display_label&#10;displayName=display_label&#10;department=department"></textarea>
+                <div class="form-text small text-muted">Source can be <code>display_label</code> for the user's primary label, or any custom OIDC claim name to pull from the merged claim store.</div>
+            </div>
+            <div class="col-12">
+                <button type="submit" class="btn btn-sm btn-primary">Register SP</button>
+            </div>
+        </form>
+    </div>
+    {{end}}
+</div>
+{{end}}

@@ -476,4 +476,144 @@ func (h *AdminHandler) APIDeleteOAuthClient(w http.ResponseWriter, r *http.Reque
 }
 
 
+// ─── SAML service providers ────────────────────────────────────────────────
+
+// APIListSAMLSPs lists registered SPs under a project.
+func (h *AdminHandler) APIListSAMLSPs(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAPICapability(w, r, "view_projects") {
+		return
+	}
+	uuidStr := chi.URLParam(r, "projectUuid")
+	a := adminAPIActor(r)
+	scope := h.App.Scope.Build(a.UserID)
+	if !scope.CanAccessProjectUUID(uuidStr) {
+		jsonAPIError(w, http.StatusForbidden, "forbidden", "project out of scope")
+		return
+	}
+	var pid int
+	h.DB.QueryRow(`SELECT id FROM projects WHERE uuid=?`, uuidStr).Scan(&pid)
+	sps, _ := h.App.SAML.ListSPsForProject(pid)
+	out := make([]map[string]interface{}, 0, len(sps))
+	for _, sp := range sps {
+		out = append(out, samlSPToMap(&sp))
+	}
+	jsonOK(w, map[string]interface{}{"service_providers": out})
+}
+
+// APICreateSAMLSP registers a new SAML SP.
+func (h *AdminHandler) APICreateSAMLSP(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAPICapability(w, r, "manage_projects") {
+		return
+	}
+	uuidStr := chi.URLParam(r, "projectUuid")
+	a := adminAPIActor(r)
+	scope := h.App.Scope.Build(a.UserID)
+	if !scope.CanAccessProjectUUID(uuidStr) {
+		jsonAPIError(w, http.StatusForbidden, "forbidden", "project out of scope")
+		return
+	}
+	var body struct {
+		EntityID     string            `json:"entity_id"`
+		ACSURL       string            `json:"acs_url"`
+		SLOURL       string            `json:"slo_url"`
+		NameIDFormat string            `json:"name_id_format"`
+		Audience     string            `json:"audience"`
+		AttributeMap map[string]string `json:"attribute_map"`
+		SPCertPEM    string            `json:"sp_cert_pem"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		jsonAPIError(w, http.StatusBadRequest, "invalid_body", err.Error())
+		return
+	}
+	var pid int
+	h.DB.QueryRow(`SELECT id FROM projects WHERE uuid=?`, uuidStr).Scan(&pid)
+	if pid == 0 {
+		jsonAPIError(w, http.StatusNotFound, "not_found", "project not found")
+		return
+	}
+	sp, err := h.App.SAML.CreateSP(pid, body.EntityID, body.ACSURL, body.SLOURL,
+		body.NameIDFormat, body.Audience, body.AttributeMap, body.SPCertPEM)
+	if err != nil {
+		jsonAPIError(w, http.StatusBadRequest, "invalid_sp", err.Error())
+		return
+	}
+	getAudit(r).LogSuccess("api.saml.sp.create", service.AuditMeta{
+		"actor_user_id": a.UserID,
+		"project_id":    pid,
+		"target_type":   "saml_service_provider",
+		"target_id":     int64(sp.ID),
+	})
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	_ = json.NewEncoder(w).Encode(samlSPToMap(sp))
+}
+
+// APIGetSAMLSP returns one SP by public_id.
+func (h *AdminHandler) APIGetSAMLSP(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAPICapability(w, r, "view_projects") {
+		return
+	}
+	publicID := chi.URLParam(r, "spId")
+	sp, err := h.App.SAML.GetSP(publicID)
+	if err != nil {
+		jsonAPIError(w, http.StatusNotFound, "not_found", "service provider not found")
+		return
+	}
+	a := adminAPIActor(r)
+	scope := h.App.Scope.Build(a.UserID)
+	if !scope.CanAccessProjectID(sp.ProjectID) {
+		jsonAPIError(w, http.StatusForbidden, "forbidden", "project out of scope")
+		return
+	}
+	jsonOK(w, samlSPToMap(sp))
+}
+
+// APIDeleteSAMLSP removes an SP. Hard delete here is fine — SAML SPs hold
+// no derived data; deleting the row simply stops the IdP from issuing
+// assertions to that SP. SP-side users at the downstream app remain.
+func (h *AdminHandler) APIDeleteSAMLSP(w http.ResponseWriter, r *http.Request) {
+	if !h.requireAPICapability(w, r, "manage_projects") {
+		return
+	}
+	publicID := chi.URLParam(r, "spId")
+	sp, err := h.App.SAML.GetSP(publicID)
+	if err != nil {
+		jsonAPIError(w, http.StatusNotFound, "not_found", "service provider not found")
+		return
+	}
+	a := adminAPIActor(r)
+	scope := h.App.Scope.Build(a.UserID)
+	if !scope.CanAccessProjectID(sp.ProjectID) {
+		jsonAPIError(w, http.StatusForbidden, "forbidden", "project out of scope")
+		return
+	}
+	if err := h.App.SAML.DeleteSP(publicID); err != nil {
+		jsonAPIError(w, http.StatusInternalServerError, "db_error", err.Error())
+		return
+	}
+	getAudit(r).LogSuccess("api.saml.sp.delete", service.AuditMeta{
+		"actor_user_id": a.UserID,
+		"project_id":    sp.ProjectID,
+		"target_type":   "saml_service_provider",
+		"target_id":     int64(sp.ID),
+	})
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func samlSPToMap(sp *service.SAMLSP) map[string]interface{} {
+	return map[string]interface{}{
+		"public_id":       sp.PublicID,
+		"entity_id":       sp.EntityID,
+		"acs_url":         sp.ACSURL,
+		"slo_url":         sp.SLOURL,
+		"name_id_format":  sp.NameIDFormat,
+		"audience":        sp.Audience,
+		"sign_assertions": sp.SignAssertions,
+		"sign_response":   sp.SignResponse,
+		"sp_cert_pem":     sp.SPCertPEM,
+		"attribute_map":   sp.AttributeMap,
+		"status":          sp.Status,
+	}
+}
+
 // (hexToken, hashSecret, and boolToInt live in admin.go — same package.)

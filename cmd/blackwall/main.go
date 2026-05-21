@@ -72,6 +72,7 @@ func main() {
 	auditChainSvc := service.NewAuditChainService(database, jwtMgr)
 	adminTokensSvc := service.NewAdminTokenService(database)
 	scimSvc := service.NewSCIMService(database)
+	samlSvc := service.NewSAMLService(database, jwtMgr)
 	// Wire custom-claims into the OAuth service so it can merge them into
 	// every issued ID token + userinfo response.
 	oauthSvc.SetClaimsProvider(claimsSvc)
@@ -112,6 +113,7 @@ func main() {
 		AuditChain:  auditChainSvc,
 		AdminTokens: adminTokensSvc,
 		SCIM:        scimSvc,
+		SAML:        samlSvc,
 	}
 
 	oauthHandler := handler.NewOAuthHandler(app, database)
@@ -335,6 +337,11 @@ func main() {
 		r.Get("/api-tokens", adminHandler.AdminTokens)
 		r.Post("/api-tokens/create", adminHandler.AdminTokenCreate)
 		r.Post("/api-tokens/{publicId}/revoke", adminHandler.AdminTokenRevoke)
+
+		// SAML SP registry (per project)
+		r.Get("/projects/{projectUuid}/saml", adminHandler.SAMLSPList)
+		r.Post("/projects/{projectUuid}/saml/create", adminHandler.SAMLSPCreate)
+		r.Post("/projects/{projectUuid}/saml/{spId}/delete", adminHandler.SAMLSPDelete)
 	})
 
 	// JSON admin API — bearer-token authenticated. Separate route prefix
@@ -361,8 +368,19 @@ func main() {
 		r.Post("/projects/{projectUuid}/webhooks", adminHandler.APICreateWebhook)
 		r.Patch("/projects/{projectUuid}/webhooks/{endpointId}", adminHandler.APIPatchWebhook)
 		r.Delete("/projects/{projectUuid}/webhooks/{endpointId}", adminHandler.APIDeleteWebhook)
+		r.Get("/projects/{projectUuid}/saml_service_providers", adminHandler.APIListSAMLSPs)
+		r.Post("/projects/{projectUuid}/saml_service_providers", adminHandler.APICreateSAMLSP)
+		r.Get("/saml_service_providers/{spId}", adminHandler.APIGetSAMLSP)
+		r.Delete("/saml_service_providers/{spId}", adminHandler.APIDeleteSAMLSP)
 		r.Get("/users", adminHandler.APIListUsers)
 	})
+
+	// SAML 2.0 IdP. Public endpoints (no auth middleware) — SAML handles
+	// its own trust model via signed AuthnRequests / verified Responses.
+	r.Get("/saml/projects/{projectUuid}/metadata", adminHandler.SAMLMetadata)
+	r.Get("/saml/projects/{projectUuid}/sso", adminHandler.SAMLSSO)
+	r.Post("/saml/projects/{projectUuid}/sso", adminHandler.SAMLSSO)
+	r.Get("/saml/projects/{projectUuid}/sso/continue", adminHandler.SAMLSSOContinue)
 
 	// SCIM 2.0 — same bearer-token middleware as /api/v1; the SCIM client
 	// passes the target project via the X-BlackWall-Project header so the
