@@ -21,10 +21,19 @@ type AuditLogger struct {
 	correlationID string
 	ipAddress     string
 	userAgent     string
+	webhooks      *WebhookService
 }
 
 func NewAuditLogger(db *sql.DB) *AuditLogger {
 	return &AuditLogger{db: db}
+}
+
+// AttachWebhooks lets the AuditLogger fan committed events out to the
+// per-project webhook queue. Wired from main.go after both services exist
+// (constructor cycle avoidance). When nil, events are simply not forwarded —
+// preserves behaviour for deployments that haven't enabled webhooks.
+func (a *AuditLogger) AttachWebhooks(svc *WebhookService) {
+	a.webhooks = svc
 }
 
 func (a *AuditLogger) WithContext(correlationID, ipAddress, userAgent string) *AuditLogger {
@@ -33,6 +42,7 @@ func (a *AuditLogger) WithContext(correlationID, ipAddress, userAgent string) *A
 		correlationID: correlationID,
 		ipAddress:     ipAddress,
 		userAgent:     userAgent,
+		webhooks:      a.webhooks,
 	}
 }
 
@@ -232,6 +242,36 @@ func (a *AuditLogger) log(eventType, outcome string, meta AuditMeta) {
 	cfg := config.Get()
 	if cfg.EventMetricsPushEnabled && cfg.EventMetricsPushURL != "" {
 		go pushMetric(cfg, eventType, outcome)
+	}
+
+	// Webhook fan-out — only events that already carry a project_id can be
+	// addressed at a webhook endpoint, since endpoints are project-scoped.
+	// Org-only or system-wide events (no project_id) are intentionally not
+	// dispatched; if customers need those, we'll add an org-scoped variant.
+	if a.webhooks != nil && projectID.Valid {
+		payload := map[string]interface{}{
+			"event_type":     eventType,
+			"outcome":        outcome,
+			"correlation_id": correlationID,
+			"project_id":     projectID.Int64,
+			"project_uuid":   nullableStringFromNS(projectUUID),
+			"organization_id": func() interface{} {
+				if orgID.Valid {
+					return orgID.Int64
+				}
+				return nil
+			}(),
+			"organization_uuid": nullableStringFromNS(orgUUID),
+			"actor_user_id": func() interface{} {
+				if actorUserID.Valid {
+					return actorUserID.Int64
+				}
+				return nil
+			}(),
+			"actor_user_uuid": nullableStringFromNS(actorUserUUID),
+			"metadata":        meta,
+		}
+		a.webhooks.Enqueue(int(projectID.Int64), eventType, payload)
 	}
 }
 

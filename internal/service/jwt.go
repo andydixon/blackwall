@@ -1,6 +1,7 @@
 package service
 
 import (
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -207,6 +208,68 @@ var protectedClaims = map[string]struct{}{
 func computeAtHash(accessToken string) string {
 	sum := sha256.Sum256([]byte(accessToken))
 	return base64.RawURLEncoding.EncodeToString(sum[:16])
+}
+
+// activeSigner returns the JWT manager's active key wrapped in a Signer.
+// This is the single seam through which non-token signing operations (e.g.
+// AuditChainService checkpoints) reach the platform's signing key without
+// reaching back into the db row directly.
+func (m *JWTManager) activeSigner() (Signer, error) {
+	key, kid, err := m.getActiveKey()
+	if err != nil {
+		return nil, err
+	}
+	return NewLocalDBSigner(kid, key.privateKey), nil
+}
+
+// SignBytes produces a detached PKCS#1 v1.5 RSA-SHA256 signature over data
+// using the active JWT key. Returns the kid alongside the signature so a
+// later verifier knows which key to consult after rotation.
+func (m *JWTManager) SignBytes(data []byte) (kid string, sig []byte, err error) {
+	signer, err := m.activeSigner()
+	if err != nil {
+		return "", nil, err
+	}
+	out, err := signer.Sign(data)
+	if err != nil {
+		return "", nil, err
+	}
+	return signer.KeyID(), out, nil
+}
+
+// VerifyBytes checks a detached signature produced by SignBytes against any
+// known (active or retired) JWT signing key. Useful for replaying historical
+// signatures after a key rotation — the key that signed is identified by the
+// stored signing_key_id on the relevant record.
+func (m *JWTManager) VerifyBytes(data, sig []byte) bool {
+	rows, err := m.db.Query(`SELECT public_key FROM jwt_signing_keys`)
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var pubPEM string
+		if err := rows.Scan(&pubPEM); err != nil {
+			continue
+		}
+		block, _ := pem.Decode([]byte(pubPEM))
+		if block == nil {
+			continue
+		}
+		pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+		if err != nil {
+			continue
+		}
+		rsaPub, ok := pub.(*rsa.PublicKey)
+		if !ok {
+			continue
+		}
+		sum := sha256.Sum256(data)
+		if err := rsa.VerifyPKCS1v15(rsaPub, crypto.SHA256, sum[:], sig); err == nil {
+			return true
+		}
+	}
+	return false
 }
 
 type ParsedToken struct {

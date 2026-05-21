@@ -65,9 +65,25 @@ func main() {
 	scopeBuilder := service.NewAdminScopeBuilder(database, adminAuthSvc)
 	claimsSvc := service.NewOIDCClaimsService(database)
 	maintenanceSvc := service.NewMaintenanceService(database)
+	featuresSvc := service.NewFeatureFlagService(database)
+	webhookSvc := service.NewWebhookService(database)
+	sessionStore := service.NewSessionStore(database)
+	brandingSvc := service.NewBrandingService(database)
+	auditChainSvc := service.NewAuditChainService(database, jwtMgr)
+	adminTokensSvc := service.NewAdminTokenService(database)
 	// Wire custom-claims into the OAuth service so it can merge them into
 	// every issued ID token + userinfo response.
 	oauthSvc.SetClaimsProvider(claimsSvc)
+	// Wire webhooks into the audit logger so committed events fan out to
+	// registered receivers without blocking the request path.
+	auditLogger.AttachWebhooks(webhookSvc)
+
+	// Background dispatcher for the webhook delivery queue. The context
+	// here is tied to process lifetime; the dispatcher exits cleanly when
+	// the server shuts down via the same Shutdown call as the HTTP server.
+	dispatchCtx, dispatchCancel := context.WithCancel(context.Background())
+	defer dispatchCancel()
+	webhookSvc.StartDispatcher(dispatchCtx, 5*time.Second)
 
 	var cryptbinKEK *service.CryptbinKEK
 	if cfg.CryptbinKEKBase64 != "" {
@@ -88,6 +104,12 @@ func main() {
 		Claims:      claimsSvc,
 		Maintenance: maintenanceSvc,
 		RateLimit:   rateLimiter,
+		Features:    featuresSvc,
+		Webhooks:    webhookSvc,
+		Sessions:    sessionStore,
+		Branding:    brandingSvc,
+		AuditChain:  auditChainSvc,
+		AdminTokens: adminTokensSvc,
 	}
 
 	oauthHandler := handler.NewOAuthHandler(app, database)

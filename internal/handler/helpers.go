@@ -20,6 +20,12 @@ type App struct {
 	Claims      *service.OIDCClaimsService
 	Maintenance *service.MaintenanceService
 	RateLimit   *security.RateLimiter
+	Features    *service.FeatureFlagService
+	Webhooks    *service.WebhookService
+	Sessions    *service.SessionStore
+	Branding    *service.BrandingService
+	AuditChain  *service.AuditChainService
+	AdminTokens *service.AdminTokenService
 }
 
 func jsonError(w http.ResponseWriter, err string, status int) {
