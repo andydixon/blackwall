@@ -71,6 +71,7 @@ func main() {
 	brandingSvc := service.NewBrandingService(database)
 	auditChainSvc := service.NewAuditChainService(database, jwtMgr)
 	adminTokensSvc := service.NewAdminTokenService(database)
+	scimSvc := service.NewSCIMService(database)
 	// Wire custom-claims into the OAuth service so it can merge them into
 	// every issued ID token + userinfo response.
 	oauthSvc.SetClaimsProvider(claimsSvc)
@@ -110,6 +111,7 @@ func main() {
 		Branding:    brandingSvc,
 		AuditChain:  auditChainSvc,
 		AdminTokens: adminTokensSvc,
+		SCIM:        scimSvc,
 	}
 
 	oauthHandler := handler.NewOAuthHandler(app, database)
@@ -360,6 +362,22 @@ func main() {
 		r.Patch("/projects/{projectUuid}/webhooks/{endpointId}", adminHandler.APIPatchWebhook)
 		r.Delete("/projects/{projectUuid}/webhooks/{endpointId}", adminHandler.APIDeleteWebhook)
 		r.Get("/users", adminHandler.APIListUsers)
+	})
+
+	// SCIM 2.0 — same bearer-token middleware as /api/v1; the SCIM client
+	// passes the target project via the X-BlackWall-Project header so the
+	// IdP can be configured with one base URL per environment.
+	r.Route("/scim/v2", func(r chi.Router) {
+		r.Use(adminHandler.AdminAPIBearerAuth)
+		r.Get("/ServiceProviderConfig", adminHandler.SCIMServiceProviderConfig)
+		r.Get("/ResourceTypes", adminHandler.SCIMResourceTypes)
+		r.Get("/Schemas", adminHandler.SCIMSchemas)
+		r.Get("/Users", adminHandler.SCIMUsersList)
+		r.Post("/Users", adminHandler.SCIMUserCreate)
+		r.Get("/Users/{id}", adminHandler.SCIMUserGet)
+		r.Put("/Users/{id}", adminHandler.SCIMUserReplace)
+		r.Patch("/Users/{id}", adminHandler.SCIMUserPatch)
+		r.Delete("/Users/{id}", adminHandler.SCIMUserDelete)
 	})
 
 	// 404 handler
