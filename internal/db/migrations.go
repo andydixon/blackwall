@@ -289,6 +289,61 @@ var migrations = []migration{
 			return nil
 		},
 	},
+	{
+		Version: 4,
+		Description: "SAML 2.0 service providers (per-project SP registry) and SCIM external_id mapping " +
+			"for round-tripping HRIS-driven provisioning.",
+		Apply: func(db *sql.DB) error {
+			// SAML SP registration — one row per (project, entity_id). Stores
+			// the SP's ACS URL and the certificate we'll use to verify any
+			// signed AuthnRequests. attribute_map_json captures which user
+			// fields go into which SAML attribute statements so the SP gets
+			// what it expects without us hard-coding "email" everywhere.
+			if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS saml_service_providers (
+				id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+				public_id CHAR(36) NOT NULL UNIQUE,
+				project_id BIGINT UNSIGNED NOT NULL,
+				entity_id VARCHAR(1024) NOT NULL,
+				acs_url VARCHAR(2048) NOT NULL,
+				slo_url VARCHAR(2048) DEFAULT NULL,
+				name_id_format VARCHAR(255) NOT NULL DEFAULT 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
+				sign_assertions TINYINT(1) NOT NULL DEFAULT 1,
+				sign_response TINYINT(1) NOT NULL DEFAULT 1,
+				sp_cert_pem TEXT DEFAULT NULL,
+				attribute_map_json TEXT NOT NULL,
+				audience VARCHAR(1024) DEFAULT NULL,
+				status ENUM('active','disabled') NOT NULL DEFAULT 'active',
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+				FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+				UNIQUE KEY uk_saml_sp_entity (project_id, entity_id),
+				INDEX idx_saml_sp_project (project_id, status)
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`); err != nil {
+				return err
+			}
+
+			// SCIM external_id mapping — when an upstream HRIS provisions a
+			// user it generates its own ID; we store it so subsequent PUTs /
+			// PATCHes / DELETEs from the same HRIS can find the row. Keyed
+			// per project so two HRIS systems can both push the same email
+			// without colliding.
+			if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS scim_user_mapping (
+				id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+				project_id BIGINT UNSIGNED NOT NULL,
+				user_id BIGINT UNSIGNED NOT NULL,
+				external_id VARCHAR(255) NOT NULL,
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				UNIQUE KEY uk_scim_external (project_id, external_id),
+				FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+				FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+				INDEX idx_scim_user (user_id, project_id)
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`); err != nil {
+				return err
+			}
+
+			return nil
+		},
+	},
 }
 
 // Migrate applies every pending migration in order under a single tracking
