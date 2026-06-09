@@ -17,6 +17,8 @@ import (
 	"time"
 )
 
+const maxResponseBodyBytes = 8 * 1024 * 1024
+
 // Client is the BlackWall admin API HTTP client.
 type Client struct {
 	Host       string
@@ -66,7 +68,13 @@ func (c *Client) do(ctx context.Context, method, path string, body, out interfac
 		return fmt.Errorf("http: %w", err)
 	}
 	defer resp.Body.Close()
-	respBytes, _ := io.ReadAll(resp.Body)
+	respBytes, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBodyBytes+1))
+	if err != nil {
+		return fmt.Errorf("read response: %w", err)
+	}
+	if len(respBytes) > maxResponseBodyBytes {
+		return fmt.Errorf("response body exceeds %d bytes", maxResponseBodyBytes)
+	}
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return &APIError{Status: resp.StatusCode, Body: string(respBytes)}

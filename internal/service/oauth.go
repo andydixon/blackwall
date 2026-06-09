@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 
+	"blackwall/internal/config"
 	"blackwall/internal/security"
 )
 
@@ -344,7 +345,7 @@ func (s *OAuthService) IntrospectToken(token string, requestingClientID int) (ma
 		"exp":             expiresAt.Time.Unix(),
 		"sub":             userUUID,
 		"aud":             clientPublicID,
-		"iss":             s.db.QueryRow("SELECT config_value FROM system_config WHERE config_key='app_url'"),
+		"iss":             config.Get().AppURL,
 		"project_id":      projectUUID,
 		"privilege_level": pl,
 		"privilege_name":  ResolvePrivilegeLabel(pl, privilegeName),

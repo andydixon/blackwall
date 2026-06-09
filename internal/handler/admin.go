@@ -231,11 +231,15 @@ func (h *AdminHandler) scopeFor(r *http.Request) *service.AdminScope {
 
 // adminBaseData supplies the values every admin template expects in its
 // layout (title, current role, capability flags, CSRF token, impersonator).
-func (h *AdminHandler) adminBaseData(w http.ResponseWriter, r *http.Request, title string) map[string]interface{} {
+func (h *AdminHandler) adminBaseData(w http.ResponseWriter, r *http.Request, title string, flashKeys ...string) map[string]interface{} {
 	sess, _ := security.GetSession(w, r)
 	userID := sess.GetInt("user_id")
 	scope := h.App.Scope.Build(userID)
 	csrf := security.GenerateCSRF(sess)
+	flashes := make(map[string]string, len(flashKeys))
+	for _, key := range flashKeys {
+		flashes[key] = popSessionString(sess, key)
+	}
 	sess.Save()
 
 	impersonator := sess.GetInt("impersonator_user_id")
@@ -262,6 +266,7 @@ func (h *AdminHandler) adminBaseData(w http.ResponseWriter, r *http.Request, tit
 		"ScopeOrgUUIDs":      scope.OrganizationUUIDs,
 		"ImpersonatorUserID": impersonatorID,
 		"CSRFToken":          csrf,
+		"Flash":              flashes,
 	}
 }
 
@@ -721,8 +726,9 @@ func (h *AdminHandler) UserStore(w http.ResponseWriter, r *http.Request) {
 		"target_type":       "user",
 		"target_id":         newUserID,
 	})
+	sess.Set(flashEnrollmentPrefix+userUUID, token)
 	sess.Save()
-	redirect(w, r, "/admin/users/"+userUUID+"?success=created&enrollment_token="+token)
+	redirect(w, r, "/admin/users/"+userUUID+"?success=created")
 }
 
 // UserDetail shows the full user record: profile, status, WebAuthn
@@ -824,14 +830,14 @@ func (h *AdminHandler) UserDetail(w http.ResponseWriter, r *http.Request) {
 		arows.Close()
 	}
 
-	enrollToken := r.URL.Query().Get("enrollment_token")
+	flashKey := flashEnrollmentPrefix + userUUID
+	data := h.adminBaseData(w, r, "User: "+label, flashKey)
+	enrollToken := data["Flash"].(map[string]string)[flashKey]
 	cfg := config.Get()
 	var enrollmentLink string
 	if enrollToken != "" {
 		enrollmentLink = cfg.AppURL + "/enroll?token=" + enrollToken
 	}
-
-	data := h.adminBaseData(w, r, "User: "+label)
 	data["User"] = user
 	data["Credentials"] = credentials
 	data["Assignments"] = assignments
@@ -1001,8 +1007,9 @@ func (h *AdminHandler) GenerateEnrollmentLink(w http.ResponseWriter, r *http.Req
 		"target_type":    "user",
 		"target_id":      int64(userID),
 	})
+	sess.Set(flashEnrollmentPrefix+userUUID, token)
 	sess.Save()
-	redirect(w, r, "/admin/users/"+userUUID+"?success=enrollment_link&enrollment_token="+token)
+	redirect(w, r, "/admin/users/"+userUUID+"?success=enrollment_link")
 }
 
 // DeleteCredential removes a WebAuthn passkey from a user account. If the
@@ -1443,7 +1450,6 @@ func (h *AdminHandler) UserProjectClaimDelete(w http.ResponseWriter, r *http.Req
 	sess.Save()
 	redirect(w, r, "/admin/users/"+userUUID+"/claims?success=deleted")
 }
-
 
 // ─── Default OIDC claim templates ────────────────────────────────────────────
 //
@@ -2967,11 +2973,11 @@ func (h *AdminHandler) ClientStore(w http.ResponseWriter, r *http.Request) {
 		"target_id":              newID,
 		"client_confidential":    confidential,
 	})
-	sess.Save()
 	redirectURL := "/admin/clients/" + clientPublicID + "?success=created"
 	if clientSecret != "" {
-		redirectURL += "&secret=" + clientSecret
+		sess.Set(flashClientSecretPrefix+clientPublicID, clientSecret)
 	}
+	sess.Save()
 	redirect(w, r, redirectURL)
 }
 
@@ -3031,14 +3037,16 @@ func (h *AdminHandler) ClientDetail(w http.ResponseWriter, r *http.Request) {
 		"Status":               status,
 	}
 
-	data := h.adminBaseData(w, r, "Client: "+name)
+	flashKey := flashClientSecretPrefix + clientPublicID
+	data := h.adminBaseData(w, r, "Client: "+name, flashKey)
+	newSecret := data["Flash"].(map[string]string)[flashKey]
 	data["Client"] = client
 	data["CanManage"] = security.HasCapability(scope.AdminRole, "manage_clients")
 	data["CanDirectStatus"] = security.HasCapability(scope.AdminRole, "change_client_status_direct")
 	data["CanDirectSettings"] = security.HasCapability(scope.AdminRole, "update_client_settings_direct")
 	data["Success"] = r.URL.Query().Get("success")
 	data["Error"] = r.URL.Query().Get("error")
-	data["NewSecret"] = r.URL.Query().Get("secret")
+	data["NewSecret"] = newSecret
 	templates.AdminPage(w, "clients/detail.html", data)
 }
 

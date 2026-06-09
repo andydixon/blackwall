@@ -13,6 +13,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
+	"net/url"
 	"strings"
 	"time"
 
@@ -28,7 +30,7 @@ import (
 //   - HTTP-POST binding for the SAML Response (the most common ACS profile).
 //   - RSA-SHA256 signed Response *and* embedded signed Assertion.
 //   - Exclusive XML canonicalization for the signed elements (per RFC 3275
-//     + xml-exc-c14n).
+//   - xml-exc-c14n).
 //   - NameID formats: emailAddress, persistent, transient, unspecified.
 //   - Attribute statements driven by the per-SP attribute_map_json column.
 //
@@ -57,21 +59,21 @@ func NewSAMLService(db *sql.DB, jwt *JWTManager) *SAMLService {
 // wildly: Tableau wants `displayName`, Slack wants `mail` + `given_name`,
 // Atlassian wants `NameID` to be the email itself.
 type SAMLSP struct {
-	ID               int
-	PublicID         string
-	ProjectID        int
-	EntityID         string
-	ACSURL           string
-	SLOURL           string
-	NameIDFormat     string
-	SignAssertions   bool
-	SignResponse     bool
-	SPCertPEM        string
-	AttributeMap     map[string]string
-	Audience         string
-	Status           string
-	CreatedAt        time.Time
-	UpdatedAt        time.Time
+	ID             int
+	PublicID       string
+	ProjectID      int
+	EntityID       string
+	ACSURL         string
+	SLOURL         string
+	NameIDFormat   string
+	SignAssertions bool
+	SignResponse   bool
+	SPCertPEM      string
+	AttributeMap   map[string]string
+	Audience       string
+	Status         string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
 }
 
 // CreateSP registers a Service Provider against a project.
@@ -79,8 +81,8 @@ func (s *SAMLService) CreateSP(projectID int, entityID, acsURL, sloURL, nameIDFo
 	if entityID == "" || acsURL == "" {
 		return nil, errors.New("entity_id and acs_url are required")
 	}
-	if !strings.HasPrefix(acsURL, "https://") && !strings.HasPrefix(acsURL, "http://") {
-		return nil, errors.New("acs_url must be an http(s) URL")
+	if err := validateSAMLConsumerURL(acsURL); err != nil {
+		return nil, err
 	}
 	if nameIDFormat == "" {
 		nameIDFormat = "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress"
@@ -106,6 +108,25 @@ func (s *SAMLService) CreateSP(projectID int, entityID, acsURL, sloURL, nameIDFo
 		NameIDFormat: nameIDFormat, SignAssertions: true, SignResponse: true,
 		SPCertPEM: spCertPEM, AttributeMap: attrMap, Audience: audience, Status: "active",
 	}, nil
+}
+
+func validateSAMLConsumerURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return errors.New("acs_url must be an absolute http(s) URL")
+	}
+	if u.User != nil || u.Fragment != "" {
+		return errors.New("acs_url must not contain userinfo or a fragment")
+	}
+	if u.Scheme == "https" {
+		return nil
+	}
+	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+	ip := net.ParseIP(host)
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") || (ip != nil && ip.IsLoopback()) {
+		return nil
+	}
+	return errors.New("acs_url must use HTTPS except for loopback development addresses")
 }
 
 // GetSP loads an SP by its public_id (used by the admin UI).
@@ -181,8 +202,8 @@ func (s *SAMLService) scanSPFromRows(rows *sql.Rows) (*SAMLSP, error) {
 
 func defaultAttributeMap() map[string]string {
 	return map[string]string{
-		"email":              "display_label",
-		"displayName":        "display_label",
+		"email":       "display_label",
+		"displayName": "display_label",
 		"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress": "display_label",
 		"http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name":         "display_label",
 	}
@@ -202,11 +223,16 @@ type AuthnRequest struct {
 	RelayState                  string
 }
 
+const maxSAMLAuthnRequestBytes = 1 << 20
+
 // ParseAuthnRequest decodes a SAMLRequest parameter and returns its key
 // fields. For HTTP-Redirect binding the input is deflate-compressed +
 // base64; for HTTP-POST it's just base64. The caller passes deflated=true
 // for redirect, false for POST.
 func ParseAuthnRequest(samlRequest string, deflated bool) (*AuthnRequest, error) {
+	if len(samlRequest) > (maxSAMLAuthnRequestBytes*4/3)+8 {
+		return nil, errors.New("encoded request too large")
+	}
 	decoded, err := base64.StdEncoding.DecodeString(samlRequest)
 	if err != nil {
 		return nil, fmt.Errorf("base64: %w", err)
@@ -214,11 +240,17 @@ func ParseAuthnRequest(samlRequest string, deflated bool) (*AuthnRequest, error)
 	if deflated {
 		r := flateReader(decoded)
 		defer r.Close()
-		buf, err := io.ReadAll(r)
+		buf, err := io.ReadAll(io.LimitReader(r, maxSAMLAuthnRequestBytes+1))
 		if err != nil {
 			return nil, fmt.Errorf("inflate: %w", err)
 		}
+		if len(buf) > maxSAMLAuthnRequestBytes {
+			return nil, errors.New("inflated request too large")
+		}
 		decoded = buf
+	}
+	if len(decoded) > maxSAMLAuthnRequestBytes {
+		return nil, errors.New("request too large")
 	}
 	var raw struct {
 		XMLName                     xml.Name `xml:"AuthnRequest"`
@@ -245,14 +277,14 @@ func ParseAuthnRequest(samlRequest string, deflated bool) (*AuthnRequest, error)
 
 // ResponseInput is everything the IdP needs to assemble a SAML Response.
 type ResponseInput struct {
-	SP            *SAMLSP
-	InResponseTo  string // the AuthnRequest's ID
-	UserUUID      string
-	UserEmail     string
-	UserAttrs     map[string]string // already projected via SP.AttributeMap
-	IssuerURL     string            // BlackWall's external URL
-	NotBefore     time.Time
-	NotOnOrAfter  time.Time
+	SP           *SAMLSP
+	InResponseTo string // the AuthnRequest's ID
+	UserUUID     string
+	UserEmail    string
+	UserAttrs    map[string]string // already projected via SP.AttributeMap
+	IssuerURL    string            // BlackWall's external URL
+	NotBefore    time.Time
+	NotOnOrAfter time.Time
 }
 
 // BuildResponse produces a fully-formed SAML Response XML document with a

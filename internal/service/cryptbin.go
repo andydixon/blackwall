@@ -448,7 +448,7 @@ func CryptbinVerifyKey(keyB64URL, verifier string) bool {
 	if len(parts) != 6 || parts[1] != "argon2id" {
 		return false
 	}
-	if !strings.HasPrefix(parts[2], "v=") {
+	if parts[2] != "v=19" {
 		return false
 	}
 	var memory uint32
@@ -457,15 +457,18 @@ func CryptbinVerifyKey(keyB64URL, verifier string) bool {
 	if _, err := fmt.Sscanf(parts[3], "m=%d,t=%d,p=%d", &memory, &time, &threads); err != nil {
 		return false
 	}
+	if memory != argon2Memory || time != argon2Time || threads != argon2Threads {
+		return false
+	}
 	salt, err := base64.RawStdEncoding.DecodeString(parts[4])
-	if err != nil {
+	if err != nil || len(salt) != int(argon2SaltLen) {
 		return false
 	}
 	expected, err := base64.RawStdEncoding.DecodeString(parts[5])
-	if err != nil {
+	if err != nil || len(expected) != int(argon2KeyLen) {
 		return false
 	}
-	got := argon2.IDKey([]byte(keyB64URL), salt, time, memory, threads, uint32(len(expected)))
+	got := argon2.IDKey([]byte(keyB64URL), salt, argon2Time, argon2Memory, argon2Threads, argon2KeyLen)
 	return subtle.ConstantTimeCompare(expected, got) == 1
 }
 

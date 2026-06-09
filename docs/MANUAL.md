@@ -257,6 +257,7 @@ session_secret: "your-64-character-hex-string-1"
 csrf_secret: "your-64-character-hex-string-2"
 
 server_addr: ":8080"
+request_body_max_bytes: 8388608
 
 rate_limit_enabled: true
 audit_retention_days: 180
@@ -2439,6 +2440,7 @@ The main configuration file is `config.yaml`. Every key can also be supplied via
 | Key | Default | Purpose |
 |---|---|---|
 | `server_addr` | `:8080` | Listen address. |
+| `request_body_max_bytes` | `8388608` | Maximum JSON/form request body size; must accommodate base64-encoded CryptBin uploads. |
 
 ## Chapter 2: Endpoint Index
 

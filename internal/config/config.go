@@ -2,6 +2,8 @@ package config
 
 import (
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -28,17 +30,17 @@ type Config struct {
 
 	CSRFSecret string `yaml:"csrf_secret"`
 
-	CryptbinKEKBase64          string `yaml:"cryptbin_kek_base64"`
-	CryptbinKEKVersion         string `yaml:"cryptbin_kek_version"`
-	CryptbinStoragePath        string `yaml:"cryptbin_storage_path"`
-	CryptbinMaxUploadBytes     int64  `yaml:"cryptbin_max_upload_bytes"`
-	CryptbinMaxTextBytes       int64  `yaml:"cryptbin_max_text_bytes"`
-	CryptbinAllowedMime        string `yaml:"cryptbin_allowed_mime"`
-	CryptbinDefaultRetentionDays int  `yaml:"cryptbin_default_retention_days"`
+	CryptbinKEKBase64            string `yaml:"cryptbin_kek_base64"`
+	CryptbinKEKVersion           string `yaml:"cryptbin_kek_version"`
+	CryptbinStoragePath          string `yaml:"cryptbin_storage_path"`
+	CryptbinMaxUploadBytes       int64  `yaml:"cryptbin_max_upload_bytes"`
+	CryptbinMaxTextBytes         int64  `yaml:"cryptbin_max_text_bytes"`
+	CryptbinAllowedMime          string `yaml:"cryptbin_allowed_mime"`
+	CryptbinDefaultRetentionDays int    `yaml:"cryptbin_default_retention_days"`
 
-	WebAuthnRPID   string `yaml:"webauthn_rp_id"`
-	WebAuthnRPName string `yaml:"webauthn_rp_name"`
-	MinWebAuthnKeys int   `yaml:"min_webauthn_keys"`
+	WebAuthnRPID    string `yaml:"webauthn_rp_id"`
+	WebAuthnRPName  string `yaml:"webauthn_rp_name"`
+	MinWebAuthnKeys int    `yaml:"min_webauthn_keys"`
 
 	AdminSuperProjectName string `yaml:"admin_super_project_name"`
 	AdminSuperProjectUUID string `yaml:"admin_super_project_uuid"`
@@ -54,19 +56,20 @@ type Config struct {
 	AdminMutationRateLimitWindowSec int `yaml:"admin_mutation_rate_limit_window_seconds"`
 	AdminApprovalPendingWarnDays    int `yaml:"admin_approval_pending_warning_days"`
 
-	MetricsToken                string `yaml:"metrics_token"`
-	MetricsAllowUnauthenticated bool   `yaml:"metrics_allow_unauthenticated"`
-	EventMetricsPushEnabled   bool   `yaml:"event_metrics_push_enabled"`
-	EventMetricsPushURL       string `yaml:"event_metrics_push_url"`
-	EventMetricsPushMetricName string `yaml:"event_metrics_push_metric_name"`
-	EventMetricsPushTimeoutMs int    `yaml:"event_metrics_push_timeout_ms"`
-	EventMetricsPushIncludeOutcome bool `yaml:"event_metrics_push_include_outcome"`
-	EventMetricsPushStaticLabels string `yaml:"event_metrics_push_static_labels"`
+	MetricsToken                   string `yaml:"metrics_token"`
+	MetricsAllowUnauthenticated    bool   `yaml:"metrics_allow_unauthenticated"`
+	EventMetricsPushEnabled        bool   `yaml:"event_metrics_push_enabled"`
+	EventMetricsPushURL            string `yaml:"event_metrics_push_url"`
+	EventMetricsPushMetricName     string `yaml:"event_metrics_push_metric_name"`
+	EventMetricsPushTimeoutMs      int    `yaml:"event_metrics_push_timeout_ms"`
+	EventMetricsPushIncludeOutcome bool   `yaml:"event_metrics_push_include_outcome"`
+	EventMetricsPushStaticLabels   string `yaml:"event_metrics_push_static_labels"`
 
 	ErrorTraceKey      string `yaml:"error_trace_key"`
 	AuditExportSignKey string `yaml:"audit_export_signing_key"`
 
-	ServerAddr string `yaml:"server_addr"`
+	ServerAddr          string `yaml:"server_addr"`
+	RequestBodyMaxBytes int64  `yaml:"request_body_max_bytes"`
 }
 
 var global *Config
@@ -98,9 +101,22 @@ func Load(path string) (*Config, error) {
 // We treat short secrets as fatal because cookies and CSRF tokens depend on
 // them; running with weak material is more dangerous than refusing to start.
 func (c *Config) Validate() error {
-	if c.AppURL == "" {
-		return fmt.Errorf("config: app_url is required")
+	appURL, err := url.Parse(c.AppURL)
+	if err != nil || appURL.Hostname() == "" || (appURL.Scheme != "http" && appURL.Scheme != "https") {
+		return fmt.Errorf("config: app_url must be an absolute http(s) URL")
 	}
+	if appURL.User != nil || appURL.RawQuery != "" || appURL.Fragment != "" || (appURL.Path != "" && appURL.Path != "/") {
+		return fmt.Errorf("config: app_url must contain only scheme and host")
+	}
+	if appURL.Scheme != "https" {
+		host := strings.ToLower(strings.TrimSuffix(appURL.Hostname(), "."))
+		ip := net.ParseIP(host)
+		isLoopback := host == "localhost" || strings.HasSuffix(host, ".localhost") || (ip != nil && ip.IsLoopback())
+		if strings.EqualFold(c.AppEnv, "production") || !isLoopback {
+			return fmt.Errorf("config: app_url must use HTTPS except for loopback development addresses")
+		}
+	}
+	c.AppURL = strings.TrimRight(c.AppURL, "/")
 	if c.DBHost == "" || c.DBName == "" || c.DBUser == "" {
 		return fmt.Errorf("config: db_host, db_name, db_user are required")
 	}
@@ -121,6 +137,16 @@ func (c *Config) Validate() error {
 	}
 	if c.SessionIdleTimeout <= 0 {
 		c.SessionIdleTimeout = 1800
+	}
+	if c.CryptbinMaxUploadBytes <= 0 || c.CryptbinMaxTextBytes <= 0 {
+		return fmt.Errorf("config: cryptbin size limits must be positive")
+	}
+	if c.RequestBodyMaxBytes <= 0 {
+		c.RequestBodyMaxBytes = 8 * 1024 * 1024
+	}
+	requiredBodyBytes := c.CryptbinMaxUploadBytes + (c.CryptbinMaxUploadBytes+2)/3 + 64*1024
+	if c.RequestBodyMaxBytes < requiredBodyBytes {
+		return fmt.Errorf("config: request_body_max_bytes must be at least %d for cryptbin_max_upload_bytes=%d", requiredBodyBytes, c.CryptbinMaxUploadBytes)
 	}
 	return nil
 }
@@ -174,6 +200,7 @@ func defaults() *Config {
 		EventMetricsPushTimeoutMs:       250,
 		EventMetricsPushIncludeOutcome:  true,
 		ServerAddr:                      ":8080",
+		RequestBodyMaxBytes:             8 * 1024 * 1024,
 	}
 }
 
@@ -247,6 +274,7 @@ func overrideFromEnv(cfg *Config) {
 	setStr(&cfg.ErrorTraceKey, "ERROR_TRACE_KEY")
 	setStr(&cfg.AuditExportSignKey, "AUDIT_EXPORT_SIGNING_KEY")
 	setStr(&cfg.ServerAddr, "SERVER_ADDR")
+	setInt64(&cfg.RequestBodyMaxBytes, "REQUEST_BODY_MAX_BYTES")
 
 	// Derive WebAuthnRPID from APP_URL if not set
 	if cfg.WebAuthnRPID == "" && cfg.AppURL != "" {

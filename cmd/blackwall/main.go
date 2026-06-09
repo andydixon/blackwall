@@ -91,7 +91,7 @@ func main() {
 	if cfg.CryptbinKEKBase64 != "" {
 		cryptbinKEK, err = service.NewCryptbinKEK()
 		if err != nil {
-			log.Printf("warn: cryptbin KEK init failed: %v", err)
+			log.Fatalf("cryptbin KEK init failed: %v", err)
 		}
 	}
 
@@ -149,6 +149,7 @@ func main() {
 
 	r.Use(chimiddleware.RealIP)
 	r.Use(chimiddleware.Recoverer)
+	r.Use(middleware.RequestBodyLimit(cfg.RequestBodyMaxBytes))
 	r.Use(middleware.CorrelationID)
 	r.Use(middleware.IPAddress)
 	r.Use(middleware.AuditContext(database, auditLogger))
@@ -413,11 +414,13 @@ func main() {
 	}
 
 	srv := &http.Server{
-		Addr:         addr,
-		Handler:      r,
-		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 60 * time.Second,
-		IdleTimeout:  120 * time.Second,
+		Addr:              addr,
+		Handler:           r,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    64 * 1024,
 	}
 
 	log.Printf("BlackWall starting on %s", addr)

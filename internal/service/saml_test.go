@@ -59,6 +59,36 @@ func TestParseAuthnRequest_POSTBinding(t *testing.T) {
 	}
 }
 
+func TestParseAuthnRequestRejectsInflationBomb(t *testing.T) {
+	xmlBody := strings.Repeat("A", maxSAMLAuthnRequestBytes+1)
+	var deflated bytes.Buffer
+	w, _ := flate.NewWriter(&deflated, flate.BestCompression)
+	_, _ = w.Write([]byte(xmlBody))
+	_ = w.Close()
+	encoded := base64.StdEncoding.EncodeToString(deflated.Bytes())
+
+	if _, err := ParseAuthnRequest(encoded, true); err == nil || !strings.Contains(err.Error(), "too large") {
+		t.Fatalf("ParseAuthnRequest() error = %v, want size rejection", err)
+	}
+}
+
+func TestValidateSAMLConsumerURL(t *testing.T) {
+	cases := map[string]bool{
+		"https://sp.example.com/acs":  true,
+		"http://localhost:9000/acs":   true,
+		"http://127.0.0.1/acs":        true,
+		"http://sp.example.com/acs":   false,
+		"https://user@sp.example/acs": false,
+		"javascript:alert(1)":         false,
+	}
+	for raw, wantOK := range cases {
+		err := validateSAMLConsumerURL(raw)
+		if (err == nil) != wantOK {
+			t.Errorf("validateSAMLConsumerURL(%q) error = %v, wantOK=%v", raw, err, wantOK)
+		}
+	}
+}
+
 // TestSignXML_InsertionAndVerify confirms that the signature is inserted
 // after </Issuer> AND that the resulting document is a parseable XML tree
 // — i.e. we haven't corrupted the surrounding structure during signing.

@@ -3,13 +3,15 @@ package security
 import (
 	"database/sql"
 	"math/rand"
+	"sync/atomic"
 	"time"
 
 	"blackwall/internal/config"
 )
 
 type RateLimiter struct {
-	db *sql.DB
+	db             *sql.DB
+	cleanupRunning atomic.Bool
 }
 
 func NewRateLimiter(db *sql.DB) *RateLimiter {
@@ -26,8 +28,11 @@ func (rl *RateLimiter) Check(identifier, action string, maxAttempts, windowSecon
 	windowStart := now.Add(-time.Duration(windowSeconds) * time.Second)
 
 	// Probabilistic cleanup (5%)
-	if rand.Intn(100) < 5 {
-		go rl.cleanup()
+	if rand.Intn(100) < 5 && rl.cleanupRunning.CompareAndSwap(false, true) {
+		go func() {
+			defer rl.cleanupRunning.Store(false)
+			rl.cleanup()
+		}()
 	}
 
 	row := rl.db.QueryRow(
@@ -42,14 +47,14 @@ func (rl *RateLimiter) Check(identifier, action string, maxAttempts, windowSecon
 	err := row.Scan(&id, &attempts, &ws, &blockedUntil)
 	if err == sql.ErrNoRows {
 		// First attempt — create record
-		_, _ = rl.db.Exec(
+		_, err = rl.db.Exec(
 			`INSERT INTO rate_limits (identifier, action, attempts, window_start) VALUES (?, ?, 1, ?)
 			 ON DUPLICATE KEY UPDATE attempts=attempts+1`,
 			identifier, action, now)
-		return true
+		return err == nil
 	}
 	if err != nil {
-		return true // allow on error
+		return false
 	}
 
 	// Check if currently blocked
@@ -59,10 +64,10 @@ func (rl *RateLimiter) Check(identifier, action string, maxAttempts, windowSecon
 
 	// If window expired, reset
 	if ws.Before(windowStart) {
-		_, _ = rl.db.Exec(
+		_, err = rl.db.Exec(
 			`UPDATE rate_limits SET attempts=1, window_start=?, blocked_until=NULL WHERE id=?`,
 			now, id)
-		return true
+		return err == nil
 	}
 
 	// Increment and check
@@ -75,8 +80,8 @@ func (rl *RateLimiter) Check(identifier, action string, maxAttempts, windowSecon
 		return false
 	}
 
-	_, _ = rl.db.Exec(`UPDATE rate_limits SET attempts=? WHERE id=?`, attempts, id)
-	return true
+	_, err = rl.db.Exec(`UPDATE rate_limits SET attempts=? WHERE id=?`, attempts, id)
+	return err == nil
 }
 
 func (rl *RateLimiter) cleanup() {

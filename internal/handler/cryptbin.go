@@ -393,6 +393,10 @@ func (h *CryptbinHandler) WebAuthnChallenge(w http.ResponseWriter, r *http.Reque
 }
 
 func (h *CryptbinHandler) Wrap(w http.ResponseWriter, r *http.Request) {
+	if h.KEK == nil {
+		jsonError(w, "cryptbin_unavailable", http.StatusServiceUnavailable)
+		return
+	}
 	sess, _ := security.GetSession(w, r)
 	audit := getAudit(r)
 
@@ -463,6 +467,10 @@ func (h *CryptbinHandler) Wrap(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *CryptbinHandler) Unwrap(w http.ResponseWriter, r *http.Request) {
+	if h.KEK == nil {
+		jsonError(w, "cryptbin_unavailable", http.StatusServiceUnavailable)
+		return
+	}
 	sess, _ := security.GetSession(w, r)
 	audit := getAudit(r)
 

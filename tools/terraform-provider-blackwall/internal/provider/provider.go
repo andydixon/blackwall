@@ -17,7 +17,11 @@ package provider
 
 import (
 	"context"
+	"fmt"
+	"net"
+	"net/url"
 	"os"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/provider"
@@ -85,6 +89,10 @@ func (p *bwProvider) Configure(ctx context.Context, req provider.ConfigureReques
 		resp.Diagnostics.AddError("Missing host", "Set provider.host or BLACKWALL_HOST.")
 		return
 	}
+	if err := validateProviderHost(host); err != nil {
+		resp.Diagnostics.AddError("Invalid host", err.Error())
+		return
+	}
 	if token == "" {
 		resp.Diagnostics.AddError("Missing token", "Set provider.token or BLACKWALL_TOKEN.")
 		return
@@ -92,6 +100,25 @@ func (p *bwProvider) Configure(ctx context.Context, req provider.ConfigureReques
 	c := client.New(host, token)
 	resp.DataSourceData = c
 	resp.ResourceData = c
+}
+
+func validateProviderHost(raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return fmt.Errorf("provider.host must be an absolute http(s) URL")
+	}
+	if u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
+		return fmt.Errorf("provider.host must contain only scheme and host")
+	}
+	if u.Scheme == "https" {
+		return nil
+	}
+	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+	ip := net.ParseIP(host)
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") || (ip != nil && ip.IsLoopback()) {
+		return nil
+	}
+	return fmt.Errorf("provider.host must use HTTPS except for loopback development addresses")
 }
 
 func (p *bwProvider) Resources(_ context.Context) []func() resource.Resource {

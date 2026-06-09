@@ -56,6 +56,19 @@ func redirect(w http.ResponseWriter, r *http.Request, url string) {
 	http.Redirect(w, r, url, http.StatusFound)
 }
 
+const (
+	flashAdminTokenPlaintext = "flash_admin_token_plaintext"
+	flashAdminTokenName      = "flash_admin_token_name"
+	flashClientSecretPrefix  = "flash_client_secret:"
+	flashEnrollmentPrefix    = "flash_enrollment_token:"
+)
+
+func popSessionString(sess *security.Session, key string) string {
+	value := sess.GetString(key)
+	sess.Delete(key)
+	return value
+}
+
 func parseJSON(r *http.Request, dst interface{}) bool {
 	return json.NewDecoder(r.Body).Decode(dst) == nil
 }
@@ -104,6 +117,8 @@ func humanizeError(err string) string {
 		return "The server could not protect the item encryption key."
 	case "unable_to_unwrap_dek":
 		return "The server could not recover the item encryption key."
+	case "cryptbin_unavailable":
+		return "Encrypted item key wrapping is not configured on this server."
 	case "webauthn_verification_failed":
 		return "The security key response could not be verified."
 	case "forbidden":

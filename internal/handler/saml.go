@@ -2,6 +2,7 @@ package handler
 
 import (
 	"encoding/base64"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -46,7 +47,8 @@ func (h *AdminHandler) SAMLMetadata(w http.ResponseWriter, r *http.Request) {
 	sso := issuer + "/sso"
 	doc, err := h.App.SAML.IdPMetadata(issuer, sso)
 	if err != nil {
-		http.Error(w, "metadata: "+err.Error(), 500)
+		log.Printf("saml metadata generation failed: project=%q err=%v", projectUUID, err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/samlmetadata+xml")
@@ -147,7 +149,8 @@ func (h *AdminHandler) finalizeSAMLResponse(w http.ResponseWriter, r *http.Reque
 	}
 	sp, err := h.App.SAML.GetSP(spPublicID)
 	if err != nil {
-		http.Error(w, "sp lookup: "+err.Error(), 500)
+		log.Printf("saml service provider lookup failed: public_id=%q err=%v", spPublicID, err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 	// Verify the user is assigned to this SP's project.
@@ -198,19 +201,20 @@ func (h *AdminHandler) finalizeSAMLResponse(w http.ResponseWriter, r *http.Reque
 		NotOnOrAfter: time.Now().Add(5 * time.Minute),
 	})
 	if err != nil {
-		http.Error(w, "build response: "+err.Error(), 500)
+		log.Printf("saml response generation failed: sp_public_id=%q user_id=%d err=%v", spPublicID, userID, err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
 		return
 	}
 
 	// Audit the issuance.
 	if audit := getAudit(r); audit != nil {
 		audit.LogSuccess("saml.response.issued", service.AuditMeta{
-			"actor_user_id":   userID,
-			"project_id":      sp.ProjectID,
-			"project_uuid":    projectUUID,
-			"target_type":     "saml_service_provider",
-			"target_id":       int64(sp.ID),
-			"sp_entity_id":    sp.EntityID,
+			"actor_user_id": userID,
+			"project_id":    sp.ProjectID,
+			"project_uuid":  projectUUID,
+			"target_type":   "saml_service_provider",
+			"target_id":     int64(sp.ID),
+			"sp_entity_id":  sp.EntityID,
 		})
 	}
 

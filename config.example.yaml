@@ -15,6 +15,9 @@ app_debug: false
 
 # ─── Server ──────────────────────────────────────────────────────────────────
 server_addr: ":8080"
+# Global cap for JSON/form bodies. Must accommodate base64-encoded CryptBin
+# ciphertext plus metadata; the default supports the 5 MiB upload limit below.
+request_body_max_bytes: 8388608
 
 # ─── Database (MySQL 8.0+) ───────────────────────────────────────────────────
 db_host: "localhost"

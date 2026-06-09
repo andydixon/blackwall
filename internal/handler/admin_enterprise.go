@@ -586,10 +586,13 @@ func (h *AdminHandler) AdminTokens(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tokens, _ := h.App.AdminTokens.ListForUser(actorID)
-	data := h.adminBaseData(w, r, "API tokens")
+	data := h.adminBaseData(w, r, "API tokens", flashAdminTokenPlaintext, flashAdminTokenName)
+	flashes := data["Flash"].(map[string]string)
+	newToken := flashes[flashAdminTokenPlaintext]
+	newTokenName := flashes[flashAdminTokenName]
 	data["Tokens"] = tokens
-	data["NewTokenPlaintext"] = r.URL.Query().Get("new_token")
-	data["NewTokenName"] = r.URL.Query().Get("new_name")
+	data["NewTokenPlaintext"] = newToken
+	data["NewTokenName"] = newTokenName
 	data["Success"] = r.URL.Query().Get("success")
 	data["Error"] = r.URL.Query().Get("error")
 	templates.AdminPage(w, "admin_tokens.html", data)
@@ -635,8 +638,10 @@ func (h *AdminHandler) AdminTokenCreate(w http.ResponseWriter, r *http.Request) 
 		"target_type":   "admin_api_token",
 		"target_id":     int64(tok.ID),
 	})
+	sess.Set(flashAdminTokenPlaintext, plaintext)
+	sess.Set(flashAdminTokenName, name)
 	sess.Save()
-	redirect(w, r, "/admin/api-tokens?success=created&new_token="+plaintext+"&new_name="+name)
+	redirect(w, r, "/admin/api-tokens?success=created")
 }
 
 // AdminTokenRevoke kills a token.
@@ -740,6 +745,9 @@ func splitCommaList(s string) []string {
 
 // jsonAPIError emits a structured error to JSON API consumers.
 func jsonAPIError(w http.ResponseWriter, status int, code, msg string) {
+	if status >= http.StatusInternalServerError {
+		msg = "internal server error"
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(map[string]string{

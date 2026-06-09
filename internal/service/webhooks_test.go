@@ -1,6 +1,7 @@
 package service
 
 import (
+	"net"
 	"strings"
 	"testing"
 	"time"
@@ -80,19 +81,42 @@ func hmacHex(secret, message string) string {
 	return hmacHexImpl(secret, message)
 }
 
-func TestIsHTTPURL(t *testing.T) {
+func TestValidateWebhookTargetURL(t *testing.T) {
 	cases := map[string]bool{
-		"http://example.com":   true,
-		"https://example.com":  true,
-		"https://x/y/z?a=1":    true,
-		"ftp://example.com":    false,
-		"":                     false,
-		"example.com":          false,
-		"javascript:alert(1)":  false,
+		"http://example.com":                 true,
+		"https://example.com":                true,
+		"https://x/y/z?a=1":                  true,
+		"http://127.0.0.1/hook":              false,
+		"http://10.0.0.1/hook":               false,
+		"http://localhost/hook":              false,
+		"https://user:pass@example.com/hook": false,
+		"ftp://example.com":                  false,
+		"":                                   false,
+		"example.com":                        false,
+		"javascript:alert(1)":                false,
 	}
 	for in, want := range cases {
-		if got := isHTTPURL(in); got != want {
-			t.Errorf("isHTTPURL(%q) = %v, want %v", in, got, want)
+		got := validateWebhookTargetURL(in) == nil
+		if got != want {
+			t.Errorf("validateWebhookTargetURL(%q) valid = %v, want %v", in, got, want)
+		}
+	}
+}
+
+func TestIsPublicWebhookIP(t *testing.T) {
+	cases := map[string]bool{
+		"8.8.8.8":         true,
+		"1.1.1.1":         true,
+		"127.0.0.1":       false,
+		"169.254.169.254": false,
+		"100.64.0.1":      false,
+		"192.0.2.1":       false,
+		"::1":             false,
+		"2001:db8::1":     false,
+	}
+	for raw, want := range cases {
+		if got := isPublicWebhookIP(net.ParseIP(raw)); got != want {
+			t.Errorf("isPublicWebhookIP(%q) = %v, want %v", raw, got, want)
 		}
 	}
 }

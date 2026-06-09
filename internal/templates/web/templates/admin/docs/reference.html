@@ -5,6 +5,7 @@
     <tbody>
         <tr><td><code>app_url</code></td><td>—</td><td>Public origin. Used as OIDC <code>issuer</code> and as the WebAuthn RP origin.</td></tr>
         <tr><td><code>server_addr</code></td><td><code>:8080</code></td><td>HTTP listen address.</td></tr>
+        <tr><td><code>request_body_max_bytes</code></td><td><code>8388608</code></td><td>Maximum JSON/form request body size.</td></tr>
         <tr><td><code>db_*</code></td><td>—</td><td>MySQL connection.</td></tr>
         <tr><td><code>session_secret</code></td><td>—</td><td>64-char hex; used to derive cookie hash + encryption keys.</td></tr>
         <tr><td><code>csrf_secret</code></td><td>—</td><td>64-char hex; HMAC key for CSRF tokens. Also default <code>error_trace_key</code> + audit export key.</td></tr>

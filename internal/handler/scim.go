@@ -27,6 +27,9 @@ type SCIMHandler struct {
 
 // scimError writes the spec-compliant error envelope (RFC 7644 §3.12).
 func scimError(w http.ResponseWriter, status int, msg, scimType string) {
+	if status >= http.StatusInternalServerError {
+		msg = "internal server error"
+	}
 	w.Header().Set("Content-Type", "application/scim+json")
 	w.WriteHeader(status)
 	body := map[string]interface{}{
@@ -81,14 +84,14 @@ func (h *AdminHandler) scimProjectID(w http.ResponseWriter, r *http.Request) int
 // whether sort is supported, etc.
 func (h *AdminHandler) SCIMServiceProviderConfig(w http.ResponseWriter, _ *http.Request) {
 	scimOK(w, http.StatusOK, map[string]interface{}{
-		"schemas":               []string{"urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"},
-		"documentationUri":      "/admin/docs/scim",
-		"patch":                 map[string]bool{"supported": true},
-		"bulk":                  map[string]bool{"supported": false},
-		"filter":                map[string]interface{}{"supported": true, "maxResults": 200},
-		"changePassword":        map[string]bool{"supported": false},
-		"sort":                  map[string]bool{"supported": false},
-		"etag":                  map[string]bool{"supported": false},
+		"schemas":          []string{"urn:ietf:params:scim:schemas:core:2.0:ServiceProviderConfig"},
+		"documentationUri": "/admin/docs/scim",
+		"patch":            map[string]bool{"supported": true},
+		"bulk":             map[string]bool{"supported": false},
+		"filter":           map[string]interface{}{"supported": true, "maxResults": 200},
+		"changePassword":   map[string]bool{"supported": false},
+		"sort":             map[string]bool{"supported": false},
+		"etag":             map[string]bool{"supported": false},
 		"authenticationSchemes": []map[string]interface{}{
 			{
 				"name":        "OAuth Bearer Token",
@@ -193,17 +196,12 @@ func (h *AdminHandler) SCIMUserCreate(w http.ResponseWriter, r *http.Request) {
 	if pid == 0 {
 		return
 	}
-	var in service.SCIMUser
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+	in, err := decodeSCIMUser(r, true)
+	if err != nil {
 		scimError(w, http.StatusBadRequest, "invalid JSON", "invalidSyntax")
 		return
 	}
-	// SCIM's `active` defaults to true if omitted from the create body. The
-	// Go decoder default is false, so flip when the input didn't mention it.
-	// We detect "omitted" by re-decoding into a map to check key presence —
-	// cheap and avoids reflection.
-	in.Active = activeFromBody(r, in.Active)
-	u, err := h.App.SCIM.CreateUser(pid, &in, 0)
+	u, err := h.App.SCIM.CreateUser(pid, in, 0)
 	if err != nil {
 		if errors.Is(err, service.ErrSCIMConflict) {
 			scimError(w, http.StatusConflict, "external_id already mapped", "uniqueness")
@@ -231,14 +229,13 @@ func (h *AdminHandler) SCIMUserReplace(w http.ResponseWriter, r *http.Request) {
 	if pid == 0 {
 		return
 	}
-	var in service.SCIMUser
-	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+	in, err := decodeSCIMUser(r, true)
+	if err != nil {
 		scimError(w, http.StatusBadRequest, "invalid JSON", "invalidSyntax")
 		return
 	}
-	in.Active = activeFromBody(r, in.Active)
 	id := chi.URLParam(r, "id")
-	u, err := h.App.SCIM.ReplaceUser(pid, id, &in)
+	u, err := h.App.SCIM.ReplaceUser(pid, id, in)
 	if err != nil {
 		if errors.Is(err, service.ErrSCIMNotFound) {
 			scimError(w, http.StatusNotFound, "user not found", "")
@@ -317,25 +314,25 @@ func (h *AdminHandler) SCIMUserDelete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// activeFromBody inspects the raw body to detect whether the caller omitted
-// "active". When omitted, RFC 7644 says default to true. We re-read the body
-// from a buffered copy; expensive but correct, and SCIM bodies are tiny.
-func activeFromBody(r *http.Request, decoded bool) bool {
-	// We rely on the fact that bodies are usually small (< 16 KiB). If the
-	// reader was already drained by the JSON decoder, there's no body left
-	// here — fall back to the decoded value.
-	bodyBytes := r.Header.Get("X-BlackWall-Raw-Body")
-	if bodyBytes == "" {
-		return decoded // can't tell, trust the decoded value
+// decodeSCIMUser preserves whether the caller supplied `active`; bool's zero
+// value alone cannot distinguish omitted from explicitly false.
+func decodeSCIMUser(r *http.Request, defaultActive bool) (*service.SCIMUser, error) {
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(r.Body).Decode(&raw); err != nil {
+		return nil, err
 	}
-	var probe map[string]interface{}
-	if err := json.Unmarshal([]byte(bodyBytes), &probe); err != nil {
-		return decoded
+	encoded, err := json.Marshal(raw)
+	if err != nil {
+		return nil, err
 	}
-	if _, present := probe["active"]; !present {
-		return true
+	var in service.SCIMUser
+	if err := json.Unmarshal(encoded, &in); err != nil {
+		return nil, err
 	}
-	return decoded
+	if _, present := raw["active"]; !present {
+		in.Active = defaultActive
+	}
+	return &in, nil
 }
 
 // SplitScimPath helps unit-test the routing convention. Kept here so the

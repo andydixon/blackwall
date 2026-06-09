@@ -13,7 +13,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -65,8 +67,8 @@ func (s *WebhookService) CreateEndpoint(projectID int, targetURL, description st
 	if projectID <= 0 {
 		return nil, errors.New("project_id required")
 	}
-	if !isHTTPURL(targetURL) {
-		return nil, errors.New("target_url must be an absolute http(s) URL")
+	if err := validateWebhookTargetURL(targetURL); err != nil {
+		return nil, err
 	}
 	if len(events) == 0 {
 		events = []string{"*"}
@@ -97,8 +99,8 @@ func (s *WebhookService) CreateEndpoint(projectID int, targetURL, description st
 // UpdateEndpoint changes mutable fields of an endpoint. Rotates the secret
 // when rotateSecret is true (returns the new secret in the result).
 func (s *WebhookService) UpdateEndpoint(publicID, targetURL, description string, events []string, status string, rotateSecret bool) (*WebhookEndpoint, error) {
-	if !isHTTPURL(targetURL) {
-		return nil, errors.New("target_url must be an absolute http(s) URL")
+	if err := validateWebhookTargetURL(targetURL); err != nil {
+		return nil, err
 	}
 	if status != "active" && status != "disabled" {
 		return nil, errors.New("status must be active or disabled")
@@ -191,12 +193,12 @@ func (s *WebhookService) Enqueue(projectID int, eventType string, payload map[st
 		payload = map[string]interface{}{}
 	}
 	envelope := map[string]interface{}{
-		"id":           eventID,
-		"type":         eventType,
-		"project_id":   projectID,
-		"occurred_at":  time.Now().UTC().Format(time.RFC3339Nano),
-		"data":         payload,
-		"api_version":  "2024-11",
+		"id":          eventID,
+		"type":        eventType,
+		"project_id":  projectID,
+		"occurred_at": time.Now().UTC().Format(time.RFC3339Nano),
+		"data":        payload,
+		"api_version": "2024-11",
 	}
 	body, err := json.Marshal(envelope)
 	if err != nil {
@@ -258,9 +260,9 @@ func (s *WebhookService) DeliverPending(ctx context.Context, batchSize int) int 
 		return 0
 	}
 	type job struct {
-		id, endpointID, attempts                   int
-		eventType, eventID, payload, url, secret   string
-		endpointStatus                             string
+		id, endpointID, attempts                 int
+		eventType, eventID, payload, url, secret string
+		endpointStatus                           string
 	}
 	var jobs []job
 	for rows.Next() {
@@ -322,14 +324,14 @@ func (s *WebhookService) DeliverPending(ctx context.Context, batchSize int) int 
 
 // send performs one HTTP POST with HMAC signing. Returns the response status
 // code (0 on transport error) and a short body excerpt for diagnostics.
-func (s *WebhookService) send(ctx context.Context, url, secret, body, eventType, eventID string) (int, string) {
+func (s *WebhookService) send(ctx context.Context, targetURL, secret, body, eventType, eventID string) (int, string) {
 	ts := fmt.Sprintf("%d", time.Now().Unix())
 	sigInput := ts + "." + body
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write([]byte(sigInput))
 	sig := hex.EncodeToString(mac.Sum(nil))
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewBufferString(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewBufferString(body))
 	if err != nil {
 		return 0, "build_request: " + err.Error()
 	}
@@ -339,7 +341,7 @@ func (s *WebhookService) send(ctx context.Context, url, secret, body, eventType,
 	req.Header.Set("X-BlackWall-Event-Id", eventID)
 	req.Header.Set("X-BlackWall-Signature", "t="+ts+",v1="+sig)
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := newWebhookHTTPClient()
 	resp, err := client.Do(req)
 	if err != nil {
 		return 0, "transport_error: " + err.Error()
@@ -397,11 +399,80 @@ func abs(x int64) int64 {
 	return x
 }
 
-func isHTTPURL(u string) bool {
-	if u == "" {
+func validateWebhookTargetURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Hostname() == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return errors.New("target_url must be an absolute http(s) URL")
+	}
+	if u.User != nil {
+		return errors.New("target_url must not contain userinfo")
+	}
+	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
+		return errors.New("target_url must not reference a local address")
+	}
+	if ip := net.ParseIP(host); ip != nil && !isPublicWebhookIP(ip) {
+		return errors.New("target_url must reference a public address")
+	}
+	return nil
+}
+
+func isHTTPURL(rawURL string) bool {
+	u, err := url.Parse(rawURL)
+	return err == nil && u.Hostname() != "" && (u.Scheme == "http" || u.Scheme == "https")
+}
+
+func newWebhookHTTPClient() *http.Client {
+	dialer := &net.Dialer{Timeout: 5 * time.Second, KeepAlive: 30 * time.Second}
+	transport := &http.Transport{
+		Proxy:                 nil,
+		ForceAttemptHTTP2:     true,
+		TLSHandshakeTimeout:   5 * time.Second,
+		ResponseHeaderTimeout: 8 * time.Second,
+		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			host, port, err := net.SplitHostPort(address)
+			if err != nil {
+				return nil, fmt.Errorf("invalid webhook address: %w", err)
+			}
+			ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+			if err != nil {
+				return nil, fmt.Errorf("resolve webhook host: %w", err)
+			}
+			if len(ips) == 0 {
+				return nil, errors.New("webhook host resolved to no addresses")
+			}
+			for _, resolved := range ips {
+				if !isPublicWebhookIP(resolved.IP) {
+					return nil, fmt.Errorf("webhook host resolved to non-public address %s", resolved.IP)
+				}
+			}
+			return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0].IP.String(), port))
+		},
+	}
+	return &http.Client{
+		Timeout:   10 * time.Second,
+		Transport: transport,
+		CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+}
+
+func isPublicWebhookIP(ip net.IP) bool {
+	if ip == nil || !ip.IsGlobalUnicast() || ip.IsLoopback() || ip.IsPrivate() || ip.IsUnspecified() || ip.IsLinkLocalUnicast() {
 		return false
 	}
-	return strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://")
+	blocked := []string{
+		"100.64.0.0/10", "192.0.0.0/24", "192.0.2.0/24", "198.18.0.0/15",
+		"198.51.100.0/24", "203.0.113.0/24", "2001:db8::/32",
+	}
+	for _, cidr := range blocked {
+		_, network, _ := net.ParseCIDR(cidr)
+		if network.Contains(ip) {
+			return false
+		}
+	}
+	return true
 }
 
 func generateWebhookSecret() string {

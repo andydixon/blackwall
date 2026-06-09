@@ -2,11 +2,12 @@ package templates
 
 import (
 	"bytes"
-	"encoding/json"
 	"embed"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"io/fs"
+	"log"
 	"net/http"
 	"path"
 )
@@ -27,7 +28,6 @@ func StaticHandler() http.Handler {
 }
 
 var funcMap = template.FuncMap{
-	"safeHTML": func(s string) template.HTML { return template.HTML(s) },
 	"json": func(v interface{}) template.JS {
 		b, err := json.Marshal(v)
 		if err != nil {
@@ -85,12 +85,14 @@ func AdminPage(w http.ResponseWriter, pageFile string, data interface{}) {
 		"web/templates/admin/"+pageFile,
 	)
 	if err != nil {
-		http.Error(w, "Template error: "+err.Error(), 500)
+		log.Printf("admin template parse failed: page=%q err=%v", pageFile, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	var buf bytes.Buffer
 	if err := t.ExecuteTemplate(&buf, "layout", data); err != nil {
-		http.Error(w, "Render error: "+err.Error(), 500)
+		log.Printf("admin template render failed: page=%q err=%v", pageFile, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -107,12 +109,14 @@ func AdminDocsPage(w http.ResponseWriter, bodyFile string, data interface{}) {
 		"web/templates/admin/"+bodyFile,
 	)
 	if err != nil {
-		http.Error(w, "Template error: "+err.Error(), 500)
+		log.Printf("admin docs template parse failed: page=%q err=%v", bodyFile, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	var buf bytes.Buffer
 	if err := t.ExecuteTemplate(&buf, "layout", data); err != nil {
-		http.Error(w, "Render error: "+err.Error(), 500)
+		log.Printf("admin docs template render failed: page=%q err=%v", bodyFile, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -131,12 +135,14 @@ func Standalone(w http.ResponseWriter, file string, data interface{}) {
 	name := path.Base(file)
 	t, err := template.New(name).Funcs(funcMap).ParseFS(templateFS, "web/templates/"+file)
 	if err != nil {
-		http.Error(w, "Template error: "+err.Error(), 500)
+		log.Printf("standalone template parse failed: page=%q err=%v", file, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	var buf bytes.Buffer
 	if err := t.ExecuteTemplate(&buf, name, data); err != nil {
-		http.Error(w, "Render error: "+err.Error(), 500)
+		log.Printf("standalone template render failed: page=%q err=%v", file, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
