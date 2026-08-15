@@ -102,6 +102,6 @@
 {{end}}
 
 <div class="alert alert-info mt-3 small">
-    <strong>Note:</strong> the sandbox simulates the merged userinfo response without going through WebAuthn or the real OAuth redirect flow — it shows what BlackWall <em>would</em> emit for the chosen user under this project. To exercise the live flow end-to-end, use a registered OAuth client of this project from its own consumer application.
+    <strong>Note:</strong> the sandbox simulates the merged userinfo response without going through WebAuthn or the real OAuth redirect flow. It does not display ID-token security claims such as <code>nonce</code>, <code>at_hash</code>, or <code>auth_time</code>. To exercise those and <code>max_age</code> end-to-end, use an OIDC-enabled registered client from its own consumer application.
 </div>
 {{end}}

@@ -155,6 +155,7 @@ func (h *AdminHandler) LoginVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sess.Set("user_id", cred.UserID)
+	sess.Set("auth_time", time.Now().Unix())
 	sess.RegenerateID()
 
 	audit.LogSuccess("admin.login.success", service.AuditMeta{"actor_user_id": cred.UserID, "webauthn_credential_id": cred.ID, "webauthn_credential_public_id": credentialID})
@@ -2824,21 +2825,22 @@ func (h *AdminHandler) ClientsList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rows, _ := h.DB.Query(`SELECT client_id, name, status, client_secret_hash IS NOT NULL AS confidential, created_at
+	rows, _ := h.DB.Query(`SELECT client_id, name, status, client_secret_hash IS NOT NULL AS confidential, oidc_enabled, created_at
 	                      FROM oauth_clients WHERE project_id=? ORDER BY created_at DESC`, projectID)
 	var clients []map[string]interface{}
 	if rows != nil {
 		defer rows.Close()
 		for rows.Next() {
 			var pubID, name, status string
-			var confidential bool
+			var confidential, oidcEnabled bool
 			var createdAt time.Time
-			rows.Scan(&pubID, &name, &status, &confidential, &createdAt)
+			rows.Scan(&pubID, &name, &status, &confidential, &oidcEnabled, &createdAt)
 			clients = append(clients, map[string]interface{}{
 				"PublicID":     pubID,
 				"Name":         name,
 				"Status":       status,
 				"Confidential": confidential,
+				"OIDCEnabled":  oidcEnabled,
 				"CreatedAt":    createdAt,
 			})
 		}

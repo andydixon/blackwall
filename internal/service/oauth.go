@@ -3,6 +3,7 @@ package service
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 
 	"blackwall/internal/config"
 	"blackwall/internal/security"
@@ -42,16 +43,16 @@ func (s *OAuthService) ClaimsForUser(userID, projectID int) map[string]interface
 	return out
 }
 
-func (s *OAuthService) CreateAuthorizationCode(clientID, userID, projectID int, redirectURI string, scopes []string, codeChallenge, codeChallengeMethod, nonce string) (string, error) {
+func (s *OAuthService) CreateAuthorizationCode(clientID, userID, projectID int, redirectURI string, scopes []string, codeChallenge, codeChallengeMethod, nonce string, authTime int64) (string, error) {
 	code := security.GenerateBase64URLToken(32)
 	codeHash := security.HashToken(code)
 
 	scopesJSON, _ := json.Marshal(scopes)
 	_, err := s.db.Exec(`INSERT INTO oauth_auth_codes
-		(code_hash, client_id, user_id, project_id, redirect_uri, scopes, code_challenge, code_challenge_method, nonce, expires_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE))`,
+		(code_hash, client_id, user_id, project_id, redirect_uri, scopes, code_challenge, code_challenge_method, nonce, auth_time, expires_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE))`,
 		codeHash, clientID, userID, projectID, redirectURI, scopesJSON,
-		codeChallenge, codeChallengeMethod, nullStringVal(nonce))
+		codeChallenge, codeChallengeMethod, nullStringVal(nonce), authTime)
 	if err != nil {
 		return "", err
 	}
@@ -67,21 +68,21 @@ func (s *OAuthService) ExchangeAuthorizationCode(code, clientPublicID, redirectU
 		codeChallengeMethod                       string
 		scopesJSON                                string
 		nonce                                     sql.NullString
+		authTime                                  sql.NullInt64
 		accessTokenType                           string
 		accessTokenLifetime, refreshTokenLifetime int
-		oidcEnabled                               bool
 	)
 
 	err := s.db.QueryRow(`SELECT ac.id, ac.client_id, ac.user_id, ac.project_id, ac.redirect_uri,
-		ac.scopes, ac.code_challenge, ac.code_challenge_method, ac.nonce, ac.expires_at,
-		c.access_token_type, c.access_token_lifetime, c.refresh_token_lifetime, c.oidc_enabled
+		ac.scopes, ac.code_challenge, ac.code_challenge_method, ac.nonce, ac.auth_time, ac.expires_at,
+		c.access_token_type, c.access_token_lifetime, c.refresh_token_lifetime
 		FROM oauth_auth_codes ac
 		JOIN oauth_clients c ON c.id = ac.client_id
 		WHERE ac.code_hash = ? AND c.client_id = ? AND c.status = 'active' AND ac.used_at IS NULL AND ac.expires_at > NOW()`,
 		codeHash, clientPublicID).Scan(
 		&id, &clientID, &userID, &projectID, &storedRedirectURI,
-		&scopesJSON, &codeChallenge, &codeChallengeMethod, &nonce, new(sql.NullTime),
-		&accessTokenType, &accessTokenLifetime, &refreshTokenLifetime, &oidcEnabled,
+		&scopesJSON, &codeChallenge, &codeChallengeMethod, &nonce, &authTime, new(sql.NullTime),
+		&accessTokenType, &accessTokenLifetime, &refreshTokenLifetime,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -120,7 +121,7 @@ func (s *OAuthService) ExchangeAuthorizationCode(code, clientPublicID, redirectU
 	s.db.QueryRow(`SELECT name FROM project_privilege_levels WHERE project_id=? AND level=?`, projectID, privilegeLevel).Scan(&privilegeName)
 
 	return s.issueTokens(clientID, userID, projectID, scopes, privilegeLevel, ResolvePrivilegeLabel(privilegeLevel, privilegeName),
-		accessTokenType, accessTokenLifetime, refreshTokenLifetime, nonce.String, oidcEnabled)
+		accessTokenType, accessTokenLifetime, refreshTokenLifetime, nonce.String, authTime.Int64)
 }
 
 func (s *OAuthService) ExchangeRefreshToken(refreshToken, clientPublicID string) (map[string]interface{}, error) {
@@ -133,21 +134,21 @@ func (s *OAuthService) ExchangeRefreshToken(refreshToken, clientPublicID string)
 		revokedAt                                 sql.NullTime
 		accessTokenType                           string
 		accessTokenLifetime, refreshTokenLifetime int
-		oidcEnabled                               bool
+		authTime                                  sql.NullInt64
 	)
 
 	err := s.db.QueryRow(`SELECT rt.id, rt.client_id, rt.user_id, rt.project_id,
-		rt.scopes, rt.revoked_at, rt.expires_at,
+		rt.scopes, rt.revoked_at, rt.expires_at, rt.auth_time,
 		c.access_token_type, c.access_token_lifetime, c.refresh_token_lifetime,
-		c.oidc_enabled, c.scopes AS client_scopes, c.status AS client_status
+		c.scopes AS client_scopes, c.status AS client_status
 		FROM oauth_refresh_tokens rt
 		JOIN oauth_clients c ON c.id = rt.client_id
 		WHERE rt.token_hash = ? AND c.client_id = ? AND rt.expires_at > NOW() LIMIT 1`,
 		tokenHash, clientPublicID).Scan(
 		&id, &clientID, &userID, &projectID,
-		&scopesJSON, &revokedAt, new(sql.NullTime),
+		&scopesJSON, &revokedAt, new(sql.NullTime), &authTime,
 		&accessTokenType, &accessTokenLifetime, &refreshTokenLifetime,
-		&oidcEnabled, &clientScopes, &clientStatus,
+		&clientScopes, &clientStatus,
 	)
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -198,7 +199,7 @@ func (s *OAuthService) ExchangeRefreshToken(refreshToken, clientPublicID string)
 	json.Unmarshal([]byte(scopesJSON), &scopes)
 
 	tokens, err := s.issueTokensTx(tx, clientID, userID, projectID, scopes, privilegeLevel, ResolvePrivilegeLabel(privilegeLevel, privilegeName),
-		accessTokenType, accessTokenLifetime, refreshTokenLifetime, "", oidcEnabled)
+		accessTokenType, accessTokenLifetime, refreshTokenLifetime, "", authTime.Int64)
 	if err != nil {
 		return nil, err
 	}
@@ -206,8 +207,8 @@ func (s *OAuthService) ExchangeRefreshToken(refreshToken, clientPublicID string)
 	return tokens, tx.Commit()
 }
 
-func (s *OAuthService) issueTokens(clientID, userID, projectID int, scopes []string, privilegeLevel int, privilegeName, tokenType string, accessLifetime, refreshLifetime int, nonce string, oidcEnabled bool) (map[string]interface{}, error) {
-	return s.issueTokensTx(s.db, clientID, userID, projectID, scopes, privilegeLevel, privilegeName, tokenType, accessLifetime, refreshLifetime, nonce, oidcEnabled)
+func (s *OAuthService) issueTokens(clientID, userID, projectID int, scopes []string, privilegeLevel int, privilegeName, tokenType string, accessLifetime, refreshLifetime int, nonce string, authTime int64) (map[string]interface{}, error) {
+	return s.issueTokensTx(s.db, clientID, userID, projectID, scopes, privilegeLevel, privilegeName, tokenType, accessLifetime, refreshLifetime, nonce, authTime)
 }
 
 type dbExecer interface {
@@ -215,7 +216,7 @@ type dbExecer interface {
 	QueryRow(query string, args ...interface{}) *sql.Row
 }
 
-func (s *OAuthService) issueTokensTx(db dbExecer, clientID, userID, projectID int, scopes []string, privilegeLevel int, privilegeName, tokenType string, accessLifetime, refreshLifetime int, nonce string, oidcEnabled bool) (map[string]interface{}, error) {
+func (s *OAuthService) issueTokensTx(db dbExecer, clientID, userID, projectID int, scopes []string, privilegeLevel int, privilegeName, tokenType string, accessLifetime, refreshLifetime int, nonce string, authTime int64) (map[string]interface{}, error) {
 	var userUUID, userLabel string
 	if err := s.db.QueryRow(`SELECT uuid, display_label FROM users WHERE id=? AND status='active'`, userID).Scan(&userUUID, &userLabel); err != nil {
 		return nil, nil
@@ -261,20 +262,21 @@ func (s *OAuthService) issueTokensTx(db dbExecer, clientID, userID, projectID in
 	if containsScope(scopes, "offline_access") {
 		rt := security.GenerateToken(32)
 		rtHash := security.HashToken(rt)
-		_, err = db.Exec(`INSERT INTO oauth_refresh_tokens (token_hash, client_id, user_id, project_id, scopes, privilege_level, expires_at) VALUES (?,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL ? SECOND))`,
-			rtHash, clientID, userID, projectID, scopesJSON, privilegeLevel, refreshLifetime)
+		_, err = db.Exec(`INSERT INTO oauth_refresh_tokens (token_hash, client_id, user_id, project_id, scopes, privilege_level, auth_time, expires_at) VALUES (?,?,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL ? SECOND))`,
+			rtHash, clientID, userID, projectID, scopesJSON, privilegeLevel, authTime, refreshLifetime)
 		if err != nil {
 			return nil, err
 		}
 		response["refresh_token"] = rt
 	}
 
-	// ID token — emitted whenever the openid scope is in play, regardless of
-	// the per-client oidc_enabled flag. (oidc_enabled was only intended to
-	// gate whether a client may *request* OIDC, which is enforced at scope
-	// allow-list time. Once openid is in the granted scopes, the spec
-	// requires we issue an ID token.)
+	// The authorize endpoint enforces the client's oidc_enabled switch before
+	// issuing a code. Once openid is granted, the token endpoint must return a
+	// complete ID token rather than silently degrading to plain OAuth.
 	if containsScope(scopes, "openid") {
+		if authTime <= 0 {
+			return nil, errors.New("OIDC authentication time is unavailable; start a new authorization flow")
+		}
 		idClaims := struct{ email, name string }{}
 		if containsScope(scopes, "email") && isEmail(userLabel) {
 			idClaims.email = userLabel
@@ -292,14 +294,11 @@ func (s *OAuthService) issueTokensTx(db dbExecer, clientID, userID, projectID in
 			}
 		}
 
-		// auth_time is best-effort — we don't track the explicit moment of
-		// authentication separately from when this code was issued, so omit
-		// it. OIDC §2 says auth_time is REQUIRED only if max_age was
-		// requested or essential by client config (we don't support either).
-		idToken, err := s.jwtManager.CreateIDToken(userUUID, clientPublicID, nonce, idClaims.email, idClaims.name, accessToken, 0, extra)
-		if err == nil {
-			response["id_token"] = idToken
+		idToken, err := s.jwtManager.CreateIDToken(userUUID, clientPublicID, nonce, idClaims.email, idClaims.name, accessToken, authTime, extra)
+		if err != nil {
+			return nil, err
 		}
+		response["id_token"] = idToken
 	}
 
 	return response, nil

@@ -19,6 +19,11 @@
             <h5 class="mb-1">Sign in to {{.ClientName}}</h5>
             <p class="text-muted small mb-0">Use your security key to continue</p>
         </div>
+        {{if eq .ReauthenticationReason "max_age"}}
+        <div class="alert alert-info small">{{.ClientName}} requires a recent sign-in (within {{.MaxAge}} seconds), so BlackWall needs another passkey check.</div>
+        {{else if eq .ReauthenticationReason "prompt_login"}}
+        <div class="alert alert-info small">{{.ClientName}} requested a fresh sign-in, so BlackWall needs another passkey check.</div>
+        {{end}}
         <div id="webauthn-status" class="alert alert-info d-none"></div>
         <form id="webauthn-form">
             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}" id="csrf_token">

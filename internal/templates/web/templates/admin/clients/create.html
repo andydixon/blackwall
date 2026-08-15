@@ -59,6 +59,7 @@ refresh_token</textarea>
                                     <input class="form-check-input" type="checkbox" id="oidcEnabled" name="oidc_enabled" value="1" checked>
                                     <label class="form-check-label" for="oidcEnabled">OIDC enabled</label>
                                 </div>
+                                <div class="form-text small">Required for <code>openid</code>. ID tokens include the WebAuthn <code>auth_time</code>; relying parties can request fresh authentication with <code>max_age</code>.</div>
                             </div>
                         </div>
                     </div>
@@ -84,6 +85,10 @@ refresh_token</textarea>
                         <div>
                             <h6 class="mb-2">JWT access tokens</h6>
                             <p class="text-muted small mb-0">Preferred for modern relying parties that validate signatures locally and call `/oauth/userinfo` for claims.</p>
+                        </div>
+                        <div class="mt-3">
+                            <h6 class="mb-2">Authentication age</h6>
+                            <p class="text-muted small mb-0"><code>max_age</code> is chosen by the relying party per login request. BlackWall forces a new passkey check when the current authentication is too old and preserves <code>auth_time</code> across refresh-token rotation.</p>
                         </div>
                     </div>
                 </div>

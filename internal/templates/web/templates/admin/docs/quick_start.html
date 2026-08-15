@@ -14,7 +14,7 @@
 <p>Create a new user, hand them the one-shot enrolment link, then assign them the <code>operator</code> admin role. Confirm they can sign in but cannot perform <code>delete_credentials_direct</code> actions — that's correct, those go through approval.</p>
 
 <h5>5. Register a test OAuth client</h5>
-<p>Register a confidential client against any project and run an authorisation-code+PKCE flow against it from <code>curl</code> or your favourite client. Confirm the ID token contains the <code>nonce</code> and <code>at_hash</code> claims.</p>
+<p>Register an OIDC-enabled confidential client against any project and run an authorisation-code+PKCE flow from your preferred client. Include <code>max_age=0</code> for the test, complete the passkey prompt, and confirm the ID token contains matching <code>nonce</code>, <code>at_hash</code>, and numeric <code>auth_time</code> claims.</p>
 
 <h5>6. Trigger maintenance</h5>
 <p>Open <a href="/admin/maintenance" class="text-light">/admin/maintenance</a> and run the scheduled jobs once manually. Verify all jobs land at <code>success</code> with non-zero <code>rows_affected</code> on a populated database.</p>

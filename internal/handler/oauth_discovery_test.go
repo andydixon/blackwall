@@ -71,4 +71,8 @@ func TestDiscovery_RequiredFields(t *testing.T) {
 	if got["issuer"] != "https://test.example.com" {
 		t.Errorf("issuer mismatch: %v", got["issuer"])
 	}
+	responseModes, ok := got["response_modes_supported"].([]interface{})
+	if !ok || len(responseModes) != 1 || responseModes[0] != "query" {
+		t.Errorf("response_modes_supported should advertise only implemented query mode, got %v", got["response_modes_supported"])
+	}
 }

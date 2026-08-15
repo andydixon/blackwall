@@ -4,6 +4,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"blackwall/internal/model"
@@ -131,6 +132,17 @@ func ValidateOAuthRequest(params url.Values, isOIDC bool) (ok bool, errCode, err
 
 	if isOIDC && params.Get("nonce") == "" {
 		return false, "invalid_request", "nonce is required for OpenID Connect requests"
+	}
+	if maxAgeValues, present := params["max_age"]; present {
+		if !isOIDC {
+			return false, "invalid_request", "max_age requires the openid scope"
+		}
+		if len(maxAgeValues) != 1 || maxAgeValues[0] == "" {
+			return false, "invalid_request", "max_age must be a non-negative integer"
+		}
+		if _, err := strconv.ParseUint(maxAgeValues[0], 10, 63); err != nil {
+			return false, "invalid_request", "max_age must be a non-negative integer"
+		}
 	}
 
 	return true, "", ""

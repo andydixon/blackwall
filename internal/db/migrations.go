@@ -344,6 +344,22 @@ var migrations = []migration{
 			return nil
 		},
 	},
+	{
+		Version:     5,
+		Description: "Persist OIDC authentication time on authorization codes and refresh tokens",
+		Apply: func(db *sql.DB) error {
+			statements := []string{
+				`ALTER TABLE oauth_auth_codes ADD COLUMN auth_time BIGINT UNSIGNED DEFAULT NULL AFTER nonce`,
+				`ALTER TABLE oauth_refresh_tokens ADD COLUMN auth_time BIGINT UNSIGNED DEFAULT NULL AFTER privilege_level`,
+			}
+			for _, statement := range statements {
+				if _, err := db.Exec(statement); err != nil && !isMySQLDupColumnErr(err) {
+					return err
+				}
+			}
+			return nil
+		},
+	},
 }
 
 // Migrate applies every pending migration in order under a single tracking

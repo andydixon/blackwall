@@ -633,7 +633,7 @@ Before configuring an OAuth client, ground yourself in the terminology.
    - **Access token type** — `jwt` (default) or `opaque`.
    - **Access token lifetime** — seconds; default 3600.
    - **Refresh token lifetime** — seconds; default 2592000 (30 days).
-   - **OIDC enabled** — turn on to issue ID tokens when the `openid` scope is requested.
+   - **OIDC enabled** — an enforcement switch for OpenID Connect. Turn it on to permit `openid` requests and issue ID tokens; disabled clients receive `unauthorized_client` for OIDC requests.
 3. Submit.
 
 Blackwall generates a `client_id` (a UUID) and, for confidential clients, a `client_secret`. **The client secret is shown exactly once on the next page.** Copy it then.
@@ -703,9 +703,10 @@ This is the only flow Blackwall supports. Read this chapter once carefully — e
    - `scope=openid profile email` (space-separated; `openid` is required for OIDC)
    - `state=…`
    - `nonce=…` (required when `openid` is in scope)
+   - `max_age=…` (optional non-negative whole seconds; forces fresh WebAuthn authentication when the existing authentication is older)
    - `code_challenge=…`
    - `code_challenge_method=S256`
-4. **Blackwall authenticates the user.** If they are not signed in, the WebAuthn login screen is shown. Once authenticated, Blackwall checks that the user is assigned to the project the client belongs to. If not, the redirect carries `error=access_denied`.
+4. **Blackwall authenticates the user.** If they are not signed in, the WebAuthn login screen is shown. When `max_age` is present, Blackwall also compares it with the session's recorded authentication time and requires a fresh passkey assertion when that age is exceeded. Once authenticated, Blackwall checks that the user is assigned to the project the client belongs to. If not, the redirect carries `error=access_denied`.
 5. **Blackwall redirects the user back to the `redirect_uri`** with two query parameters:
    - `code=…` (a one-time authorisation code, valid for 10 minutes)
    - `state=…` (echoed back unchanged)
@@ -759,6 +760,8 @@ Send the challenge in the redirect; remember the verifier; send the verifier in 
 | `error=invalid_request&error_description=Invalid+redirect_uri` | The redirect URI you sent does not exactly match a registered one. Trailing slashes count. |
 | `error=invalid_request&error_description=code_challenge+is+required` | You forgot PKCE. Mandatory in Blackwall. |
 | `error=access_denied&error_description=User+not+authorized+for+this+project` | The signed-in user is not assigned to the client's project. |
+| `error=invalid_request` mentioning `max_age` | `max_age` was negative, fractional, non-numeric, or too large. Send non-negative whole seconds. |
+| `error=unauthorized_client` on an `openid` request | OIDC is disabled for that client in Admin. |
 | `error=invalid_grant` at the token endpoint | The code is expired, already used, or the `code_verifier` does not match. |
 | `error=invalid_client` at the token endpoint | The client secret is wrong, or you used `Authorization: Basic` for a public client. |
 
@@ -787,6 +790,7 @@ Every Blackwall-issued JWT can be verified using the public keys at the JWKS end
    - `exp` is in the future.
    - `nbf` is in the past (if present).
    - For ID tokens, `nonce` equals the value you sent at `/oauth/authorize`.
+   - For ID tokens, `auth_time` is a numeric date for the authentication event. If you sent `max_age`, reject a token whose authentication age exceeds your requested limit (allowing only a small clock skew).
    - For ID tokens with an `at_hash` claim, recompute the hash and compare (see below).
 
 Most languages have a library that handles this end-to-end. Examples appear throughout Part V.
@@ -814,7 +818,7 @@ Authorization: Basic <base64(client_id:client_secret)>
 grant_type=refresh_token&refresh_token=rt_…
 ```
 
-The response carries a **new** access token and a **new** refresh token. The old refresh token is immediately revoked. Re-using a revoked refresh token triggers token-family revocation: every active access and refresh token for that user/project/client triple is revoked. This is the OAuth 2.1 best-practice that defeats stolen refresh tokens.
+The response carries a **new** access token and a **new** refresh token. The old refresh token is immediately revoked. Re-using a revoked refresh token triggers token-family revocation: every active access and refresh token for that user/project/client triple is revoked. This is the OAuth 2.1 best-practice that defeats stolen refresh tokens. When an OIDC refresh response includes a new ID token, its `auth_time` remains the original authentication time; token refresh does not pretend that the user performed a new passkey check.
 
 ## Chapter 5: The Userinfo Endpoint
 
@@ -1663,6 +1667,8 @@ Not currently implemented. The webhook surface (Part VI, Chapter 3) is a reasona
 | `invalid_grant` at token exchange | The authorisation code has been used already (codes are single-use) or has expired (10-minute window). |
 | `invalid_request: code_challenge is required` | You forgot to send a PKCE pair. Mandatory in Blackwall. |
 | ID token `nonce` does not match | You sent the wrong nonce, or your session was lost between authorize and callback (check cookie SameSite). |
+| ID token is missing `auth_time`, or `auth_time` is too old | The token predates Blackwall's authentication-time migration, or the relying party's freshness limit was exceeded. Start a new authorization flow; use `max_age` when fresh authentication is required. |
+| User receives another passkey prompt despite an active Blackwall session | The relying party sent `max_age` and the session's authentication is older. Check the `oidc.reauthentication.required` audit event. |
 | `access_denied: User not authorized for this project` | The user has a valid credential but is not assigned to the project. Assign them via `/admin/projects/{uuid}/assignments`. |
 | `invalid_token` at userinfo | Token has expired, been revoked, or carries an audience that does not match any active client. Check the JWT's `exp` and `aud`. |
 | `insufficient_scope` at userinfo | You requested userinfo without the `openid` scope. |
@@ -1865,6 +1871,7 @@ Each endpoint has a **Deliveries** link showing the last 100 attempts with statu
 |---|---|
 | `admin.user.create` / `admin.user.update` | User CRUD via the admin UI or API. |
 | `portal.login.success` / `portal.login.fail` | WebAuthn assertion result. |
+| `oidc.reauthentication.required` | An OIDC client's `max_age` requirement forced a fresh WebAuthn assertion. |
 | `oidc.userinfo.success` | A downstream OIDC client read userinfo. |
 | `admin.client.create` / `admin.client.update` | OAuth client lifecycle. |
 | `admin.claims.user.upsert` / `admin.claims.project_default.upsert` | Custom claim mutations. |
@@ -2340,6 +2347,7 @@ Blackwall targets the OpenID Foundation's **Basic OP + PKCE** conformance profil
 - **Error responses** redirected to the redirect_uri with `error` + `error_description` + `state`.
 - **prompt=none** returns `login_required` when unauthenticated.
 - **prompt=login** forces fresh WebAuthn authentication.
+- **max_age** validates authentication freshness and forces WebAuthn reauthentication when needed; signed **auth_time** is preserved through authorization-code exchange and refresh-token rotation.
 - **Reserved claim protection** — custom claims can never override `iss`, `sub`, `aud`, etc.
 - **Userinfo endpoint** verifies `openid` scope and bearer-token freshness.
 - **Token revocation** at `/oauth/revoke` and **introspection** at `/oauth/introspect`.
@@ -2350,9 +2358,8 @@ Blackwall targets the OpenID Foundation's **Basic OP + PKCE** conformance profil
 Items planned for the next conformance pass:
 
 - **id_token_hint** evaluation when prompt=none arrives.
-- **max_age** enforcement at `/oauth/authorize`.
 - **acr_values** echo in the `acr` claim.
-- **response_mode=form_post** — advertised in discovery but not implemented in the code-issuance path yet.
+- **response_mode=form_post** — not implemented and not advertised; `query` is the only supported response mode until the HTML form response path is added.
 - **End-session endpoint** for RP-initiated logout.
 - **Backchannel logout** — webhook fallback exists in the meantime.
 
@@ -2524,6 +2531,7 @@ Selected events admins commonly filter on. The full list is observable by enumer
 - `oauth.authorize.begin` — authorize endpoint accepted a valid request.
 - `oauth.authorize.approve` — user consented (or trusted client auto-approved).
 - `oauth.authorize.fail` — request rejected; reason in `metadata_json`.
+- `oidc.reauthentication.required` — the existing authentication exceeded the relying party's `max_age`; metadata includes `max_age_seconds`.
 - `oauth.token.exchange` — code exchanged for tokens.
 - `oauth.token.refresh` — refresh used to mint new access token.
 - `oauth.token.revoke` — token revoked via `/oauth/revoke`.
@@ -2580,6 +2588,7 @@ Selected events admins commonly filter on. The full list is observable by enumer
 |---|---|
 | Assertion | The SAML XML element carrying authentication facts. Signed. |
 | Authenticator | A device that holds WebAuthn private keys (Touch ID, Windows Hello, security key, synced passkey). |
+| auth_time | The OIDC NumericDate (Unix seconds) when the user last completed authentication. Refreshing tokens preserves this original value. |
 | at_hash | The OIDC `at_hash` claim — leftmost 128 bits of SHA-256 of the access token, base64url-encoded. Binds the ID token to the access token. |
 | Audit chain | The hash-linked sequence of audit log rows. |
 | Bearer token | A credential that, by holding it, grants access. The opposite of proof-of-possession. |
@@ -2591,6 +2600,7 @@ Selected events admins commonly filter on. The full list is observable by enumer
 | Discovery document | The JSON at `/.well-known/openid-configuration`. |
 | Issuer | The URL that identifies an OIDC provider. Blackwall's `app_url`. |
 | JWKS | JSON Web Key Set. The public keys at `/oauth/jwks`. |
+| max_age | An optional OIDC authorization-request parameter, in non-negative whole seconds, requiring the user's `auth_time` to be no older than that limit. |
 | Nonce | A one-shot random value sent with an OIDC request and echoed in the ID token. |
 | Organisation | The tenant boundary. |
 | PKCE | Proof Key for Code Exchange (RFC 7636). Mandatory in Blackwall. |

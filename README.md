@@ -7,7 +7,8 @@ authentication. Single static binary, no external runtime dependencies.
 
 - **OAuth 2.1 / OIDC** — Authorisation Code + PKCE (S256), refresh tokens
   (single-use with token-family revocation), token revocation (RFC 7009),
-  introspection (RFC 7662), discovery, JWKS, ID tokens with `at_hash`, UserInfo.
+  introspection (RFC 7662), discovery, JWKS, ID tokens with `at_hash` and
+  `auth_time`, `max_age` reauthentication enforcement, UserInfo.
 - **WebAuthn** — passwordless authentication via passkeys (ES256 / RS256).
   Sign-counter regression detection, mandatory User Verification (UV), full
   CBOR / COSE attestation parsing.

@@ -100,6 +100,7 @@
                             <input class="form-check-input" type="checkbox" id="oidcEnabled" name="oidc_enabled" value="1" {{if .Client.OIDCEnabled}}checked{{end}}>
                             <label class="form-check-label" for="oidcEnabled">OIDC enabled (issue ID tokens)</label>
                         </div>
+                        <div class="form-text small">When enabled, <code>openid</code> requests receive an ID token containing <code>auth_time</code>. A relying party's <code>max_age</code> parameter can force a fresh WebAuthn check.</div>
                     </div>
                 </div>
             </div>
@@ -121,6 +122,7 @@
             <dt class="col-sm-3">Access lifetime</dt><dd class="col-sm-9">{{.Client.AccessTokenLifetime}}s</dd>
             <dt class="col-sm-3">Refresh lifetime</dt><dd class="col-sm-9">{{.Client.RefreshTokenLifetime}}s</dd>
             <dt class="col-sm-3">OIDC enabled</dt><dd class="col-sm-9">{{.Client.OIDCEnabled}}</dd>
+            <dt class="col-sm-3">Authentication age</dt><dd class="col-sm-9">ID tokens carry <code>auth_time</code>; relying parties may enforce freshness with <code>max_age</code>.</dd>
             <dt class="col-sm-3">Scopes</dt><dd class="col-sm-9"><code>{{range .Client.Scopes}}{{.}} {{end}}</code></dd>
             <dt class="col-sm-3">Redirect URIs</dt><dd class="col-sm-9"><code>{{range .Client.RedirectURIs}}{{.}}<br>{{end}}</code></dd>
         </dl>

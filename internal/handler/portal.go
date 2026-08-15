@@ -144,6 +144,7 @@ func (h *PortalHandler) LoginVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sess.Set("user_id", cred.UserID)
+	sess.Set("auth_time", time.Now().Unix())
 	sess.Set("login_credential_id", cred.ID)
 	sess.RegenerateID()
 

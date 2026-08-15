@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -56,7 +57,7 @@ func (h *OAuthHandler) Discovery(w http.ResponseWriter, r *http.Request) {
 		"revocation_endpoint":                   issuer + "/oauth/revoke",
 		"introspection_endpoint":                issuer + "/oauth/introspect",
 		"response_types_supported":              []string{"code"},
-		"response_modes_supported":              []string{"query", "fragment", "form_post"},
+		"response_modes_supported":              []string{"query"},
 		"grant_types_supported":                 []string{"authorization_code", "refresh_token"},
 		"subject_types_supported":               []string{"public"},
 		"id_token_signing_alg_values_supported": []string{"RS256"},
@@ -151,6 +152,10 @@ func (h *OAuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 		redirectOAuthErr(w, r, redirectURI, errCode, errDesc, params.Get("state"))
 		return
 	}
+	if isOIDC && !client.OIDCEnabled {
+		redirectOAuthErr(w, r, redirectURI, "unauthorized_client", "OpenID Connect is disabled for this client", params.Get("state"))
+		return
+	}
 	if first := security.FirstDisallowedScope(requestedScopes, client.Scopes); first != "" {
 		redirectOAuthErr(w, r, redirectURI, "invalid_scope", "Scope not allowed", params.Get("state"))
 		return
@@ -161,10 +166,40 @@ func (h *OAuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 	sess.Save()
 
 	userID := sess.GetInt("user_id")
+	reauthenticationReason := ""
 	if userID > 0 && !h.isActiveUser(userID) {
 		sess.Delete("user_id")
+		sess.Delete("auth_time")
 		userID = 0
 		sess.Save()
+	}
+	freshlyAuthenticated := false
+	if freshNonce := sess.GetString("oauth_fresh_nonce"); freshNonce != "" && freshNonce == params.Get("nonce") {
+		freshlyAuthenticated = true
+		sess.Delete("oauth_fresh_nonce")
+		sess.Save()
+	}
+	if userID > 0 && params.Get("max_age") != "" && !freshlyAuthenticated {
+		maxAge, _ := strconv.ParseInt(params.Get("max_age"), 10, 64)
+		authTime := int64(sess.GetInt("auth_time"))
+		if authTime <= 0 {
+			authTime = int64(sess.GetInt("created_at"))
+		}
+		now := time.Now().Unix()
+		if authTime <= 0 || authTime > now+30 || now-authTime > maxAge {
+			reauthenticationReason = "max_age"
+			if audit != nil {
+				audit.LogInfo("oidc.reauthentication.required", service.AuditMeta{
+					"actor_user_id":   userID,
+					"oauth_client_id": client.ID,
+					"max_age_seconds": maxAge,
+				})
+			}
+			sess.Delete("user_id")
+			sess.Delete("auth_time")
+			userID = 0
+			sess.Save()
+		}
 	}
 
 	// `prompt` handling (OIDC Core §3.1.2.1). The values that actually
@@ -189,8 +224,10 @@ func (h *OAuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 		// that guarantee should also pass id_token_hint and verify the sub
 		// claim on its side. Tracked for the next conformance pass.
 	}
-	if prompt == "login" {
+	if prompt == "login" && !freshlyAuthenticated {
+		reauthenticationReason = "prompt_login"
 		sess.Delete("user_id")
+		sess.Delete("auth_time")
 		userID = 0
 		sess.Save()
 	}
@@ -199,10 +236,12 @@ func (h *OAuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 		org, _ := h.orgRepo.FindByID(project.OrganizationID)
 		csrfToken, _ := security.GenerateCSRFToken(w, r)
 		tmpl.Standalone(w, "oauth/login.html", map[string]interface{}{
-			"ClientName":   client.Name,
-			"ReturnURL":    redirectURI,
-			"Organization": org,
-			"CSRFToken":    csrfToken,
+			"ClientName":             client.Name,
+			"ReturnURL":              redirectURI,
+			"Organization":           org,
+			"CSRFToken":              csrfToken,
+			"ReauthenticationReason": reauthenticationReason,
+			"MaxAge":                 params.Get("max_age"),
 		})
 		return
 	}
@@ -321,6 +360,12 @@ func (h *OAuthHandler) AuthorizePost(w http.ResponseWriter, r *http.Request) {
 		redirectOAuthErr(w, r, redirectURI, errCode, errDesc, paramsMap["state"])
 		return
 	}
+	if isOIDC && !client.OIDCEnabled {
+		sess.Delete("oauth_auth_request")
+		sess.Save()
+		redirectOAuthErr(w, r, redirectURI, "unauthorized_client", "OpenID Connect is disabled for this client", paramsMap["state"])
+		return
+	}
 
 	if first := security.FirstDisallowedScope(requestedScopes, client.Scopes); first != "" {
 		sess.Delete("oauth_auth_request")
@@ -369,9 +414,14 @@ func (h *OAuthHandler) AuthorizePost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	authTime := int64(sess.GetInt("auth_time"))
+	if authTime <= 0 {
+		authTime = int64(sess.GetInt("created_at"))
+	}
 	code, err := h.app.OAuth.CreateAuthorizationCode(
 		client.ID, userID, project.ID, redirectURI,
 		requestedScopes, paramsMap["code_challenge"], paramsMap["code_challenge_method"], paramsMap["nonce"],
+		authTime,
 	)
 	if err != nil {
 		redirectOAuthErr(w, r, redirectURI, "server_error", "", paramsMap["state"])
@@ -821,8 +871,12 @@ func (h *OAuthHandler) LoginVerify(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sess.Set("user_id", cred.UserID)
+	sess.Set("auth_time", time.Now().Unix())
 	if authRequest != nil {
 		sess.Set("oauth_auth_request", authRequest)
+		if paramsMap, ok := authRequest.(map[string]string); ok && paramsMap["nonce"] != "" {
+			sess.Set("oauth_fresh_nonce", paramsMap["nonce"])
+		}
 	}
 	sess.RegenerateID()
 	sess.Save()

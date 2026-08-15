@@ -27,6 +27,7 @@
     <li><code>security.csrf.fail</code> spike → likely browser misbehaviour or active cross-site attack attempt.</li>
     <li>Repeated <code>security.ratelimit.hit</code> → either client misuse or brute-force attempt; correlate by <code>ip_address</code>.</li>
     <li><code>oauth.authorize.fail</code> with <code>error_code=invalid_client</code> from one IP → enumeration attempt.</li>
+    <li><code>oidc.reauthentication.required</code> records when a relying party's <code>max_age</code> forced a fresh passkey check; repeated events may indicate an intentionally strict client policy.</li>
     <li>Rising <code>fail</code>-outcome counts on the dashboard breakdown — investigate by event_type.</li>
 </ul>
 {{end}}
