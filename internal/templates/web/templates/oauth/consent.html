@@ -95,6 +95,13 @@
             opacity: 0.85;
         }
 
+        .conn-logo .client-favicon {
+            width: 30px;
+            height: 30px;
+            object-fit: contain;
+            border-radius: 6px;
+        }
+
         .conn-logo .client-initial {
             font-size: 1.25rem;
             font-weight: 700;
@@ -302,6 +309,7 @@
                         <span></span><span></span><span></span>
                     </div>
                     <div class="conn-logo">
+                        <img src="{{.FaviconURL}}" class="client-favicon" alt="" onload="this.nextElementSibling.hidden=true" onerror="this.hidden=true">
                         <span class="client-initial">{{printf "%.1s" .Client.Name}}</span>
                     </div>
                 </div>

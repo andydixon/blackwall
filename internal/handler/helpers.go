@@ -29,6 +29,7 @@ type App struct {
 	SCIM        *service.SCIMService
 	SAML        *service.SAMLService
 	Licences    *service.LicenceService
+	Favicons    *service.FaviconService
 }
 
 func jsonError(w http.ResponseWriter, err string, status int) {

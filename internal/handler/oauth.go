@@ -2,6 +2,7 @@ package handler
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
 	"encoding/json"
@@ -268,6 +269,7 @@ func (h *OAuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	csrfToken, _ := security.GenerateCSRFToken(w, r)
+	faviconQuery := url.Values{"client_id": {client.ClientID}, "redirect_uri": {redirectURI}}
 	tmpl.Standalone(w, "oauth/consent.html", map[string]interface{}{
 		"Client":               client,
 		"Project":              project,
@@ -277,7 +279,60 @@ func (h *OAuthHandler) Authorize(w http.ResponseWriter, r *http.Request) {
 		"PrivilegeLevelNumber": role.PrivilegeLevel,
 		"CSRFToken":            csrfToken,
 		"Params":               urlValuesToMap(params),
+		"FaviconURL":           "/oauth/client-favicon?" + faviconQuery.Encode(),
 	})
+}
+
+// ClientFavicon serves a small, passive image fetched from the exact registered
+// redirect URI used by the OAuth request. The service pins public DNS answers
+// before connecting, so this endpoint cannot be repurposed to reach an internal
+// or link-local address.
+func (h *OAuthHandler) ClientFavicon(w http.ResponseWriter, r *http.Request) {
+	if h.app == nil || h.app.Favicons == nil {
+		http.NotFound(w, r)
+		return
+	}
+	if h.app.RateLimit != nil && !h.app.RateLimit.Check("ip:"+getIP(r), "oauth.client_favicon", 120, 60) {
+		w.Header().Set("Cache-Control", "no-store")
+		http.Error(w, "favicon unavailable", http.StatusTooManyRequests)
+		return
+	}
+
+	clientID := r.URL.Query().Get("client_id")
+	redirectURI := r.URL.Query().Get("redirect_uri")
+	if len(clientID) == 0 || len(clientID) > 255 || len(redirectURI) == 0 || len(redirectURI) > 2048 {
+		w.Header().Set("Cache-Control", "no-store")
+		http.NotFound(w, r)
+		return
+	}
+	client, err := h.clientRepo.FindByClientID(clientID)
+	if err != nil || client == nil || !client.IsActive() || !client.HasRedirectURI(redirectURI) {
+		w.Header().Set("Cache-Control", "no-store")
+		http.NotFound(w, r)
+		return
+	}
+
+	data, contentType, err := h.app.Favicons.Fetch(r.Context(), redirectURI)
+	if err != nil {
+		w.Header().Set("Cache-Control", "no-store")
+		http.NotFound(w, r)
+		return
+	}
+	etagBytes := sha256.Sum256(data)
+	etag := `"` + base64.RawURLEncoding.EncodeToString(etagBytes[:18]) + `"`
+	if r.Header.Get("If-None-Match") == etag {
+		w.Header().Set("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400")
+		w.Header().Set("ETag", etag)
+		w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	w.Header().Set("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400")
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	w.Header().Set("Cross-Origin-Resource-Policy", "same-origin")
+	w.Header().Set("ETag", etag)
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(data)
 }
 
 func (h *OAuthHandler) AuthorizePost(w http.ResponseWriter, r *http.Request) {

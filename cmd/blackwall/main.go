@@ -119,6 +119,7 @@ func main() {
 		SCIM:        scimSvc,
 		SAML:        samlSvc,
 		Licences:    licenceSvc,
+		Favicons:    service.NewFaviconService(),
 	}
 
 	oauthHandler := handler.NewOAuthHandler(app, database)
@@ -178,6 +179,7 @@ func main() {
 	// OAuth endpoints
 	r.Get("/oauth/authorize", oauthHandler.Authorize)
 	r.Post("/oauth/authorize", oauthHandler.AuthorizePost)
+	r.Get("/oauth/client-favicon", oauthHandler.ClientFavicon)
 	r.Post("/oauth/login/challenge", oauthHandler.LoginChallenge)
 	r.Post("/oauth/login/verify", oauthHandler.LoginVerify)
 	r.Post("/oauth/token", oauthHandler.Token)

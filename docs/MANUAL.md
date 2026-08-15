@@ -595,6 +595,15 @@ Once verified, inbound requests with that `Host` header automatically pick up th
 
 If a request arrives on a host that does not match any verified custom domain, the platform default branding is used.
 
+During OAuth authorisation, Blackwall displays the calling site's conventional
+`/favicon.ico` in place of the generated client initial when it can be
+retrieved safely. The source is derived only from the exact registered redirect
+URI in the validated request. Fetches require HTTPS on port 443, resolve and pin
+public DNS addresses, do not follow redirects or send cookies, accept only a
+small passive raster/icon response, and use a bounded in-memory cache. Private,
+loopback, link-local, reserved, IP-literal, oversized, SVG, or non-image targets
+fall back to the client initial.
+
 ## Chapter 9: Project Licences
 
 Project licences are signed entitlement statements for a legal person or
