@@ -30,6 +30,7 @@ This manual is written in British English. Spec-prescribed identifiers such as `
 - Chapter 6: The Approval Workflow
 - Chapter 7: Per-Project Feature Flags
 - Chapter 8: Branding and Custom Domains
+- Chapter 9: Project Licences
 
 **Part IV — OAuth 2.1 and OpenID Connect**
 - Chapter 1: Concepts and Terminology
@@ -86,7 +87,8 @@ This manual is written in British English. Spec-prescribed identifiers such as `
 - Chapter 2: Endpoint Index
 - Chapter 3: Capability Matrix
 - Chapter 4: Audit Event Catalogue
-- Chapter 5: Glossary
+- Chapter 5: Project Licence Protocol
+- Chapter 6: Glossary
 
 ---
 
@@ -101,6 +103,8 @@ What you can do with Blackwall:
 - Define **organisations**, each with their own admin user and project portfolio.
 - Run **projects** with bespoke privilege ladders and per-user assignments.
 - Issue and revoke **OAuth clients** for downstream applications.
+- Issue, verify, and revoke exact-hostname-bound **project licences** for a
+  person or business.
 - Enrol users with one-time **WebAuthn credentials**.
 - Apply **custom OIDC claims** at four merge layers (organisation, project, user, user × project).
 - Act as a **SAML 2.0 Identity Provider** for legacy applications that cannot speak OIDC.
@@ -590,6 +594,38 @@ Mapping `login.customer.com → Blackwall` is a two-step process:
 Once verified, inbound requests with that `Host` header automatically pick up the organisation's branding overlay. The OIDC issuer URL is unchanged — only the login UI is rebranded.
 
 If a request arrives on a host that does not match any verified custom domain, the platform default branding is used.
+
+## Chapter 9: Project Licences
+
+Project licences are signed entitlement statements for a legal person or
+business. They are independent of OAuth clients and user assignments. Open a
+project and select **Licences** to inspect its register.
+
+Each licence records:
+
+- A generated licence UUID and the project UUID.
+- Entity type (`person` or `business`), legal name, and optional customer or
+  company reference.
+- One to 32 exact DNS hostnames or IP literals. URLs, ports, Unicode input, and
+  wildcards are rejected; use punycode for an international DNS name.
+- Optional lower-case feature identifiers and a maximum instance count.
+- Issue, not-before, and expiry timestamps in UTC.
+- The signing-key ID and a signed online-check interval.
+
+Only a `super_admin` has `manage_licences`, so only that role can issue or
+revoke. A scoped `operator` has `view_licences` and can inspect and download the
+licence for projects they can reach. Issuance, failed issuance, and revocation
+are audited without copying the entity name or token into the audit log.
+
+The downloaded `.bwlic` file is an Ed25519-signed `BWLIC1` envelope. Editing any
+claim invalidates the signature. Revocation is enforced by the authoritative
+`POST /licences/v1/verify` endpoint; offline verification cannot learn about a
+new revocation until it reconnects. Integrators must therefore refresh online
+within the signed `online_check_seconds` and fail closed after that deadline.
+
+See [Verifying Blackwall Project Licences](licensing/VERIFYING_LICENCES.md) for
+the protocol, threat model, key generation and rotation runbook, status codes,
+and complete PHP, Go, Rust, and Java validation examples.
 
 ---
 
@@ -2429,6 +2465,15 @@ The main configuration file is `config.yaml`. Every key can also be supplied via
 | `approval_pending_max_age_days` | 14 | Auto-reject after this many days. |
 | `admin_approval_pending_warning_days` | 3 | Dashboard warning threshold. |
 
+### Project licences
+
+| Key | Default | Purpose |
+|---|---|---|
+| `licence_signing_key_file` | (empty) | Mode-0600 Ed25519 PKCS#8 key path. Empty disables issuance but not verification or revocation. |
+| `licence_max_validity_days` | 365 | Maximum validity accepted when issuing; range 1–3650. |
+| `licence_clock_skew_seconds` | 120 | Verification tolerance; range 0–600. |
+| `licence_online_check_seconds` | 86400 | Signed maximum interval between authoritative revocation checks; range 300–604800. |
+
 ### Metrics
 
 | Key | Default | Purpose |
@@ -2462,6 +2507,13 @@ The main configuration file is `config.yaml`. Every key can also be supplied via
 | `/oauth/userinfo` | GET, POST | Userinfo endpoint. |
 | `/oauth/revoke` | POST | RFC 7009 revocation. |
 | `/oauth/introspect` | POST | RFC 7662 introspection. |
+
+### Project licence verification
+
+| Path | Method | Purpose |
+|---|---|---|
+| `/.well-known/blackwall-licence-keys.json` | GET | Ed25519 public keys, fingerprints, and active/retired/compromised state. |
+| `/licences/v1/verify` | POST | Signature, issuer, project, exact hostname, time, project state, database anchor, and revocation check. |
 
 ### SAML 2.0 IdP
 
@@ -2505,7 +2557,7 @@ The complete capability list per role is rendered at `/admin/roles`. The highlig
 | Capability | super_admin | operator | auditor |
 |---|---|---|---|
 | `view_audit` | ✓ | ✓ | ✓ |
-| `view_users` / `view_projects` | ✓ | ✓ | ✓ |
+| `view_users` / `view_projects` | ✓ | ✓ | — |
 | `manage_users` | ✓ | ✓ | — |
 | `manage_projects` | ✓ | ✓ | — |
 | `manage_clients` | ✓ | ✓ | — |
@@ -2520,6 +2572,8 @@ The complete capability list per role is rendered at `/admin/roles`. The highlig
 | `update_project_settings_direct` | ✓ | — | — |
 | `change_project_status_direct` | ✓ | — | — |
 | `switch_organization_admin` | ✓ | — | — |
+| `view_licences` | ✓ | ✓ | — |
+| `manage_licences` | ✓ | — | — |
 | `view_docs` | ✓ | ✓ | ✓ |
 
 ## Chapter 4: Audit Event Catalogue
@@ -2555,6 +2609,7 @@ Selected events admins commonly filter on. The full list is observable by enumer
 - `admin.saml.sp.create` / `delete`
 - `admin.org.branding.update`
 - `admin.org.domain.add` / `delete`
+- `admin.licence.issue` / `issue.fail` / `revoke`
 
 ### Approvals
 
@@ -2582,7 +2637,20 @@ Selected events admins commonly filter on. The full list is observable by enumer
 - `portal.login.success` / `fail`
 - `admin.login.success` / `fail`
 
-## Chapter 5: Glossary
+## Chapter 5: Project Licence Protocol
+
+The normative protocol, validation sequence, anti-spoofing requirements, key
+rotation and compromise response, and language examples live in
+[Verifying Blackwall Project Licences](licensing/VERIFYING_LICENCES.md). Keep
+that guide with the application integration; a licence must never be accepted
+merely because its JSON decodes successfully.
+
+The authoritative verifier is `https://blackwall.cx/licences/v1/verify` for
+licences whose signed issuer is `https://blackwall.cx`. Self-hosted issuers must
+use their own fixed `app_url`; consumers must not take the expected issuer from
+the unverified licence itself.
+
+## Chapter 6: Glossary
 
 | Term | Definition |
 |---|---|
@@ -2600,6 +2668,7 @@ Selected events admins commonly filter on. The full list is observable by enumer
 | Discovery document | The JSON at `/.well-known/openid-configuration`. |
 | Issuer | The URL that identifies an OIDC provider. Blackwall's `app_url`. |
 | JWKS | JSON Web Key Set. The public keys at `/oauth/jwks`. |
+| Licence envelope | A versioned `BWLIC1` payload and Ed25519 signature. It is not a bearer login token. |
 | max_age | An optional OIDC authorization-request parameter, in non-negative whole seconds, requiring the user's `auth_time` to be no older than that limit. |
 | Nonce | A one-shot random value sent with an OIDC request and echoed in the ID token. |
 | Organisation | The tenant boundary. |

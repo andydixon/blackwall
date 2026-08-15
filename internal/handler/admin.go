@@ -4304,6 +4304,7 @@ var docsGuidePages = []struct {
 	{"access-model", "Access Model and Scope", "How admin scope, super admin rules, and visibility boundaries work.", "docs/access_model.html"},
 	{"users-and-enrolment", "Users and Enrolment", "User lifecycle, enrolment links, WebAuthn credentials, and status control.", "docs/users_and_enrolment.html"},
 	{"projects-and-privileges", "Projects, Privileges, and Assignments", "Project governance, privilege levels, and assignment administration.", "docs/projects_and_privileges.html"},
+	{"project-licences", "Project Licences", "Issue, verify, download, revoke, and rotate signing keys safely.", "docs/project_licences.html"},
 	{"oauth-clients", "OAuth Clients and Authorisation Flows", "Client configuration, security posture, and flow expectations.", "docs/oauth_clients.html"},
 	{"custom-claims", "Custom OIDC Claims", "Per-user and per-project key/value pairs merged into ID tokens and userinfo.", "docs/custom_claims.html"},
 	{"approvals", "Approvals Workflow", "Submission, decisioning, denial reasons, and operational handling.", "docs/approvals.html"},

@@ -26,6 +26,10 @@
         <tr><td><code>approval_pending_max_age_days</code></td><td><code>14</code></td><td>Pending approval requests older than this are auto-cancelled.</td></tr>
         <tr><td><code>admin_approval_pending_warning_days</code></td><td><code>3</code></td><td>Dashboard SLA warning threshold.</td></tr>
         <tr><td><code>event_metrics_push_*</code></td><td>—</td><td>See Metrics page.</td></tr>
+        <tr><td><code>licence_signing_key_file</code></td><td>—</td><td>Mode-0600 Ed25519 PKCS#8 key path. Empty disables issuance, not verification or revocation.</td></tr>
+        <tr><td><code>licence_max_validity_days</code></td><td><code>365</code></td><td>Issue-time validity ceiling; maximum 3650.</td></tr>
+        <tr><td><code>licence_clock_skew_seconds</code></td><td><code>120</code></td><td>Verification clock tolerance; maximum 600.</td></tr>
+        <tr><td><code>licence_online_check_seconds</code></td><td><code>86400</code></td><td>Signed maximum interval between authoritative revocation checks.</td></tr>
     </tbody>
 </table>
 
@@ -35,6 +39,8 @@
     <tbody>
         <tr><td>GET</td><td><code>/.well-known/openid-configuration</code></td><td>OIDC discovery</td></tr>
         <tr><td>GET</td><td><code>/oauth/jwks</code></td><td>JSON Web Key Set</td></tr>
+        <tr><td>GET</td><td><code>/.well-known/blackwall-licence-keys.json</code></td><td>Project licence public-key registry</td></tr>
+        <tr><td>POST</td><td><code>/licences/v1/verify</code></td><td>Authoritative licence and revocation check</td></tr>
         <tr><td>GET / POST</td><td><code>/oauth/authorize</code></td><td>Authorisation endpoint + consent submission</td></tr>
         <tr><td>POST</td><td><code>/oauth/token</code></td><td>Code, refresh exchange</td></tr>
         <tr><td>POST</td><td><code>/oauth/revoke</code></td><td>RFC 7009 revocation</td></tr>
@@ -59,6 +65,8 @@
     <dd>Data Encryption Key. Per-CryptBin-item AES-256 key generated client-side; wrapped under the server-side KEK before storage.</dd>
     <dt>KEK</dt>
     <dd>Key Encryption Key. Server-side XChaCha20-Poly1305 key used to wrap each CryptBin DEK. Single key, identified by version tag.</dd>
+    <dt>Licence envelope</dt>
+    <dd>A <code>BWLIC1</code> canonical payload and Ed25519 signature, bound to an entity, project, exact hostnames, and a validity window.</dd>
     <dt>Privilege level</dt>
     <dd>Numeric rung within a project's privilege ladder; lower number = more privilege.</dd>
     <dt>Scope (admin)</dt>

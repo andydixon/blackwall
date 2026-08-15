@@ -20,6 +20,9 @@ authentication. Single static binary, no external runtime dependencies.
   approval workflow for sensitive mutations, scope-aware visibility for
   organisations and projects, integrity-chained audit log with HMAC-signed
   CSV export, in-app documentation guide.
+- **Project licences** — dedicated Ed25519-signed, exact-hostname-bound licence
+  envelopes for a person or business, with feature and instance claims,
+  scoped administration, key rotation, online verification, and revocation.
 - **CryptBin** — end-to-end encrypted blob storage. Client-side AES-256-GCM
   on payloads; server-side XChaCha20-Poly1305 wraps the per-item DEK with
   AAD bound to the blob ID. Optional per-item WebAuthn binding.
@@ -145,6 +148,20 @@ openssl rand -hex 32       # session_secret, csrf_secret, audit_export_signing_k
 openssl rand -base64 32    # cryptbin_kek_base64
 ```
 
+To enable project licence issuance, generate a separate Ed25519 PKCS#8 key and
+mount it read-only. The application refuses loose permissions and never stores
+the private key in MySQL:
+
+```bash
+umask 077
+openssl genpkey -algorithm Ed25519 -out /run/secrets/blackwall_licence_ed25519.pem
+chmod 0600 /run/secrets/blackwall_licence_ed25519.pem
+```
+
+Set `licence_signing_key_file` to that path. Leave it blank when the instance
+must verify and revoke existing licences without issuing new ones. See the
+[complete verification and key-rotation guide](docs/licensing/VERIFYING_LICENCES.md).
+
 ## Schema migrations
 
 On startup, the binary applies any pending migrations from
@@ -204,6 +221,8 @@ project — at `/admin/users/{userUuid}/claims`.
 | `POST /oauth/revoke`                    | Token revocation (RFC 7009)                |
 | `POST /oauth/introspect`                | Token introspection (RFC 7662)             |
 | `GET /oauth/userinfo`                   | UserInfo endpoint                          |
+| `GET /.well-known/blackwall-licence-keys.json` | Project licence public-key registry |
+| `POST /licences/v1/verify`              | Authoritative licence and revocation check |
 | `GET /metrics`                          | Prometheus-compatible metrics              |
 
 Full reference inside the admin panel at `/admin/docs/reference`.
@@ -277,3 +296,9 @@ docker/
 - Mutations on users / projects / clients / assignments require a
   capability-gated `_direct` permission OR they route through the approval
   workflow.
+- Project licences use a dedicated Ed25519 key with a key-derived identifier.
+  Online validation verifies the exact signed bytes against the database,
+  rejects revoked/expired/hostname-mismatched licences and disabled projects,
+  and refuses keys marked compromised. Exact hostnames are used instead of
+  ambiguous wildcards. Private signing material is file-only and must be mode
+  0600 or stricter.
