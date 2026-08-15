@@ -68,6 +68,14 @@ type Config struct {
 	ErrorTraceKey      string `yaml:"error_trace_key"`
 	AuditExportSignKey string `yaml:"audit_export_signing_key"`
 
+	// Licence signing uses a dedicated Ed25519 key held in a tightly
+	// permissioned file. Keeping it separate from OAuth/JWT keys prevents
+	// cross-protocol key reuse and lets operators rotate it independently.
+	LicenceSigningKeyFile     string `yaml:"licence_signing_key_file"`
+	LicenceMaxValidityDays    int    `yaml:"licence_max_validity_days"`
+	LicenceClockSkewSeconds   int    `yaml:"licence_clock_skew_seconds"`
+	LicenceOnlineCheckSeconds int    `yaml:"licence_online_check_seconds"`
+
 	ServerAddr          string `yaml:"server_addr"`
 	RequestBodyMaxBytes int64  `yaml:"request_body_max_bytes"`
 }
@@ -148,6 +156,15 @@ func (c *Config) Validate() error {
 	if c.RequestBodyMaxBytes < requiredBodyBytes {
 		return fmt.Errorf("config: request_body_max_bytes must be at least %d for cryptbin_max_upload_bytes=%d", requiredBodyBytes, c.CryptbinMaxUploadBytes)
 	}
+	if c.LicenceMaxValidityDays < 1 || c.LicenceMaxValidityDays > 3650 {
+		return fmt.Errorf("config: licence_max_validity_days must be between 1 and 3650")
+	}
+	if c.LicenceClockSkewSeconds < 0 || c.LicenceClockSkewSeconds > 600 {
+		return fmt.Errorf("config: licence_clock_skew_seconds must be between 0 and 600")
+	}
+	if c.LicenceOnlineCheckSeconds < 300 || c.LicenceOnlineCheckSeconds > 604800 {
+		return fmt.Errorf("config: licence_online_check_seconds must be between 300 and 604800")
+	}
 	return nil
 }
 
@@ -201,6 +218,9 @@ func defaults() *Config {
 		EventMetricsPushIncludeOutcome:  true,
 		ServerAddr:                      ":8080",
 		RequestBodyMaxBytes:             8 * 1024 * 1024,
+		LicenceMaxValidityDays:          365,
+		LicenceClockSkewSeconds:         120,
+		LicenceOnlineCheckSeconds:       86400,
 	}
 }
 
@@ -273,6 +293,10 @@ func overrideFromEnv(cfg *Config) {
 	setStr(&cfg.EventMetricsPushStaticLabels, "EVENT_METRICS_PUSH_STATIC_LABELS")
 	setStr(&cfg.ErrorTraceKey, "ERROR_TRACE_KEY")
 	setStr(&cfg.AuditExportSignKey, "AUDIT_EXPORT_SIGNING_KEY")
+	setStr(&cfg.LicenceSigningKeyFile, "LICENCE_SIGNING_KEY_FILE")
+	setInt(&cfg.LicenceMaxValidityDays, "LICENCE_MAX_VALIDITY_DAYS")
+	setInt(&cfg.LicenceClockSkewSeconds, "LICENCE_CLOCK_SKEW_SECONDS")
+	setInt(&cfg.LicenceOnlineCheckSeconds, "LICENCE_ONLINE_CHECK_SECONDS")
 	setStr(&cfg.ServerAddr, "SERVER_ADDR")
 	setInt64(&cfg.RequestBodyMaxBytes, "REQUEST_BODY_MAX_BYTES")
 

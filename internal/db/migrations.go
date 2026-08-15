@@ -360,6 +360,59 @@ var migrations = []migration{
 			return nil
 		},
 	},
+	{
+		Version:     6,
+		Description: "Ed25519-signed, hostname-bound project licences and signing-key registry",
+		Apply: func(db *sql.DB) error {
+			// Only public key material is persisted. The active private key is
+			// supplied through a permission-restricted file and never enters the
+			// database, backups, admin UI, audit log, or licence-verification API.
+			if _, err := db.Exec(`CREATE TABLE IF NOT EXISTS licence_signing_keys (
+				kid VARCHAR(64) NOT NULL PRIMARY KEY,
+				algorithm VARCHAR(16) NOT NULL,
+				public_key_base64 VARCHAR(128) NOT NULL,
+				status ENUM('active','retired','compromised') NOT NULL DEFAULT 'active',
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				retired_at DATETIME DEFAULT NULL,
+				UNIQUE KEY uk_licence_public_key (public_key_base64)
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`); err != nil {
+				return err
+			}
+
+			// The signed payload and signature are retained byte-for-byte. Online
+			// verification requires both a valid signature and a matching database
+			// record, so possession of a copied token cannot bypass revocation and
+			// possession of a signing key alone cannot invent an online-valid row.
+			_, err := db.Exec(`CREATE TABLE IF NOT EXISTS project_licences (
+				id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+				public_id CHAR(36) NOT NULL UNIQUE,
+				project_id BIGINT UNSIGNED NOT NULL,
+				entity_type ENUM('person','business') NOT NULL,
+				entity_name VARCHAR(255) NOT NULL,
+				entity_reference VARCHAR(255) DEFAULT NULL,
+				hostnames_json TEXT NOT NULL,
+				features_json TEXT NOT NULL,
+				max_instances INT UNSIGNED NOT NULL DEFAULT 1,
+				not_before DATETIME NOT NULL,
+				expires_at DATETIME NOT NULL,
+				issued_at DATETIME NOT NULL,
+				issued_by_user_id BIGINT UNSIGNED DEFAULT NULL,
+				revoked_at DATETIME DEFAULT NULL,
+				revoked_by_user_id BIGINT UNSIGNED DEFAULT NULL,
+				revocation_reason VARCHAR(500) DEFAULT NULL,
+				signing_key_id VARCHAR(64) NOT NULL,
+				payload_json TEXT NOT NULL,
+				signature_base64 VARCHAR(128) NOT NULL,
+				FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+				FOREIGN KEY (issued_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
+				FOREIGN KEY (revoked_by_user_id) REFERENCES users(id) ON DELETE SET NULL,
+				FOREIGN KEY (signing_key_id) REFERENCES licence_signing_keys(kid),
+				INDEX idx_licence_project_status (project_id, revoked_at, expires_at),
+				INDEX idx_licence_key (signing_key_id)
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`)
+			return err
+		},
+	},
 }
 
 // Migrate applies every pending migration in order under a single tracking

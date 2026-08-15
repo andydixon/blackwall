@@ -96,3 +96,13 @@ event_metrics_push_static_labels: ""   # e.g. 'env="prod",region="eu-west"'
 # Symmetric key used by /admin/error-trace to decode the short opaque codes
 # shown to end users on error pages. Blank = falls back to csrf_secret.
 error_trace_key: ""
+
+# ─── Project licensing ──────────────────────────────────────────────────────
+# Optional dedicated Ed25519 PKCS#8 private key. When blank, existing licences
+# can still be checked against registered public keys but issuance is disabled.
+# The file must be mounted read-only with mode 0600 or stricter. Never place it
+# in the repository, image, environment, database, or a shared volume.
+licence_signing_key_file: ""         # set to /run/secrets/blackwall_licence_ed25519.pem to enable issuance
+licence_max_validity_days: 365       # hard upper bound accepted by the issue UI
+licence_clock_skew_seconds: 120      # verifier tolerance; maximum 600
+licence_online_check_seconds: 86400  # signed maximum revocation-check interval

@@ -28,6 +28,7 @@ type App struct {
 	AdminTokens *service.AdminTokenService
 	SCIM        *service.SCIMService
 	SAML        *service.SAMLService
+	Licences    *service.LicenceService
 }
 
 func jsonError(w http.ResponseWriter, err string, status int) {

@@ -73,6 +73,10 @@ func main() {
 	adminTokensSvc := service.NewAdminTokenService(database)
 	scimSvc := service.NewSCIMService(database)
 	samlSvc := service.NewSAMLService(database, jwtMgr)
+	licenceSvc, err := service.NewLicenceService(database, cfg)
+	if err != nil {
+		log.Fatalf("licence service init failed: %v", err)
+	}
 	// Wire custom-claims into the OAuth service so it can merge them into
 	// every issued ID token + userinfo response.
 	oauthSvc.SetClaimsProvider(claimsSvc)
@@ -114,6 +118,7 @@ func main() {
 		AdminTokens: adminTokensSvc,
 		SCIM:        scimSvc,
 		SAML:        samlSvc,
+		Licences:    licenceSvc,
 	}
 
 	oauthHandler := handler.NewOAuthHandler(app, database)
@@ -167,6 +172,8 @@ func main() {
 	// OIDC / OAuth discovery
 	r.Get("/.well-known/openid-configuration", oauthHandler.Discovery)
 	r.Get("/oauth/jwks", oauthHandler.JWKS)
+	r.Get("/.well-known/blackwall-licence-keys.json", adminHandler.LicenceKeys)
+	r.Post("/licences/v1/verify", adminHandler.LicenceVerify)
 
 	// OAuth endpoints
 	r.Get("/oauth/authorize", oauthHandler.Authorize)
