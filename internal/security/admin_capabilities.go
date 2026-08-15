@@ -26,13 +26,14 @@ var capabilityMatrix = map[string][]string{
 		"update_project_settings_direct", "update_client_settings_direct",
 		"assignment_mutations_direct",
 		"view_cryptbin", "manage_cryptbin",
+		"view_licences", "manage_licences",
 		"view_approvals", "decide_approvals",
 	},
 	RoleOperator: {
 		"view_dashboard", "view_users", "manage_users", "view_projects", "manage_projects",
 		"view_clients", "manage_clients", "view_assignments", "manage_assignments",
 		"view_privileges", "manage_privileges", "view_audit", "view_docs",
-		"view_approvals", "view_scope_debug", "view_organizations",
+		"view_approvals", "view_scope_debug", "view_organizations", "view_licences",
 	},
 	RoleAuditor: {
 		"view_dashboard", "view_audit", "view_maintenance", "decode_error_trace",

@@ -182,6 +182,17 @@ func (s *LicenceService) Enabled() bool {
 	return len(s.privateKey) == ed25519.PrivateKeySize
 }
 
+// IssuanceReady confirms that the in-memory key is still active in the public
+// registry. A key marked compromised stops issuance immediately, without
+// waiting for a restart.
+func (s *LicenceService) IssuanceReady() bool {
+	if !s.Enabled() {
+		return false
+	}
+	var status string
+	return s.db.QueryRow(`SELECT status FROM licence_signing_keys WHERE kid=?`, s.keyID).Scan(&status) == nil && status == "active"
+}
+
 func (s *LicenceService) ActiveKeyID() string { return s.keyID }
 
 func (s *LicenceService) Issuer() string { return s.issuer }
@@ -195,6 +206,14 @@ func (s *LicenceService) registerActiveKey() error {
 	}
 	defer tx.Rollback()
 	encoded := base64.RawURLEncoding.EncodeToString(s.publicKey)
+	var existingStatus string
+	err = tx.QueryRow(`SELECT status FROM licence_signing_keys WHERE kid=?`, s.keyID).Scan(&existingStatus)
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+	if existingStatus == "compromised" {
+		return errors.New("refusing to reactivate a licence key marked compromised")
+	}
 	if _, err := tx.Exec(`UPDATE licence_signing_keys
 		SET status='retired', retired_at=COALESCE(retired_at, NOW())
 		WHERE status='active' AND kid<>?`, s.keyID); err != nil {
@@ -214,12 +233,19 @@ func (s *LicenceService) registerActiveKey() error {
 // Issue creates a signed licence and anchors the exact signed bytes in the
 // database. No licence is returned unless persistence succeeds.
 func (s *LicenceService) Issue(input LicenceIssueRequest) (*ProjectLicence, error) {
-	if !s.Enabled() {
-		return nil, errors.New("licence issuance is disabled: no signing key configured")
+	if !s.IssuanceReady() {
+		return nil, errors.New("licence issuance is disabled: no active signing key configured")
 	}
 	parsedProjectUUID, parseErr := uuid.Parse(input.ProjectUUID)
 	if input.ProjectID < 1 || parseErr != nil || parsedProjectUUID.String() != input.ProjectUUID {
 		return nil, errors.New("valid project required")
+	}
+	var projectStatus string
+	if err := s.db.QueryRow(`SELECT status FROM projects WHERE id=? AND uuid=?`, input.ProjectID, input.ProjectUUID).Scan(&projectStatus); err != nil {
+		return nil, errors.New("project not found")
+	}
+	if projectStatus != "active" {
+		return nil, errors.New("licences can only be issued for an active project")
 	}
 	entity, err := normaliseLicenceEntity(input.EntityType, input.EntityName, input.EntityReference)
 	if err != nil {

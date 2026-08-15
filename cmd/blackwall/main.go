@@ -292,6 +292,10 @@ func main() {
 		r.Post("/projects/create", adminHandler.ProjectStore)
 		r.Get("/projects/{projectUuid}", adminHandler.ProjectDetail)
 		r.Post("/projects/{projectUuid}/update", adminHandler.ProjectUpdate)
+		r.Get("/projects/{projectUuid}/licences", adminHandler.ProjectLicences)
+		r.Post("/projects/{projectUuid}/licences/issue", adminHandler.ProjectLicenceIssue)
+		r.Get("/projects/{projectUuid}/licences/{licenceId}/download", adminHandler.ProjectLicenceDownload)
+		r.Post("/projects/{projectUuid}/licences/{licenceId}/revoke", adminHandler.ProjectLicenceRevoke)
 
 		// Privilege levels
 		r.Get("/projects/{projectUuid}/privileges", adminHandler.PrivilegeLevels)

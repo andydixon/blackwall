@@ -1,0 +1,91 @@
+{{define "content"}}
+<div class="row mt-4 align-items-center">
+    <div class="col">
+        <div class="page-header"><h2>Project licences</h2></div>
+        <p class="text-muted small mb-0">Project: <a href="/admin/projects/{{.Project.UUID}}" class="text-light">{{.Project.Name}}</a> · <code>{{.Project.UUID}}</code></p>
+    </div>
+    <div class="col-auto">
+        <a href="/admin/projects/{{.Project.UUID}}" class="btn btn-outline-secondary">Back to project</a>
+    </div>
+</div>
+
+{{if .Success}}<div class="alert alert-success mt-3">{{if eq .Success "issued"}}Licence issued and ready to download.{{else if eq .Success "revoked"}}Licence revoked. Online checks reject it immediately.{{else}}{{.Success}}{{end}}</div>{{end}}
+{{if .Error}}<div class="alert alert-danger mt-3">{{if eq .Error "invalid"}}The licence details were invalid or signing failed. Check the entity, exact hostnames, features, instance limit, validity, and signing-key configuration.{{else if eq .Error "csrf"}}Session expired — refresh and try again.{{else if eq .Error "rate_limited"}}Too many licence changes. Wait and try again.{{else if eq .Error "revoke_failed"}}The licence could not be revoked; it may already be revoked.{{else}}{{.Error}}{{end}}</div>{{end}}
+
+<div class="card mt-3 border-info-subtle">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Signing service</span>
+        {{if .IssuanceEnabled}}<span class="badge bg-success">ready</span>{{else}}<span class="badge bg-warning text-dark">issuance disabled</span>{{end}}
+    </div>
+    <div class="card-body small">
+        {{if .IssuanceEnabled}}
+        <p class="mb-2">New licences are signed with a dedicated Ed25519 key. Active key: <code>{{.ActiveKeyID}}</code>.</p>
+        {{else}}
+        <p class="mb-2">Configure <code>licence_signing_key_file</code> with a mode-0600 Ed25519 PKCS#8 key to enable issuance.</p>
+        {{end}}
+        <p class="text-muted mb-0">A signature proves origin and prevents claim editing. The public verification service additionally checks the database record, revocation, project state, exact hostname, issuer, and time window. Wildcard hostnames are deliberately not accepted.</p>
+    </div>
+</div>
+
+<div class="card mt-3">
+    <div class="card-header">Issued licences</div>
+    <div class="table-responsive">
+        <table class="table table-dark table-sm mb-0 align-middle">
+            <thead><tr><th>Entity</th><th>Hostnames</th><th>Features</th><th>Instances</th><th>Issued / expires</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+                {{range .Licences}}
+                {{$state := .State $.Now}}
+                <tr>
+                    <td><strong>{{.EntityName}}</strong><br><span class="text-muted small">{{.EntityType}}{{if .EntityReference.Valid}} · {{.EntityReference.String}}{{end}}</span><br><code class="small">{{.PublicID}}</code></td>
+                    <td class="small">{{range .Hostnames}}<code class="d-block">{{.}}</code>{{end}}</td>
+                    <td class="small">{{range .Features}}<span class="badge text-bg-dark border me-1">{{.}}</span>{{else}}<span class="text-muted">No feature restrictions</span>{{end}}</td>
+                    <td>{{.MaxInstances}}</td>
+                    <td class="small"><span class="text-muted">Issued</span> {{.IssuedAt.Format "2006-01-02 15:04 UTC"}}<br><span class="text-muted">Expires</span> {{.ExpiresAt.Format "2006-01-02 15:04 UTC"}}</td>
+                    <td>{{if eq $state "active"}}<span class="badge bg-success">Active</span>{{else if eq $state "revoked"}}<span class="badge bg-danger">Revoked</span>{{else if eq $state "expired"}}<span class="badge bg-secondary">Expired</span>{{else}}<span class="badge bg-info text-dark">Scheduled</span>{{end}}{{if .RevocationReason.Valid}}<div class="text-muted small mt-1">{{.RevocationReason.String}}</div>{{end}}</td>
+                    <td class="text-end text-nowrap">
+                        <a href="/admin/projects/{{$.Project.UUID}}/licences/{{.PublicID}}/download" class="btn btn-sm btn-outline-light">Download</a>
+                        {{if and $.CanManage (eq $state "active")}}
+                        <button class="btn btn-sm btn-outline-danger" type="button" data-bs-toggle="collapse" data-bs-target="#revoke-{{.PublicID}}">Revoke</button>
+                        {{end}}
+                    </td>
+                </tr>
+                {{if and $.CanManage (eq $state "active")}}
+                <tr class="collapse" id="revoke-{{.PublicID}}"><td colspan="7">
+                    <form method="POST" action="/admin/projects/{{$.Project.UUID}}/licences/{{.PublicID}}/revoke" class="row g-2 align-items-end">
+                        <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">
+                        <div class="col-md-10"><label class="form-label small">Revocation reason</label><input type="text" class="form-control form-control-sm" name="reason" required maxlength="500" autocomplete="off"></div>
+                        <div class="col-md-2 d-grid"><button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('Revoke this licence permanently?')">Confirm revoke</button></div>
+                    </form>
+                </td></tr>
+                {{end}}
+                {{else}}
+                <tr><td colspan="7" class="text-center text-muted py-4">No licences have been issued for this project.</td></tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{{if .CanManage}}
+<div class="card mt-3">
+    <div class="card-header">Issue a licence</div>
+    <div class="card-body">
+        {{if .IssuanceEnabled}}
+        <form method="POST" action="/admin/projects/{{.Project.UUID}}/licences/issue" class="row g-3">
+            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+            <div class="col-md-3"><label class="form-label">Entity type</label><select class="form-select" name="entity_type" required><option value="business">Business</option><option value="person">Person</option></select></div>
+            <div class="col-md-5"><label class="form-label">Legal name</label><input type="text" class="form-control" name="entity_name" required maxlength="255" autocomplete="off"></div>
+            <div class="col-md-4"><label class="form-label">Customer / company reference</label><input type="text" class="form-control" name="entity_reference" maxlength="255" autocomplete="off"><div class="form-text">Optional; never put secrets here.</div></div>
+            <div class="col-md-6"><label class="form-label">Exact hostnames</label><textarea class="form-control font-monospace" name="hostnames" rows="4" required maxlength="4096" placeholder="app.example.com&#10;api.example.com"></textarea><div class="form-text">One per line or comma-separated. DNS names, punycode names, and IP literals are accepted; ports, URLs, and wildcards are rejected.</div></div>
+            <div class="col-md-6"><label class="form-label">Features</label><textarea class="form-control font-monospace" name="features" rows="4" maxlength="4096" placeholder="api&#10;reporting"></textarea><div class="form-text">Optional lower-case entitlement identifiers. An empty list means no feature restriction in the signed claim.</div></div>
+            <div class="col-md-3"><label class="form-label">Maximum instances</label><input type="number" class="form-control" name="max_instances" value="1" min="1" max="1000000" required></div>
+            <div class="col-md-3"><label class="form-label">Validity (days)</label><input type="number" class="form-control" name="validity_days" value="365" min="1" max="{{.MaxValidityDays}}" required><div class="form-text">Maximum configured value: {{.MaxValidityDays}} days.</div></div>
+            <div class="col-12"><button type="submit" class="btn btn-primary">Sign and issue licence</button></div>
+        </form>
+        {{else}}
+        <div class="alert alert-warning mb-0">Issuance is disabled until a dedicated signing key is configured. Existing licence verification and revocation remain available.</div>
+        {{end}}
+    </div>
+</div>
+{{end}}
+{{end}}
