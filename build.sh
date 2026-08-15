@@ -17,6 +17,8 @@
 #   VERSION   override the auto-detected version (defaults to `git describe`)
 #   GOOS      target OS for the local binary (default: linux)
 #   GOARCH    target arch for the local binary (default: amd64)
+#   VULNERABILITY_SCAN_DATE       RFC 3339 completion time of the last successful scan
+#   VULNERABILITY_SCAN_REFERENCE  opaque CI or report reference for that scan
 
 set -euo pipefail
 
@@ -46,6 +48,8 @@ done
 GIT_TAG="${GIT_TAG:-$(git describe --tags --abbrev=0 2>/dev/null || echo 'dev')}"
 GIT_COMMIT_SHORT="${GIT_COMMIT_SHORT:-$(git rev-parse --short HEAD 2>/dev/null || echo 'unknown')}"
 BUILD_DATE="${BUILD_DATE:-$(date -u +%Y-%m-%dT%H:%M:%SZ)}"
+VULNERABILITY_SCAN_DATE="${VULNERABILITY_SCAN_DATE:-unknown}"
+VULNERABILITY_SCAN_REFERENCE="${VULNERABILITY_SCAN_REFERENCE:-unknown}"
 VERSION="${VERSION:-${GIT_TAG}-${GIT_COMMIT_SHORT}}"
 GOOS="${GOOS:-linux}"
 GOARCH="${GOARCH:-amd64}"
@@ -61,6 +65,7 @@ echo "    version: ${VERSION}"
 echo "    tag:     ${GIT_TAG}"
 echo "    commit:  ${GIT_COMMIT_SHORT}"
 echo "    built:   ${BUILD_DATE}"
+echo "    scan:    ${VULNERABILITY_SCAN_DATE} (${VULNERABILITY_SCAN_REFERENCE})"
 echo "    binary:  $([[ ${DO_BINARY} -eq 1 ]] && echo yes || echo no)"
 echo "    image:   $([[ ${DO_IMAGE}  -eq 1 ]] && echo yes || echo no) (${IMAGE_REPO})"
 echo "    push:    $([[ ${DO_PUSH}   -eq 1 ]] && echo yes || echo no)"
@@ -76,7 +81,7 @@ if [[ ${DO_BINARY} -eq 1 ]]; then
     # binary so leaked stack traces don't reveal /home/<user>/...
     CGO_ENABLED=0 GOOS="${GOOS}" GOARCH="${GOARCH}" go build \
         -trimpath \
-        -ldflags="-s -w -X blackwall/internal/buildinfo.VersionTag=${GIT_TAG} -X blackwall/internal/buildinfo.CommitShort=${GIT_COMMIT_SHORT} -X blackwall/internal/buildinfo.BuildDate=${BUILD_DATE}" \
+        -ldflags="-s -w -X blackwall/internal/buildinfo.VersionTag=${GIT_TAG} -X blackwall/internal/buildinfo.CommitShort=${GIT_COMMIT_SHORT} -X blackwall/internal/buildinfo.BuildDate=${BUILD_DATE} -X blackwall/internal/buildinfo.VulnerabilityScanDate=${VULNERABILITY_SCAN_DATE} -X blackwall/internal/buildinfo.VulnerabilityScanReference=${VULNERABILITY_SCAN_REFERENCE}" \
         -o "${BUILD_DIR}/${BINARY}" \
         ./cmd/blackwall
 
@@ -97,6 +102,8 @@ if [[ ${DO_IMAGE} -eq 1 ]]; then
         --build-arg "GIT_TAG=${GIT_TAG}" \
         --build-arg "GIT_COMMIT_SHORT=${GIT_COMMIT_SHORT}" \
         --build-arg "BUILD_DATE=${BUILD_DATE}" \
+        --build-arg "VULNERABILITY_SCAN_DATE=${VULNERABILITY_SCAN_DATE}" \
+        --build-arg "VULNERABILITY_SCAN_REFERENCE=${VULNERABILITY_SCAN_REFERENCE}" \
         --tag "${IMAGE_REPO}:${VERSION}" \
         --file Dockerfile \
         .

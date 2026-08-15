@@ -252,6 +252,31 @@
     </div>
 
     <div class="col-xl-4">
+        <div class="card border-info-subtle">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>Build &amp; security status</span>
+                {{if .BuildStatus.VulnerabilityScanRecorded}}
+                <span class="badge bg-success">scan recorded</span>
+                {{else}}
+                <span class="badge bg-warning text-dark">scan metadata absent</span>
+                {{end}}
+            </div>
+            <div class="card-body p-0">
+                <table class="table table-dark table-sm align-middle mb-0">
+                    <tbody>
+                        <tr><th class="ps-3 text-muted fw-normal">Application version</th><td class="pe-3 text-end font-monospace">{{.BuildStatus.Version}}</td></tr>
+                        <tr><th class="ps-3 text-muted fw-normal">Commit</th><td class="pe-3 text-end font-monospace">{{.BuildStatus.Commit}}</td></tr>
+                        <tr><th class="ps-3 text-muted fw-normal">Built</th><td class="pe-3 text-end font-monospace small">{{.BuildStatus.BuildTime}}</td></tr>
+                        <tr><th class="ps-3 text-muted fw-normal">Last successful scan</th><td class="pe-3 text-end font-monospace small">{{.BuildStatus.VulnerabilityScanTime}}</td></tr>
+                        <tr><th class="ps-3 text-muted fw-normal">Scan reference</th><td class="pe-3 text-end font-monospace small">{{.BuildStatus.VulnerabilityScanReference}}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer small text-muted">
+                Only release provenance is shown here. Dependency names and scanner findings are deliberately excluded.
+            </div>
+        </div>
+
         <div class="card">
             <div class="card-header">Quick actions</div>
             <div class="card-body">

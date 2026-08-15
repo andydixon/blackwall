@@ -28,10 +28,12 @@ ARG VERSION=dev
 ARG GIT_TAG=dev
 ARG GIT_COMMIT_SHORT=unknown
 ARG BUILD_DATE=unknown
+ARG VULNERABILITY_SCAN_DATE=unknown
+ARG VULNERABILITY_SCAN_REFERENCE=unknown
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -trimpath \
-    -ldflags="-s -w -X blackwall/internal/buildinfo.VersionTag=${GIT_TAG} -X blackwall/internal/buildinfo.CommitShort=${GIT_COMMIT_SHORT} -X blackwall/internal/buildinfo.BuildDate=${BUILD_DATE}" \
+    -ldflags="-s -w -X blackwall/internal/buildinfo.VersionTag=${GIT_TAG} -X blackwall/internal/buildinfo.CommitShort=${GIT_COMMIT_SHORT} -X blackwall/internal/buildinfo.BuildDate=${BUILD_DATE} -X blackwall/internal/buildinfo.VulnerabilityScanDate=${VULNERABILITY_SCAN_DATE} -X blackwall/internal/buildinfo.VulnerabilityScanReference=${VULNERABILITY_SCAN_REFERENCE}" \
     -o /out/blackwall \
     ./cmd/blackwall
 

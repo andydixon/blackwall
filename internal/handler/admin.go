@@ -255,6 +255,7 @@ func (h *AdminHandler) adminBaseData(w http.ResponseWriter, r *http.Request, tit
 		capMap[c] = true
 	}
 
+	buildStatus := buildinfo.Current()
 	return map[string]interface{}{
 		"Title":              title,
 		"CurrentAdminRole":   scope.AdminRole,
@@ -268,6 +269,10 @@ func (h *AdminHandler) adminBaseData(w http.ResponseWriter, r *http.Request, tit
 		"ImpersonatorUserID": impersonatorID,
 		"CSRFToken":          csrf,
 		"Flash":              flashes,
+		"Version":            buildStatus.Version,
+		"Commit":             buildStatus.Commit,
+		"BuildDate":          buildStatus.BuildTime,
+		"BuildStatus":        buildStatus,
 	}
 }
 

@@ -61,6 +61,20 @@ Override the auto-detected version (defaults to `git describe`):
 VERSION=1.4.0 ./build.sh
 ```
 
+Release pipelines should also pass the completion time and opaque report or
+pipeline reference for the most recent successful vulnerability scan. BlackWall
+shows these values to authenticated administrators, but deliberately does not
+embed affected package names or findings in the binary:
+
+```bash
+VULNERABILITY_SCAN_DATE=2026-08-15T12:30:00Z \
+VULNERABILITY_SCAN_REFERENCE=ci/security/1842 \
+./build.sh
+```
+
+If either value is missing or the time is not RFC 3339, the admin dashboard
+reports that scan metadata is absent rather than implying that a scan passed.
+
 ## Run with Docker
 
 The image runs the `blackwall` binary directly as PID 1 under an
