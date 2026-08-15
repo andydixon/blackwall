@@ -100,6 +100,7 @@ parameter placeholders is not treated as injection.
 | BWA-008 | Low | High | Hostname/instance licensing remains patchable client policy | Licence consumer boundary | Open |
 | BWA-009 | Low | Medium | Licence private-key loading leaves avoidable memory and TOCTOU exposure | `loadLicencePrivateKey` | Open |
 | BWA-010 | Low | Medium | Oversized unsigned COSE algorithm integers wrap | WebAuthn COSE parser | Open |
+| BWA-011 | High | High | Production configuration entered Docker build context | Container build | Fixed after audit |
 
 ## 7. Detailed Findings
 
@@ -792,6 +793,76 @@ CWE-190; WebAuthn/COSE algorithm registry.
 The audit did not demonstrate a valid-signature bypass; severity is based on
 strict-parser hygiene.
 
+### Finding ID: BWA-011
+
+#### Title
+
+Production configuration entered Docker build context
+
+#### Severity
+
+High
+
+#### Confidence
+
+High
+
+#### Affected Files / Components
+
+Docker build context, builder cache and the previously missing `.dockerignore`.
+
+#### Description
+
+`prod.config.yaml` is ignored by Git but, before this release, no `.dockerignore`
+existed. `COPY . .` therefore sent the local production configuration and any
+other matching local secrets to the Docker daemon and copied them into an
+intermediate builder layer. The multi-stage runtime image copies only the binary,
+so the file was not found in the final image, but builder cache/history remains a
+separate exposure surface.
+
+#### Evidence
+
+The repository had no `.dockerignore` immediately before the production build.
+The release added explicit exclusions for local/production configuration,
+environment files, PEM/key files, generated artefacts, storage, caches and logs
+before rebuilding.
+
+#### Attack Scenario
+
+An attacker or operator with Docker daemon/cache/export access inspects an old
+builder layer or build context and recovers production credentials even though
+the final runtime filesystem does not contain the configuration.
+
+#### Impact
+
+Credential disclosure with the same downstream classes of impact as BWA-001.
+
+#### Recommendation
+
+Retain the strict `.dockerignore`, prune historic builder cache after credential
+rotation, and use BuildKit secret mounts if a future build genuinely needs a
+secret. Never pass secrets through `ARG`, `ENV` or ordinary `COPY`.
+
+#### Safer Example
+
+Only source, module manifests and intentionally embedded assets should enter the
+builder; runtime configuration must be mounted after image creation.
+
+#### Suggested Tests
+
+Inspect the effective build context in CI, fail if secret/config patterns are
+present, scan all final layers, and verify an exported builder cache after the
+rotation/cache-prune runbook.
+
+#### References
+
+CWE-200; CWE-798; OWASP ASVS V14.1.
+
+#### Assumptions / Limitations
+
+Historic Docker cache access and retention were not enumerated. Treat old caches
+as potentially containing the already-exposed values.
+
 ## 8. Blackhat-Style Abuse Paths
 
 1. **Historic clone to production trust:** obtain the old configuration from a
@@ -1028,4 +1099,3 @@ known-exposed production secrets have not been rotated. A push of source commits
 is safe; representing a new production restart as secure is not. The audit is a
 point-in-time review and does not replace recurring scans, external penetration
 testing, incident review, restore tests or cryptographic key ceremonies.
-

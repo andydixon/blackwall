@@ -1,0 +1,22 @@
+# Source-control and local developer state.
+.git
+.env
+.env.*
+!.env.example
+*.local.yaml
+
+# Production and local configuration may contain credentials. Only the example
+# configuration belongs in a Docker build context.
+config.yaml
+prod.config.yaml
+etc/
+*.pem
+*.key
+
+# Generated artefacts, mutable data, caches and logs are never build inputs.
+dist/
+logs/
+tmp/
+**/target/
+__storage/
+
