@@ -2,7 +2,7 @@ module github.com/blackwall/terraform-provider-blackwall
 
 go 1.25.0
 
-toolchain go1.26.4
+toolchain go1.26.6
 
 require github.com/hashicorp/terraform-plugin-framework v1.10.0
 
