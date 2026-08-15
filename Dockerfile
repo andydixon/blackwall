@@ -36,11 +36,12 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     ./cmd/blackwall
 
 # ─── runtime ─────────────────────────────────────────────────────────────────
-FROM alpine:3.20
+FROM alpine:3.23.4
 
 # ca-certificates: outbound TLS (event-metrics push, etc.).
 # tzdata: correct local-time formatting in audit log entries.
-RUN apk add --no-cache ca-certificates tzdata \
+RUN apk upgrade --no-cache \
+    && apk add --no-cache ca-certificates tzdata \
     && rm -rf /var/cache/apk/*
 
 # Unprivileged user — blackwall never needs root inside the container.
