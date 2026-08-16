@@ -1,26 +1,11 @@
 {{define "content"}}
-<div class="row mt-4 align-items-end g-4">
-    <div class="col-lg-8">
-        <div class="page-header">
-            <h2>Dashboard</h2>
-        </div>
-        <p class="text-muted mb-0">
-            Operational visibility across identity, approvals, CSRF pressure, and recent control-plane activity.
-        </p>
+<div class="mt-4 mb-4">
+    <div class="page-header">
+        <h2>Dashboard</h2>
     </div>
-    <div class="col-lg-4">
-        <div class="card h-100">
-            <div class="card-body">
-                <div class="small text-muted text-uppercase mb-2">Current focus</div>
-                <div class="d-flex flex-wrap gap-2">
-                    <span class="badge text-bg-dark border">Identity plane</span>
-                    {{if .CanViewApprovals}}<span class="badge text-bg-dark border">Approval queue</span>{{end}}
-                    {{if .CanViewCryptbin}}<span class="badge text-bg-dark border">CryptBin</span>{{end}}
-                    <span class="badge text-bg-dark border">Security telemetry</span>
-                </div>
-            </div>
-        </div>
-    </div>
+    <p class="text-muted mb-0">
+        Operational visibility across identity, approvals, CSRF pressure, and recent control-plane activity.
+    </p>
 </div>
 
 <div class="row g-3 mb-4">
