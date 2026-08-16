@@ -30,4 +30,7 @@
     <li><code>oidc.reauthentication.required</code> records when a relying party's <code>max_age</code> forced a fresh passkey check; repeated events may indicate an intentionally strict client policy.</li>
     <li>Rising <code>fail</code>-outcome counts on the dashboard breakdown — investigate by event_type.</li>
 </ul>
+
+<h5>Build and vulnerability-scan provenance</h5>
+<p>The dashboard shows the application version, short commit, build timestamp, last successful vulnerability-scan timestamp, and an opaque scan reference. It deliberately excludes package names and findings. Match these values to the intended release and investigate absent or stale scan metadata in CI; an absent value never means that a scan passed.</p>
 {{end}}

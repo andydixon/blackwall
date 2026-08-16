@@ -7,6 +7,9 @@
 <h5>2. Confirm the audit chain is being written</h5>
 <p>Open <a href="/admin/audit" class="text-light">/admin/audit</a> and look for entries from the last few minutes. Each entry carries a <code>chain_hash</code>; if those are blank, audit writes are failing — stop and fix the database connection before continuing.</p>
 
+<h5>2a. Match the deployed build to the release</h5>
+<p>On the dashboard, compare the version, commit, build time, vulnerability-scan time, and scan reference with the artefacts approved in your release pipeline. Missing scan metadata is a warning, not evidence of a clean scan.</p>
+
 <h5>3. Create the first additional organisation</h5>
 <p>Even if everything will live in one org, create a second one early so you exercise the multi-tenant code paths during testing.</p>
 

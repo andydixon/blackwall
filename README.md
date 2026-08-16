@@ -33,6 +33,17 @@ authentication. Single static binary, no external runtime dependencies.
 - **Auto-migrating schema** — forward-only, idempotent migrations applied
   on every startup; tracked in `schema_migrations`.
 
+## Documentation
+
+- [BlackWall User Guide (PDF)](docs/user-guide/BlackWall-User-Guide.pdf) — the
+  illustrated, all-audience publication by Andy Dixon.
+- [Editable Scribus source](docs/user-guide/BlackWall-User-Guide.sla) and its
+  [rebuild notes](docs/user-guide/README.md).
+- [Complete repository manual](docs/MANUAL.md).
+- [Normative project licence verification guide](docs/licensing/VERIFYING_LICENCES.md)
+  with PHP, Go, Rust, and Java examples.
+- [Licence renewal reminder operations guide](docs/licensing/RENEWAL_REMINDERS.md).
+
 ## Requirements
 
 - Go 1.25+ (for compiling from source)
@@ -93,7 +104,9 @@ docker run -d --name blackwall \
     blackwall:latest
 ```
 
-Or use the bundled `docker-compose.yml` which also stands up MySQL.
+Or use the bundled `docker-compose.yml`, which also starts MySQL. The Compose
+file does not seed Blackwall's historical base schema: restore that baseline
+into the database volume before starting the application for the first time.
 
 ## Run behind Apache 2
 
@@ -172,9 +185,11 @@ for configuration, recipient rules, retries, privacy, and monitoring.
 
 On startup, the binary applies any pending migrations from
 `internal/db/migrations.go`, tracked in a `schema_migrations` table.
-First-run on an empty database is fine — the application assumes the base
-BlackWall schema already exists, plus this binary's own incremental
-migrations on top.
+The application assumes the established Blackwall base schema already exists;
+this source tree does not include a fresh-install baseline SQL file. Restore
+the correct baseline from an existing deployment or obtain the baseline for
+your deployment before first start. An empty database will fail when the first
+incremental migration refers to a base table such as `users` or `projects`.
 
 ## Bootstrap
 

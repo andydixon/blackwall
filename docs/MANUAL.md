@@ -31,6 +31,8 @@ This manual is written in British English. Spec-prescribed identifiers such as `
 - Chapter 7: Per-Project Feature Flags
 - Chapter 8: Branding and Custom Domains
 - Chapter 9: Project Licences
+- Chapter 10: CryptBin Encrypted Sharing
+- Chapter 11: The End-User Portal
 
 **Part IV — OAuth 2.1 and OpenID Connect**
 - Chapter 1: Concepts and Terminology
@@ -112,7 +114,32 @@ What you can do with Blackwall:
 - Drive everything declaratively via a **JSON Admin API** or **Terraform provider**.
 - Track everything through an integrity-chained **audit log** with signed exports.
 
-Blackwall is a single statically-linked Go binary backed by MySQL. There is no microservice layout, no daemon mesh, and no scheduler service — background work runs in goroutines inside the same process as the HTTP server.
+Blackwall is a single statically linked Go binary backed by MySQL. There is no microservice layout, no daemon mesh, and no scheduler service — background work runs in goroutines inside the same process as the HTTP server.
+
+### Who this guide is for
+
+You do not need to be a security specialist to use this guide. Start with the
+chapters that match your role:
+
+- **End users** should read the authentication posture, end-user portal, and
+  CryptBin chapters for sign-in, passkey, recovery, and secure-sharing tasks.
+- **Organisation administrators** should read the organisation, project, user,
+  assignment, branding, and licence chapters.
+- **Blackwall administrators and operators** should also read the approval,
+  audit, maintenance, backup, key-management, renewal-reminder, and
+  troubleshooting chapters before running production.
+- **Application developers** should begin with OAuth/OIDC concepts, choose an
+  integration pattern, and then use the worked example for their language.
+- **Licensed-product developers** must read the complete Project Licence
+  Protocol and its fail-closed verification guide; decoding a licence is never
+  equivalent to verifying it.
+- **Automation and platform engineers** should use the Admin JSON API,
+  Terraform, CI/CD, configuration, metrics, and endpoint references.
+
+Commands and field names are shown exactly as Blackwall expects them. Replace
+example domains, UUIDs, secrets, and paths with values from your own controlled
+configuration. Never paste a production token, licence, private key, session,
+or CryptBin fragment into a ticket or shared terminal transcript.
 
 ## Chapter 2: Architecture at a Glance
 
@@ -222,7 +249,13 @@ GRANT ALL PRIVILEGES ON blackwall.* TO 'blackwall'@'%';
 FLUSH PRIVILEGES;
 ```
 
-Blackwall will create every table it needs on first start. The base schema and the forward-only migrations are both applied automatically.
+Blackwall applies its forward-only migrations automatically, but the current
+distribution expects the established Blackwall base schema to exist first. The
+source tree does not contain a fresh-install baseline SQL file, so do not point
+the binary at an unrelated empty schema. Restore the baseline from an existing
+Blackwall deployment or obtain the deployment-specific baseline before first
+start, then let the binary apply the numbered migrations in
+`internal/db/migrations.go`.
 
 ### Step 2 — install the binary
 
@@ -281,7 +314,11 @@ Every key in the configuration file can also be supplied via an environment vari
 /usr/local/bin/blackwall --config /etc/blackwall/config.yaml
 ```
 
-On first start you will see `[migrate] applying 1: …` lines as Blackwall creates its tables. After migrations complete the server begins serving on the configured address.
+On first start you will see `[migrate] applying 1: …` lines while Blackwall
+applies pending upgrades to the established base schema. After migrations
+complete, the server begins serving on the configured address. A missing base
+table is a deployment error; stop and restore the correct baseline rather than
+creating an ad hoc table from a failed migration message.
 
 ### Step 6 — install as a systemd unit
 
@@ -358,6 +395,7 @@ Run through the following safety checks before exposing the service to real user
 | Maintenance jobs run cleanly | Visit `/admin/maintenance` and click **Run now**. All jobs should land at `success`. |
 | The OIDC discovery doc is well-formed | `curl -s https://auth.example.com/.well-known/openid-configuration | jq` should return a populated JSON document. |
 | JWKS is reachable | `curl -s https://auth.example.com/oauth/jwks | jq '.keys | length'` should return at least 1. |
+| Build provenance is present | On the admin dashboard, confirm the application version, commit, build time, last successful vulnerability-scan time, and opaque scan reference match the release you intended to deploy. |
 | Backup of the MySQL database is scheduled | Confirm with your infrastructure team. The JWT signing keys live in the database. |
 
 ---
@@ -382,6 +420,13 @@ The admin console lives at `/admin`. The top navigation bar shows the surfaces t
 - **Errors** — server error trace decoder (super-admin and auditor).
 - **Scope** — debug your own scope (anyone).
 - **Docs** — the in-app documentation (anyone).
+
+The dashboard's **Build & security status** card is administrative release
+provenance, not a vulnerability report. It shows only the application version,
+short commit, build timestamp, last successful scan timestamp, and an opaque
+scan or pipeline reference. Package names and findings are deliberately absent.
+Treat missing or stale scan metadata as a release-process warning and follow the
+reference in your CI or scanner; do not infer that an unrecorded scan passed.
 
 Every page is protected by CSRF tokens. Mutations that arrive without a valid CSRF token are rejected with an audit log entry.
 
@@ -632,9 +677,186 @@ claim invalidates the signature. Revocation is enforced by the authoritative
 new revocation until it reconnects. Integrators must therefore refresh online
 within the signed `online_check_seconds` and fail closed after that deadline.
 
+Blackwall deliberately uses an Ed25519 digital signature rather than wrapping
+the licence in a self-signed X.509 certificate. A self-signed certificate would
+not create trust by itself: the product would still need to pin the issuer or
+public key. Ed25519 provides a small, deterministic signature, while the fixed
+HTTPS issuer, key-derived ID, and pinned public-key fingerprint provide the
+trust anchors.
+
 See [Verifying Blackwall Project Licences](licensing/VERIFYING_LICENCES.md) for
 the protocol, threat model, key generation and rotation runbook, status codes,
 and complete PHP, Go, Rust, and Java validation examples.
+
+### Calling the authoritative verifier
+
+Keep the verifier URL, expected project UUID, and runtime hostname in trusted
+application configuration; never derive them from the unverified licence. Read
+the licence from a permission-restricted file rather than a command-line
+argument, then send:
+
+```bash
+jq -n --rawfile licence /run/secrets/product.bwlic \
+  --arg host 'app.example.com' \
+  --arg project 'aa88643b-889d-4ce7-a96d-4a562065c880' \
+  '{licence:($licence|gsub("\\s+$";"")), expected_hostname:$host, project_uuid:$project}' |
+curl --fail-with-body --silent --show-error \
+  --header 'Content-Type: application/json' \
+  --data-binary @- https://blackwall.cx/licences/v1/verify
+```
+
+The HTTP response must be 200, `valid` must be exactly `true`, `code` must be
+`valid`, `checked_at` must be fresh, and the echoed signed claims must match the
+locally configured issuer, project, and hostname. Every network, TLS, parser,
+time, or mismatch failure denies access.
+
+PHP 8.1+ uses cURL and strict JSON handling:
+
+```php
+$request = json_encode([
+    'licence' => rtrim(file_get_contents('/run/secrets/product.bwlic')),
+    'expected_hostname' => 'app.example.com',
+    'project_uuid' => 'aa88643b-889d-4ce7-a96d-4a562065c880',
+], JSON_THROW_ON_ERROR);
+$ch = curl_init('https://blackwall.cx/licences/v1/verify');
+curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_POSTFIELDS => $request,
+    CURLOPT_HTTPHEADER => ['Content-Type: application/json'],
+    CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 5]);
+$raw = curl_exec($ch);
+if ($raw === false || curl_getinfo($ch, CURLINFO_RESPONSE_CODE) !== 200) {
+    throw new RuntimeException('Licence verification unavailable');
+}
+$result = json_decode($raw, true, 32, JSON_THROW_ON_ERROR);
+if (($result['valid'] ?? false) !== true || ($result['code'] ?? '') !== 'valid') {
+    throw new RuntimeException('Licence rejected');
+}
+```
+
+Go uses a bounded context and rejects every non-valid result:
+
+```go
+ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+defer cancel()
+payload, _ := json.Marshal(map[string]string{
+    "licence": strings.TrimSpace(string(mustRead("/run/secrets/product.bwlic"))),
+    "expected_hostname": "app.example.com",
+    "project_uuid": "aa88643b-889d-4ce7-a96d-4a562065c880",
+})
+req, _ := http.NewRequestWithContext(ctx, http.MethodPost,
+    "https://blackwall.cx/licences/v1/verify", bytes.NewReader(payload))
+req.Header.Set("Content-Type", "application/json")
+resp, err := http.DefaultClient.Do(req)
+if err != nil || resp.StatusCode != http.StatusOK { deny() }
+var result struct { Valid bool `json:"valid"`; Code string `json:"code"` }
+if json.NewDecoder(io.LimitReader(resp.Body, 64<<10)).Decode(&result) != nil ||
+    !result.Valid || result.Code != "valid" { deny() }
+```
+
+Rust with `reqwest` follows the same fail-closed boundary:
+
+```rust
+let response = reqwest::blocking::Client::builder()
+    .timeout(std::time::Duration::from_secs(5)).build()?
+    .post("https://blackwall.cx/licences/v1/verify")
+    .json(&serde_json::json!({
+        "licence": std::fs::read_to_string("/run/secrets/product.bwlic")?.trim(),
+        "expected_hostname": "app.example.com",
+        "project_uuid": "aa88643b-889d-4ce7-a96d-4a562065c880"
+    })).send()?;
+if response.status() != reqwest::StatusCode::OK { deny(); }
+let result: VerifyResponse = response.json()?;
+if !result.valid || result.code != "valid" { deny(); }
+```
+
+Java 17+ can use the standard HTTP client:
+
+```java
+var request = HttpRequest.newBuilder(URI.create(
+        "https://blackwall.cx/licences/v1/verify"))
+    .timeout(Duration.ofSeconds(5))
+    .header("Content-Type", "application/json")
+    .POST(HttpRequest.BodyPublishers.ofString(requestJson)).build();
+var response = HttpClient.newHttpClient().send(request,
+    HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
+if (response.statusCode() != 200) deny();
+VerifyResponse result = objectMapper.readValue(response.body(), VerifyResponse.class);
+if (!result.valid() || !"valid".equals(result.code())) deny();
+```
+
+These excerpts show the transport boundary. The complete shipped examples also
+enforce response size, duplicate/unknown JSON fields where supported, response
+freshness, and echoed claim equality; use those complete programs rather than
+copying a shortened excerpt into production.
+
+### Offline verification and anti-spoofing rules
+
+An offline result is only a short continuity mechanism; it cannot discover a
+revocation made since the last successful online check. Cache a successful
+online decision for no longer than the signed `online_check_seconds`. After
+that deadline, deny the licensed function or enter only an explicit,
+operator-approved, tightly bounded grace mode.
+
+The complete offline sequence is:
+
+1. Fetch `https://blackwall.cx/.well-known/blackwall-licence-keys.json` through
+   normally verified HTTPS during deployment and refresh it at least every five
+   minutes while online.
+2. Pin the expected `fingerprint_sha256` in controlled application
+   configuration or a signed deployment artefact. Never trust a new key merely
+   because an unverified licence names it.
+3. Limit the token to 16 KiB and require exactly three non-empty segments:
+   `BWLIC1`, an unpadded base64url payload, and an unpadded base64url signature.
+4. Decode strictly. Limit the payload to 8 KiB, require a 64-byte Ed25519
+   signature and a 32-byte public key, and reject malformed input.
+5. Parse the UTF-8 JSON with duplicate and unknown fields rejected. Verify the
+   signature over the original ASCII `BWLIC1.<payload-base64url>` bytes; never
+   parse and reserialise the payload before verification.
+6. Locate the signed `kid`, then independently recalculate it as
+   `bwlic_ + base64url(SHA-256(public_key)[0:18])`. Reject a mismatch or any key
+   marked `compromised`. A `retired` key may verify a licence signed before
+   rotation; it may not sign a new one.
+7. Require version `1`, issuer `https://blackwall.cx`, audience
+   `blackwall-licence`, the locally configured project UUID, a valid UTC time
+   window (within the narrow allowed skew), and the exact runtime hostname.
+8. Lower-case a DNS hostname and remove at most one terminal dot before exact
+   comparison. Reject URLs, ports, user information, paths, wildcards, Unicode
+   input, and unexpected IP forms. Supply international names as punycode.
+9. Enforce every requested feature and `max_instances` inside the licensed
+   product. A signature authenticates claims; it cannot count running copies.
+10. Repeat the authoritative online check before its signed deadline and fail
+    closed on TLS, network, parsing, time, issuer, project, hostname, signature,
+    feature, instance, key-status, database, revocation, or response-freshness
+    failure.
+
+Never ship the licence issuer's private signing key, a symmetric ‘licence
+secret’, or licence-minting code in the product being licensed. A hostile owner
+of a distributed binary may still patch its policy checks, so combine licence
+verification with server-side entitlements for high-value operations where
+that threat matters.
+
+### Signing-key setup, rotation, and compromise
+
+Generate the issuer key on the Blackwall host or in the secret-management
+system that mounts it:
+
+```bash
+umask 077
+openssl genpkey -algorithm Ed25519 \
+  -out /run/secrets/blackwall_licence_ed25519.pem
+chmod 0600 /run/secrets/blackwall_licence_ed25519.pem
+```
+
+Set `licence_signing_key_file` to that path. Blackwall accepts only a regular,
+mode-0600-or-stricter Ed25519 PKCS#8 PEM file and stores only its public key in
+MySQL. Replacing the mounted key and restarting makes the new public key active
+and retires the former key without invalidating existing licences.
+
+If private material may have escaped, stop issuance, preserve the audit trail,
+mark that key `compromised`, install a newly generated key, restart, and reissue
+affected licences only after independently checking their entities and
+hostnames. Revoke the old licence rows with an incident reference and tell
+every product verifier to refresh immediately. Never return a compromised key
+to `active`.
 
 ### Renewal reminders
 
@@ -652,6 +874,100 @@ Messages contain useful renewal metadata but never the licence token, hostname
 or feature claims, instance allowance, or customer reference. See
 [Project Licence Renewal Reminders](licensing/RENEWAL_REMINDERS.md) for secure
 SMTP configuration and the operating runbook.
+
+Enable mail only after a verified TLS relay is ready:
+
+```yaml
+licence_reminders_enabled: true
+licence_reminder_interval_seconds: 900
+smtp_host: "smtp.example.com"
+smtp_port: 587
+smtp_username: "blackwall"
+smtp_password: "" # inject SMTP_PASSWORD from the deployment secret store
+smtp_from_address: "licences@example.com"
+smtp_from_name: "Blackwall"
+smtp_tls_mode: "starttls"
+smtp_timeout_seconds: 10
+```
+
+Use `implicit` TLS, normally on port 465, only when the provider requires it.
+Both modes require TLS 1.2 or newer with normal certificate and hostname
+validation; plaintext SMTP is unavailable. Supply both username and password,
+or leave both blank for a trusted relay that authenticates the host by another
+means. Blackwall refuses to start when an enabled mail configuration is
+incomplete or unsafe.
+
+Temporary transport and SMTP 4xx failures retry after 5 minutes, 15 minutes, 1
+hour, 3 hours, 6 hours, 12 hours, and 24 hours. The eighth failed attempt is
+exhausted. Permanent SMTP 5xx, authentication, certificate, configuration,
+sender, and recipient failures do not retry pointlessly. The stable opaque
+Message-ID lets the receiving system suppress the rare duplicate possible if a
+mail server accepts `DATA` immediately before the Blackwall process stops.
+
+Before enabling production reminders, send a short-lived test licence through
+each intended threshold, confirm the project page records **Sent**, and verify
+SPF, DKIM, and DMARC alignment at the recipient. Alert on exhausted rows and
+mail-failure categories without logging provider responses or licence data.
+Rotate SMTP credentials through the secret store and test again. Disabling the
+worker pauses scans and deliveries while retaining queue history.
+
+## Chapter 10: CryptBin Encrypted Sharing
+
+CryptBin shares a text snippet or file without sending its plaintext or
+decryption key to Blackwall. Open `/cryptbin`, select **Text** or **File**, and
+choose **Create Cryptbin**. The browser generates a data-encryption key (DEK),
+encrypts the payload with AES-256-GCM, and puts the key material in the URL
+fragment after `#`. Browsers do not include that fragment in an HTTP request.
+
+The server stores ciphertext, public metadata, and a wrapped copy of the DEK.
+The wrapping key is the configured `cryptbin_kek_base64`; XChaCha20-Poly1305
+binds the wrapper to the item ID as additional authenticated data. File names
+are sanitised before storage and all item files are mode 0600.
+
+### Sharing and opening an item
+
+1. Copy the complete share URL, including everything after `#`.
+2. Send it through a channel appropriate for the sensitivity of the content.
+   Anyone with the complete URL may possess the client-side key.
+3. The recipient opens the URL in a current browser. Ciphertext is fetched from
+   Blackwall and decrypted locally.
+4. Text appears in the editor. Files are offered as a local decrypted download.
+
+Do not paste a CryptBin URL into tickets, chat rooms, analytics systems, or
+screenshots. The fragment is hidden from the Blackwall server, but browser
+extensions, clipboard history, and the person receiving the link can still see
+it. Losing the fragment key makes the payload unrecoverable.
+
+### Updating, deleting, and WebAuthn
+
+The item view offers **Update** and **Delete** only when the fragment key is
+present. Wrapped-DEK release and KEK use require a verified WebAuthn assertion.
+An item may also bind that check to a particular credential. Deleting the bound
+credential or rotating the KEK without rewrapping every stored DEK can make an
+item permanently unreadable; rehearse both operations before production.
+
+Administrators can inspect ciphertext size, type, creation/expiry metadata, and
+operational failures from `/admin/cryptbin`, but cannot recover plaintext from
+that view. Retention cleanup removes expired items. Back up the storage path and
+database metadata consistently, while backing up the KEK separately.
+
+## Chapter 11: The End-User Portal
+
+The portal at `/portal/login` gives a user a narrow self-service view without
+granting admin access. Sign-in is passkey-only. After authentication, the portal
+shows the user's project assignments and privilege labels alongside their
+registered security keys.
+
+Choose **Add Key** to register another passkey. Give hardware keys a meaningful
+label such as `YubiKey 5 NFC`; platform passkeys can use a device name. Blackwall
+will not let a user remove their last credential, and `min_webauthn_keys` may
+require them to retain more than one. Register and test a replacement before
+removing an old authenticator.
+
+If every authenticator is lost, an administrator must verify the person's
+identity out of band, remove the unusable credential under the approval policy,
+and generate a new one-time enrolment link. Neither the user nor an operator
+should attempt to bypass that recovery trail by creating a shared credential.
 
 ---
 
@@ -1729,7 +2045,7 @@ Not currently implemented. The webhook surface (Part VI, Chapter 3) is a reasona
 | `invalid_grant` at token exchange | The authorisation code has been used already (codes are single-use) or has expired (10-minute window). |
 | `invalid_request: code_challenge is required` | You forgot to send a PKCE pair. Mandatory in Blackwall. |
 | ID token `nonce` does not match | You sent the wrong nonce, or your session was lost between authorize and callback (check cookie SameSite). |
-| ID token is missing `auth_time`, or `auth_time` is too old | The token predates Blackwall's authentication-time migration, or the relying party's freshness limit was exceeded. Start a new authorization flow; use `max_age` when fresh authentication is required. |
+| ID token is missing `auth_time`, or `auth_time` is too old | The token predates Blackwall's authentication-time migration, or the relying party's freshness limit was exceeded. Start a new authorisation flow; use `max_age` when fresh authentication is required. |
 | User receives another passkey prompt despite an active Blackwall session | The relying party sent `max_age` and the session's authentication is older. Check the `oidc.reauthentication.required` audit event. |
 | `access_denied: User not authorized for this project` | The user has a valid credential but is not assigned to the project. Assign them via `/admin/projects/{uuid}/assignments`. |
 | `invalid_token` at userinfo | Token has expired, been revoked, or carries an audience that does not match any active client. Check the JWT's `exp` and `aud`. |
@@ -2409,7 +2725,7 @@ Blackwall targets the OpenID Foundation's **Basic OP + PKCE** conformance profil
 - **Error responses** redirected to the redirect_uri with `error` + `error_description` + `state`.
 - **prompt=none** returns `login_required` when unauthenticated.
 - **prompt=login** forces fresh WebAuthn authentication.
-- **max_age** validates authentication freshness and forces WebAuthn reauthentication when needed; signed **auth_time** is preserved through authorization-code exchange and refresh-token rotation.
+- **max_age** validates authentication freshness and forces WebAuthn reauthentication when needed; signed **auth_time** is preserved through authorisation-code exchange and refresh-token rotation.
 - **Reserved claim protection** — custom claims can never override `iss`, `sub`, `aud`, etc.
 - **Userinfo endpoint** verifies `openid` scope and bearer-token freshness.
 - **Token revocation** at `/oauth/revoke` and **introspection** at `/oauth/introspect`.
@@ -2702,7 +3018,7 @@ the unverified licence itself.
 | Issuer | The URL that identifies an OIDC provider. Blackwall's `app_url`. |
 | JWKS | JSON Web Key Set. The public keys at `/oauth/jwks`. |
 | Licence envelope | A versioned `BWLIC1` payload and Ed25519 signature. It is not a bearer login token. |
-| max_age | An optional OIDC authorization-request parameter, in non-negative whole seconds, requiring the user's `auth_time` to be no older than that limit. |
+| max_age | An optional OIDC authorisation-request parameter, in non-negative whole seconds, requiring the user's `auth_time` to be no older than that limit. |
 | Nonce | A one-shot random value sent with an OIDC request and echoed in the ID token. |
 | Organisation | The tenant boundary. |
 | PKCE | Proof Key for Code Exchange (RFC 7636). Mandatory in Blackwall. |

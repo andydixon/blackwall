@@ -6,7 +6,7 @@ Terraform provider for the BlackWall identity platform. Resources are driven thr
 
 | Surface                       | Resource / data source              | Status      |
 |-------------------------------|-------------------------------------|-------------|
-| Organization lookup           | `data.blackwall_organization`       | implemented |
+| Organisation lookup           | `data.blackwall_organization`       | implemented |
 | Project                       | `blackwall_project`                 | implemented |
 | OAuth client                  | `blackwall_oauth_client`            | implemented |
 | Per-project default OIDC claim| `blackwall_claim_default`           | implemented |

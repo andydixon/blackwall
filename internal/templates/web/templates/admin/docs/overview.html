@@ -6,7 +6,7 @@
     <li>Define <strong>organisations</strong>, each with their own admin user and project portfolio.</li>
     <li>Run <strong>projects</strong> with bespoke privilege ladders and per-user assignments.</li>
     <li>Issue and revoke <strong>OAuth clients</strong> for downstream applications.</li>
-    <li>Issue and revoke <strong>Ed25519-signed project licences</strong> bound to exact hostnames.</li>
+    <li>Issue and revoke <strong>Ed25519-signed project licences</strong> bound to exact hostnames, with durable renewal reminders.</li>
     <li>Enrol users with one-time <strong>WebAuthn credentials</strong>; passwords are never used.</li>
     <li>Track everything through an integrity-chained <strong>audit log</strong> with CSV export.</li>
     <li>Hold sensitive payloads in <strong>CryptBin</strong> with end-to-end client-side encryption.</li>
@@ -23,6 +23,7 @@
     <li><a href="/admin/docs/branding-and-domains" class="text-light">Branding and custom domains</a> — per-org login UI overrides.</li>
     <li><a href="/admin/docs/audit-chain" class="text-light">Audit chain checkpoints</a> — tamper-evident snapshots of the audit log tip.</li>
     <li><a href="/admin/docs/project-licences" class="text-light">Project licences</a> — signed entity, hostname, feature, instance, and validity claims with online revocation.</li>
+    <li><strong>Build and security provenance</strong> — the dashboard records version, commit, build time, and the last successful vulnerability-scan reference without exposing package details.</li>
     <li><a href="/admin/docs/api-tokens" class="text-light">Admin API tokens</a>, <a href="/admin/docs/scim" class="text-light">SCIM 2.0</a>, <a href="/admin/docs/saml" class="text-light">SAML IdP</a>, <a href="/admin/docs/terraform" class="text-light">Terraform provider</a>, <a href="/admin/docs/kms-signer" class="text-light">KMS-pluggable signing</a>.</li>
 </ul>
 

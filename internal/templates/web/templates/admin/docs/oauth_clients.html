@@ -31,7 +31,7 @@
 </ul>
 
 <h5>OIDC authentication freshness</h5>
-<p><strong>OIDC enabled</strong> is an enforcement switch, not just a label: clients with it disabled cannot start new <code>openid</code> authorization requests. For enabled clients, BlackWall records the successful WebAuthn time, signs it into <code>auth_time</code>, and preserves the same value when refresh tokens rotate. A relying party that sends <code>max_age</code> gets a new passkey prompt whenever that recorded authentication is too old. Disable the whole client or revoke its tokens as well if existing sessions must stop immediately.</p>
+<p><strong>OIDC enabled</strong> is an enforcement switch, not just a label: clients with it disabled cannot start new <code>openid</code> authorisation requests. For enabled clients, BlackWall records the successful WebAuthn time, signs it into <code>auth_time</code>, and preserves the same value when refresh tokens rotate. A relying party that sends <code>max_age</code> gets a new passkey prompt whenever that recorded authentication is too old. Disable the whole client or revoke its tokens as well if existing sessions must stop immediately.</p>
 
 <h5>Token type choice</h5>
 <p><strong>JWT</strong> is the default. JWTs are signed RS256, include scope, project_id, privilege_level/name, and (for ID tokens) <code>at_hash</code> per OIDC §3.1.3.6. They are also stored as a hash in <code>oauth_access_tokens</code> so revocation works.</p>

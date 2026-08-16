@@ -18,7 +18,7 @@
     <li><strong>Error responses</strong> redirected to the redirect_uri with <code>error</code> + <code>error_description</code> + <code>state</code>.</li>
     <li><strong>prompt=none</strong> returns <code>login_required</code> when the user isn't authenticated, rather than rendering a login page.</li>
     <li><strong>prompt=login</strong> forces a fresh WebAuthn authentication regardless of session state.</li>
-    <li><strong><code>max_age</code> and <code>auth_time</code></strong> — non-negative <code>max_age</code> values are validated and stale sessions force a fresh WebAuthn authentication. The signed authentication time is preserved through authorization-code exchange and refresh-token rotation.</li>
+    <li><strong><code>max_age</code> and <code>auth_time</code></strong> — non-negative <code>max_age</code> values are validated and stale sessions force a fresh WebAuthn authentication. The signed authentication time is preserved through authorisation-code exchange and refresh-token rotation.</li>
     <li><strong>Reserved claim protection</strong> — custom claims can never override <code>iss</code>, <code>sub</code>, <code>aud</code>, <code>exp</code>, <code>iat</code>, <code>nbf</code>, <code>jti</code>, <code>nonce</code>, <code>at_hash</code>, etc., even if an operator tries to set them.</li>
     <li><strong>userinfo endpoint</strong> verifies <code>openid</code> scope and bearer-token freshness (revocation, expiry, audience).</li>
     <li><strong>Token revocation</strong> at <code>/oauth/revoke</code> and <strong>introspection</strong> at <code>/oauth/introspect</code>.</li>
