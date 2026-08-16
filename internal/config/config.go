@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"net"
+	"net/mail"
 	"net/url"
 	"os"
 	"strconv"
@@ -75,6 +76,20 @@ type Config struct {
 	LicenceMaxValidityDays    int    `yaml:"licence_max_validity_days"`
 	LicenceClockSkewSeconds   int    `yaml:"licence_clock_skew_seconds"`
 	LicenceOnlineCheckSeconds int    `yaml:"licence_online_check_seconds"`
+
+	// Renewal reminders use a durable database queue and an authenticated,
+	// encrypted SMTP connection. SMTP credentials are configuration secrets and
+	// must be supplied through the deployment secret store rather than Git.
+	LicenceRemindersEnabled        bool   `yaml:"licence_reminders_enabled"`
+	LicenceReminderIntervalSeconds int    `yaml:"licence_reminder_interval_seconds"`
+	SMTPHost                       string `yaml:"smtp_host"`
+	SMTPPort                       int    `yaml:"smtp_port"`
+	SMTPUsername                   string `yaml:"smtp_username"`
+	SMTPPassword                   string `yaml:"smtp_password"`
+	SMTPFromAddress                string `yaml:"smtp_from_address"`
+	SMTPFromName                   string `yaml:"smtp_from_name"`
+	SMTPTLSMode                    string `yaml:"smtp_tls_mode"`
+	SMTPTimeoutSeconds             int    `yaml:"smtp_timeout_seconds"`
 
 	ServerAddr          string `yaml:"server_addr"`
 	RequestBodyMaxBytes int64  `yaml:"request_body_max_bytes"`
@@ -165,7 +180,62 @@ func (c *Config) Validate() error {
 	if c.LicenceOnlineCheckSeconds < 300 || c.LicenceOnlineCheckSeconds > 604800 {
 		return fmt.Errorf("config: licence_online_check_seconds must be between 300 and 604800")
 	}
+	if c.LicenceReminderIntervalSeconds < 300 || c.LicenceReminderIntervalSeconds > 86400 {
+		return fmt.Errorf("config: licence_reminder_interval_seconds must be between 300 and 86400")
+	}
+	if c.SMTPTimeoutSeconds < 1 || c.SMTPTimeoutSeconds > 60 {
+		return fmt.Errorf("config: smtp_timeout_seconds must be between 1 and 60")
+	}
+	if c.LicenceRemindersEnabled {
+		if err := c.validateReminderSMTP(); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+func (c *Config) validateReminderSMTP() error {
+	host := strings.TrimSpace(c.SMTPHost)
+	if host == "" || strings.ContainsAny(host, "\r\n\t /:@[]") || !validSMTPHost(host) {
+		return fmt.Errorf("config: smtp_host must be a hostname or IP address without a scheme or port")
+	}
+	if c.SMTPPort < 1 || c.SMTPPort > 65535 {
+		return fmt.Errorf("config: smtp_port must be between 1 and 65535")
+	}
+	if c.SMTPTLSMode != "starttls" && c.SMTPTLSMode != "implicit" {
+		return fmt.Errorf("config: smtp_tls_mode must be starttls or implicit")
+	}
+	if (c.SMTPUsername == "") != (c.SMTPPassword == "") {
+		return fmt.Errorf("config: smtp_username and smtp_password must either both be set or both be blank")
+	}
+	if len(c.SMTPUsername) > 512 || len(c.SMTPPassword) > 4096 || len(c.SMTPFromName) > 200 || strings.ContainsAny(c.SMTPUsername+c.SMTPFromName, "\r\n") {
+		return fmt.Errorf("config: SMTP identity fields are invalid")
+	}
+	from, err := mail.ParseAddress(strings.TrimSpace(c.SMTPFromAddress))
+	if err != nil || from.Address == "" || !strings.EqualFold(from.Address, strings.TrimSpace(c.SMTPFromAddress)) {
+		return fmt.Errorf("config: smtp_from_address must be one plain email address")
+	}
+	return nil
+}
+
+func validSMTPHost(host string) bool {
+	if net.ParseIP(host) != nil {
+		return true
+	}
+	if len(host) > 253 || strings.HasPrefix(host, ".") || strings.HasSuffix(host, ".") || strings.Contains(host, "..") {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if len(label) < 1 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, char := range label {
+			if (char < 'a' || char > 'z') && (char < 'A' || char > 'Z') && (char < '0' || char > '9') && char != '-' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func Get() *Config {
@@ -221,6 +291,11 @@ func defaults() *Config {
 		LicenceMaxValidityDays:          365,
 		LicenceClockSkewSeconds:         120,
 		LicenceOnlineCheckSeconds:       86400,
+		LicenceReminderIntervalSeconds:  900,
+		SMTPPort:                        587,
+		SMTPFromName:                    "Blackwall",
+		SMTPTLSMode:                     "starttls",
+		SMTPTimeoutSeconds:              10,
 	}
 }
 
@@ -297,6 +372,16 @@ func overrideFromEnv(cfg *Config) {
 	setInt(&cfg.LicenceMaxValidityDays, "LICENCE_MAX_VALIDITY_DAYS")
 	setInt(&cfg.LicenceClockSkewSeconds, "LICENCE_CLOCK_SKEW_SECONDS")
 	setInt(&cfg.LicenceOnlineCheckSeconds, "LICENCE_ONLINE_CHECK_SECONDS")
+	setBool(&cfg.LicenceRemindersEnabled, "LICENCE_REMINDERS_ENABLED")
+	setInt(&cfg.LicenceReminderIntervalSeconds, "LICENCE_REMINDER_INTERVAL_SECONDS")
+	setStr(&cfg.SMTPHost, "SMTP_HOST")
+	setInt(&cfg.SMTPPort, "SMTP_PORT")
+	setStr(&cfg.SMTPUsername, "SMTP_USERNAME")
+	setStr(&cfg.SMTPPassword, "SMTP_PASSWORD")
+	setStr(&cfg.SMTPFromAddress, "SMTP_FROM_ADDRESS")
+	setStr(&cfg.SMTPFromName, "SMTP_FROM_NAME")
+	setStr(&cfg.SMTPTLSMode, "SMTP_TLS_MODE")
+	setInt(&cfg.SMTPTimeoutSeconds, "SMTP_TIMEOUT_SECONDS")
 	setStr(&cfg.ServerAddr, "SERVER_ADDR")
 	setInt64(&cfg.RequestBodyMaxBytes, "REQUEST_BODY_MAX_BYTES")
 

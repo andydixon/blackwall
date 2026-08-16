@@ -413,6 +413,38 @@ var migrations = []migration{
 			return err
 		},
 	},
+	{
+		Version:     7,
+		Description: "Durable, duplicate-safe project licence renewal reminders",
+		Apply: func(db *sql.DB) error {
+			// One row represents one recipient at one countdown threshold. The
+			// uniqueness constraint is the last line of defence against duplicate
+			// mail when several Blackwall instances scan at the same time.
+			_, err := db.Exec(`CREATE TABLE IF NOT EXISTS licence_renewal_reminders (
+				id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+				licence_id BIGINT UNSIGNED NOT NULL,
+				threshold_days TINYINT UNSIGNED NOT NULL,
+				recipient_user_id BIGINT UNSIGNED NOT NULL,
+				recipient_email VARCHAR(254) NOT NULL,
+				status ENUM('pending','sending','succeeded','exhausted','cancelled') NOT NULL DEFAULT 'pending',
+				attempts TINYINT UNSIGNED NOT NULL DEFAULT 0,
+				next_attempt_at DATETIME NOT NULL,
+				locked_at DATETIME DEFAULT NULL,
+				lock_token CHAR(36) DEFAULT NULL,
+				last_error_code VARCHAR(64) DEFAULT NULL,
+				sent_at DATETIME DEFAULT NULL,
+				created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+				updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+				FOREIGN KEY (licence_id) REFERENCES project_licences(id) ON DELETE CASCADE,
+				FOREIGN KEY (recipient_user_id) REFERENCES users(id),
+				UNIQUE KEY uk_licence_reminder_recipient (licence_id, threshold_days, recipient_user_id),
+				INDEX idx_licence_reminder_queue (status, next_attempt_at),
+				INDEX idx_licence_reminder_project (licence_id, created_at),
+				CONSTRAINT chk_licence_reminder_threshold CHECK (threshold_days IN (30,14,7,2,1))
+			) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`)
+			return err
+		},
+	},
 }
 
 // Migrate applies every pending migration in order under a single tracking

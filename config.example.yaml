@@ -106,3 +106,17 @@ licence_signing_key_file: ""         # set to /run/secrets/blackwall_licence_ed2
 licence_max_validity_days: 365       # hard upper bound accepted by the issue UI
 licence_clock_skew_seconds: 120      # verifier tolerance; maximum 600
 licence_online_check_seconds: 86400  # signed maximum revocation-check interval
+
+# Renewal reminders are queued once per licence at 30, 14, 7, 2, and 1 day
+# remaining, then delivered to the active designated administrator of the
+# project's organisation. Mail is never sent without encrypted SMTP.
+licence_reminders_enabled: false
+licence_reminder_interval_seconds: 900
+smtp_host: ""
+smtp_port: 587
+smtp_username: ""                  # leave both username and password blank only for a trusted relay
+smtp_password: ""                  # supply as SMTP_PASSWORD through the deployment secret store
+smtp_from_address: ""
+smtp_from_name: "Blackwall"
+smtp_tls_mode: "starttls"           # starttls (usually 587) or implicit (usually 465)
+smtp_timeout_seconds: 10

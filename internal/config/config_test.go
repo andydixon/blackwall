@@ -33,3 +33,40 @@ func TestValidateRequiresSecureAppURL(t *testing.T) {
 		t.Fatalf("AppURL = %q, want trailing slash removed", cfg.AppURL)
 	}
 }
+
+func TestValidateReminderSMTPRequiresEncryptedCompleteConfiguration(t *testing.T) {
+	valid := defaults()
+	valid.SessionSecret = strings.Repeat("a", 32)
+	valid.CSRFSecret = strings.Repeat("b", 32)
+	valid.LicenceRemindersEnabled = true
+	valid.SMTPHost = "smtp.example.com"
+	valid.SMTPPort = 587
+	valid.SMTPUsername = "blackwall"
+	valid.SMTPPassword = "deployment-secret"
+	valid.SMTPFromAddress = "licences@example.com"
+	valid.SMTPTLSMode = "starttls"
+	if err := valid.Validate(); err != nil {
+		t.Fatalf("valid reminder SMTP rejected: %v", err)
+	}
+
+	cases := []struct {
+		name   string
+		mutate func(*Config)
+	}{
+		{"missing host", func(c *Config) { c.SMTPHost = "" }},
+		{"invalid host", func(c *Config) { c.SMTPHost = "-smtp.example.com" }},
+		{"header injection", func(c *Config) { c.SMTPFromName = "Blackwall\r\nBcc: x@example.com" }},
+		{"plaintext mode", func(c *Config) { c.SMTPTLSMode = "none" }},
+		{"missing password", func(c *Config) { c.SMTPPassword = "" }},
+		{"display-name from address", func(c *Config) { c.SMTPFromAddress = "Blackwall <licences@example.com>" }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			candidate := *valid
+			tc.mutate(&candidate)
+			if err := candidate.Validate(); err == nil {
+				t.Fatal("invalid SMTP reminder configuration was accepted")
+			}
+		})
+	}
+}
