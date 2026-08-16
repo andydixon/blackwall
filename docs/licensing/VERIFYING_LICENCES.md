@@ -225,6 +225,9 @@ Marking a key compromised is intentionally disruptive. Do not change it back to
 - Back up licence rows and the public key registry with the database. Back up
   the private key separately through the secret manager; never in the same
   archive.
+- Enable the independently configured renewal reminder worker where required;
+  see [Project Licence Renewal Reminders](RENEWAL_REMINDERS.md). Reminder email
+  is an operational courtesy and never replaces fail-closed expiry enforcement.
 - Test tampered payloads, tampered signatures, wrong projects, wrong hostnames,
   expiry, future `nbf`, revocation, disabled projects, retired keys, compromised
   keys, timeouts, malformed JSON, and oversized input before release.

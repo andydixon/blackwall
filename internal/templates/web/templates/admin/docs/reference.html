@@ -30,6 +30,13 @@
         <tr><td><code>licence_max_validity_days</code></td><td><code>365</code></td><td>Issue-time validity ceiling; maximum 3650.</td></tr>
         <tr><td><code>licence_clock_skew_seconds</code></td><td><code>120</code></td><td>Verification clock tolerance; maximum 600.</td></tr>
         <tr><td><code>licence_online_check_seconds</code></td><td><code>86400</code></td><td>Signed maximum interval between authoritative revocation checks.</td></tr>
+        <tr><td><code>licence_reminders_enabled</code></td><td><code>false</code></td><td>Enable durable 30/14/7/2/1-day licence renewal email.</td></tr>
+        <tr><td><code>licence_reminder_interval_seconds</code></td><td><code>900</code></td><td>Reminder queue and delivery interval; 300–86400.</td></tr>
+        <tr><td><code>smtp_host</code> / <code>smtp_port</code></td><td>— / <code>587</code></td><td>Encrypted SMTP submission endpoint.</td></tr>
+        <tr><td><code>smtp_username</code> / <code>smtp_password</code></td><td>—</td><td>Optional pair. Supply the password through the deployment secret store.</td></tr>
+        <tr><td><code>smtp_from_address</code> / <code>smtp_from_name</code></td><td>— / <code>Blackwall</code></td><td>Envelope/header sender identity.</td></tr>
+        <tr><td><code>smtp_tls_mode</code></td><td><code>starttls</code></td><td><code>starttls</code> or <code>implicit</code>; plaintext delivery is unsupported.</td></tr>
+        <tr><td><code>smtp_timeout_seconds</code></td><td><code>10</code></td><td>Network deadline; 1–60 seconds.</td></tr>
     </tbody>
 </table>
 

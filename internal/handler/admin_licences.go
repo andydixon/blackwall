@@ -43,6 +43,14 @@ func (h *AdminHandler) ProjectLicences(w http.ResponseWriter, r *http.Request) {
 	data["IssuanceEnabled"] = h.App.Licences.IssuanceReady()
 	data["ActiveKeyID"] = h.App.Licences.ActiveKeyID()
 	data["MaxValidityDays"] = h.App.Licences.MaxValidityDays()
+	if h.App.Reminders != nil {
+		if reminderStatus, statusErr := h.App.Reminders.ProjectStatus(r.Context(), projectID); statusErr == nil {
+			data["ReminderStatus"] = reminderStatus
+		}
+		if reminderHistory, historyErr := h.App.Reminders.HistoryForProject(r.Context(), projectID, 25); historyErr == nil {
+			data["ReminderHistory"] = reminderHistory
+		}
+	}
 	data["Success"] = r.URL.Query().Get("success")
 	data["Error"] = r.URL.Query().Get("error")
 	templates.AdminPage(w, "projects/licences.html", data)

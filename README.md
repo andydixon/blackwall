@@ -22,7 +22,8 @@ authentication. Single static binary, no external runtime dependencies.
   CSV export, in-app documentation guide.
 - **Project licences** — dedicated Ed25519-signed, exact-hostname-bound licence
   envelopes for a person or business, with feature and instance claims,
-  scoped administration, key rotation, online verification, and revocation.
+  scoped administration, key rotation, online verification, revocation, and
+  durable renewal reminders at 30, 14, 7, 2, and 1 day remaining.
 - **CryptBin** — end-to-end encrypted blob storage. Client-side AES-256-GCM
   on payloads; server-side XChaCha20-Poly1305 wraps the per-item DEK with
   AAD bound to the blob ID. Optional per-item WebAuthn binding.
@@ -161,6 +162,11 @@ chmod 0600 /run/secrets/blackwall_licence_ed25519.pem
 Set `licence_signing_key_file` to that path. Leave it blank when the instance
 must verify and revoke existing licences without issuing new ones. See the
 [complete verification and key-rotation guide](docs/licensing/VERIFYING_LICENCES.md).
+
+Renewal email is independently optional. It uses a duplicate-safe MySQL queue,
+the active designated organisation administrator, and mandatory encrypted SMTP.
+See the [renewal reminder operations guide](docs/licensing/RENEWAL_REMINDERS.md)
+for configuration, recipient rules, retries, privacy, and monitoring.
 
 ## Schema migrations
 

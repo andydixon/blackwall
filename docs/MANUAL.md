@@ -636,6 +636,23 @@ See [Verifying Blackwall Project Licences](licensing/VERIFYING_LICENCES.md) for
 the protocol, threat model, key generation and rotation runbook, status codes,
 and complete PHP, Go, Rust, and Java validation examples.
 
+### Renewal reminders
+
+When enabled, Blackwall queues one renewal email at 30, 14, 7, 2, and 1 UTC
+calendar days before an active licence expires. The recipient is the active
+designated administrator of the project's organisation; their display label
+must be a valid email address. Revoked licences, disabled projects or
+organisations, inactive users, and former designated administrators are checked
+again immediately before delivery and are cancelled rather than emailed.
+
+The project licence page shows mail readiness, the resolved recipient, and
+recent reminder history. Delivery uses a durable, duplicate-safe MySQL queue,
+multi-instance row leases, bounded retries, and a stable opaque Message-ID.
+Messages contain useful renewal metadata but never the licence token, hostname
+or feature claims, instance allowance, or customer reference. See
+[Project Licence Renewal Reminders](licensing/RENEWAL_REMINDERS.md) for secure
+SMTP configuration and the operating runbook.
+
 ---
 
 # Part IV — OAuth 2.1 and OpenID Connect
@@ -2482,6 +2499,13 @@ The main configuration file is `config.yaml`. Every key can also be supplied via
 | `licence_max_validity_days` | 365 | Maximum validity accepted when issuing; range 1–3650. |
 | `licence_clock_skew_seconds` | 120 | Verification tolerance; range 0–600. |
 | `licence_online_check_seconds` | 86400 | Signed maximum interval between authoritative revocation checks; range 300–604800. |
+| `licence_reminders_enabled` | false | Enables the durable 30/14/7/2/1-day renewal reminder worker; valid encrypted SMTP configuration is then required. |
+| `licence_reminder_interval_seconds` | 900 | Queue and delivery scan interval; range 300–86400. |
+| `smtp_host` / `smtp_port` | (empty) / 587 | SMTP submission endpoint without a URL scheme. |
+| `smtp_username` / `smtp_password` | (empty) | Optional credential pair; set both or neither and inject the password from the deployment secret store. |
+| `smtp_from_address` / `smtp_from_name` | (empty) / `Blackwall` | Plain sender mailbox and human-readable name. |
+| `smtp_tls_mode` | `starttls` | Mandatory encrypted transport: `starttls` or `implicit`; plaintext mode is not supported. |
+| `smtp_timeout_seconds` | 10 | Per-connection network deadline; range 1–60. |
 
 ### Metrics
 

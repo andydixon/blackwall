@@ -27,6 +27,41 @@
     </div>
 </div>
 
+{{with .ReminderStatus}}
+<div class="card mt-3 border-info-subtle">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Renewal reminders</span>
+        {{if and .Enabled .RecipientAvailable}}<span class="badge bg-success">ready</span>{{else if .Enabled}}<span class="badge bg-warning text-dark">recipient needed</span>{{else}}<span class="badge bg-secondary">disabled</span>{{end}}
+    </div>
+    <div class="card-body small">
+        {{if .Enabled}}
+            {{if .RecipientAvailable}}
+            <p class="mb-2">Blackwall emails the active designated administrator of <strong>{{.OrganisationName}}</strong> at <code>{{.RecipientLabel}}</code>.</p>
+            {{else}}
+            <p class="mb-2 text-warning">The designated administrator of <strong>{{.OrganisationName}}</strong> does not have an active email-shaped display label. No reminders can be queued until that user is corrected.</p>
+            {{end}}
+        {{else}}
+        <p class="mb-2">Renewal email delivery is not enabled for this Blackwall installation. Configure encrypted SMTP and set <code>licence_reminders_enabled</code> to enable it.</p>
+        {{end}}
+        <p class="text-muted mb-0">One duplicate-safe reminder is queued at 30, 14, 7, 2, and 1 UTC calendar days before each active licence expires. Revoked licences, disabled projects, and former organisation administrators are excluded.</p>
+    </div>
+    {{if $.ReminderHistory}}
+    <div class="table-responsive border-top">
+        <table class="table table-dark table-sm mb-0 align-middle">
+            <thead><tr><th>Licence</th><th>Threshold</th><th>Status</th><th>Attempts</th><th>Sent / queued</th></tr></thead>
+            <tbody>{{range $.ReminderHistory}}<tr>
+                <td><code class="small">{{.LicencePublicID}}</code></td>
+                <td>{{.ThresholdDays}} {{if eq .ThresholdDays 1}}day{{else}}days{{end}}</td>
+                <td>{{if eq .Status "succeeded"}}<span class="badge bg-success">Sent</span>{{else if eq .Status "pending"}}<span class="badge bg-info text-dark">Pending</span>{{else if eq .Status "sending"}}<span class="badge bg-info text-dark">Sending</span>{{else if eq .Status "cancelled"}}<span class="badge bg-secondary">Cancelled</span>{{else}}<span class="badge bg-danger">Delivery exhausted</span>{{end}}</td>
+                <td>{{.Attempts}}</td>
+                <td class="small">{{if .SentAt.Valid}}{{.SentAt.Time.Format "2006-01-02 15:04 UTC"}}{{else}}{{.CreatedAt.Format "2006-01-02 15:04 UTC"}}{{end}}</td>
+            </tr>{{end}}</tbody>
+        </table>
+    </div>
+    {{end}}
+</div>
+{{end}}
+
 <div class="card mt-3">
     <div class="card-header">Issued licences</div>
     <div class="table-responsive">

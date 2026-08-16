@@ -33,6 +33,10 @@ chmod 0600 /run/secrets/blackwall_licence_ed25519.pem</code></pre>
 </ul>
 <p>The source distribution includes the normative <code>docs/licensing/VERIFYING_LICENCES.md</code> guide and fail-closed PHP, Go, Rust, and Java examples.</p>
 
+<h5>Renewal reminders</h5>
+<p>When encrypted SMTP and <code>licence_reminders_enabled</code> are configured, Blackwall emails the active designated administrator of the project's organisation at 30, 14, 7, 2, and 1 UTC calendar days remaining. The administrator's display label must be a valid email address.</p>
+<p>The durable MySQL queue prevents normal duplicate sends across application instances, retries temporary failures with bounded backoff, cancels reminders after revocation or an administrator change, and records recent status on the project licence page. Messages do not contain the licence token, hostnames, features, instance allowance, or customer reference. See <code>docs/licensing/RENEWAL_REMINDERS.md</code> for the complete setup and operating guide.</p>
+
 <h5>Rotation and compromise</h5>
 <p>Replace the mounted private key and restart to activate a new key and retire the previous one. Retired public keys remain available so existing licences verify. If a key may have leaked, stop issuance, mark it <code>compromised</code>, install a new key, revoke and reissue the affected licences, and force consumers to refresh the key registry. Blackwall refuses to reactivate a compromised key.</p>
 {{end}}
