@@ -77,6 +77,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("licence service init failed: %v", err)
 	}
+	var reminderMailer service.MailSender
+	if cfg.LicenceRemindersEnabled {
+		reminderMailer = service.NewSMTPMailer(cfg)
+	}
+	licenceReminderSvc := service.NewLicenceReminderService(database, cfg, reminderMailer)
 	// Wire custom-claims into the OAuth service so it can merge them into
 	// every issued ID token + userinfo response.
 	oauthSvc.SetClaimsProvider(claimsSvc)
@@ -90,6 +95,7 @@ func main() {
 	dispatchCtx, dispatchCancel := context.WithCancel(context.Background())
 	defer dispatchCancel()
 	webhookSvc.StartDispatcher(dispatchCtx, 5*time.Second)
+	licenceReminderSvc.Start(dispatchCtx)
 
 	var cryptbinKEK *service.CryptbinKEK
 	if cfg.CryptbinKEKBase64 != "" {
@@ -119,6 +125,7 @@ func main() {
 		SCIM:        scimSvc,
 		SAML:        samlSvc,
 		Licences:    licenceSvc,
+		Reminders:   licenceReminderSvc,
 		Favicons:    service.NewFaviconService(),
 	}
 

@@ -29,6 +29,7 @@ type App struct {
 	SCIM        *service.SCIMService
 	SAML        *service.SAMLService
 	Licences    *service.LicenceService
+	Reminders   *service.LicenceReminderService
 	Favicons    *service.FaviconService
 }
 
