@@ -70,3 +70,56 @@ func TestValidateReminderSMTPRequiresEncryptedCompleteConfiguration(t *testing.T
 		})
 	}
 }
+
+func TestValidateWebAuthnExtraOrigins(t *testing.T) {
+	base := func() *Config {
+		cfg := defaults()
+		cfg.SessionSecret = strings.Repeat("a", 32)
+		cfg.CSRFSecret = strings.Repeat("b", 32)
+		cfg.AppURL = "https://blackwall.cx"
+		cfg.WebAuthnRPID = "blackwall.cx"
+		return cfg
+	}
+
+	t.Run("accepts and normalises a subdomain", func(t *testing.T) {
+		cfg := base()
+		cfg.WebAuthnExtraOrigins = " https://admin.blackwall.cx/ , https://ops.blackwall.cx "
+		if err := cfg.Validate(); err != nil {
+			t.Fatalf("Validate() error = %v, want nil", err)
+		}
+		if cfg.WebAuthnExtraOrigins != "https://admin.blackwall.cx,https://ops.blackwall.cx" {
+			t.Fatalf("WebAuthnExtraOrigins = %q, want trimmed scheme+host list", cfg.WebAuthnExtraOrigins)
+		}
+	})
+
+	t.Run("accepts the RP ID itself", func(t *testing.T) {
+		cfg := base()
+		cfg.WebAuthnExtraOrigins = "https://blackwall.cx"
+		if err := cfg.Validate(); err != nil {
+			t.Fatalf("Validate() error = %v, want nil", err)
+		}
+	})
+
+	// Each of these would let an origin that can never legitimately hold a
+	// credential for this RP ID past the ceremony's origin check.
+	cases := []struct {
+		name  string
+		value string
+	}{
+		{"outside the RP ID", "https://blackwall.cx.evil.example"},
+		{"suffix without dot boundary", "https://notblackwall.cx"},
+		{"plaintext scheme", "http://admin.blackwall.cx"},
+		{"carries a path", "https://admin.blackwall.cx/admin"},
+		{"carries credentials", "https://user:pw@admin.blackwall.cx"},
+		{"not a URL", "admin.blackwall.cx"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := base()
+			cfg.WebAuthnExtraOrigins = tc.value
+			if err := cfg.Validate(); err == nil {
+				t.Fatalf("Validate() accepted %q", tc.value)
+			}
+		})
+	}
+}

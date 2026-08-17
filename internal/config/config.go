@@ -42,6 +42,14 @@ type Config struct {
 	WebAuthnRPID    string `yaml:"webauthn_rp_id"`
 	WebAuthnRPName  string `yaml:"webauthn_rp_name"`
 	MinWebAuthnKeys int    `yaml:"min_webauthn_keys"`
+	// Extra browser origins permitted to complete a WebAuthn ceremony, on top
+	// of app_url. Comma-separated, scheme+host only (e.g.
+	// "https://admin.blackwall.cx"). Needed when a reverse proxy fronts the
+	// app on a second hostname: the browser reports its own origin in
+	// clientDataJSON, which would otherwise fail the app_url comparison.
+	// Every entry must sit under webauthn_rp_id, since credentials are scoped
+	// to the RP ID and no other host could present them anyway.
+	WebAuthnExtraOrigins string `yaml:"webauthn_extra_origins"`
 
 	AdminSuperProjectName string `yaml:"admin_super_project_name"`
 	AdminSuperProjectUUID string `yaml:"admin_super_project_uuid"`
@@ -191,7 +199,57 @@ func (c *Config) Validate() error {
 			return err
 		}
 	}
+	if err := c.validateWebAuthnExtraOrigins(); err != nil {
+		return err
+	}
 	return nil
+}
+
+// validateWebAuthnExtraOrigins rejects anything the browser could never
+// legitimately present. Each entry has to be a bare https scheme+host that
+// lives under webauthn_rp_id — a credential is bound to the RP ID, so an
+// origin outside it can't hold one, and listing it would only ever widen the
+// origin check for no gain.
+func (c *Config) validateWebAuthnExtraOrigins() error {
+	origins := splitList(c.WebAuthnExtraOrigins)
+	if len(origins) == 0 {
+		c.WebAuthnExtraOrigins = ""
+		return nil
+	}
+	rpID := strings.ToLower(strings.TrimSuffix(c.WebAuthnRPID, "."))
+	if rpID == "" {
+		return fmt.Errorf("config: webauthn_extra_origins requires webauthn_rp_id (or app_url) to be set")
+	}
+
+	normalised := make([]string, 0, len(origins))
+	for _, raw := range origins {
+		u, err := url.Parse(raw)
+		if err != nil || u.Hostname() == "" || u.Scheme != "https" {
+			return fmt.Errorf("config: webauthn_extra_origins entry %q must be an absolute https URL", raw)
+		}
+		if u.User != nil || u.RawQuery != "" || u.Fragment != "" || (u.Path != "" && u.Path != "/") {
+			return fmt.Errorf("config: webauthn_extra_origins entry %q must contain only scheme and host", raw)
+		}
+		host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+		if host != rpID && !strings.HasSuffix(host, "."+rpID) {
+			return fmt.Errorf("config: webauthn_extra_origins entry %q is not under webauthn_rp_id %q", raw, rpID)
+		}
+		normalised = append(normalised, u.Scheme+"://"+u.Host)
+	}
+	c.WebAuthnExtraOrigins = strings.Join(normalised, ",")
+	return nil
+}
+
+// splitList turns a comma-separated config value into trimmed, non-empty
+// entries.
+func splitList(v string) []string {
+	var out []string
+	for _, part := range strings.Split(v, ",") {
+		if p := strings.TrimSpace(part); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 func (c *Config) validateReminderSMTP() error {
@@ -348,6 +406,7 @@ func overrideFromEnv(cfg *Config) {
 	setInt(&cfg.CryptbinDefaultRetentionDays, "CRYPTBIN_DEFAULT_RETENTION_DAYS")
 	setStr(&cfg.WebAuthnRPID, "WEBAUTHN_RP_ID")
 	setStr(&cfg.WebAuthnRPName, "WEBAUTHN_RP_NAME")
+	setStr(&cfg.WebAuthnExtraOrigins, "WEBAUTHN_EXTRA_ORIGINS")
 	setInt(&cfg.MinWebAuthnKeys, "MIN_WEBAUTHN_KEYS")
 	setStr(&cfg.AdminSuperProjectName, "ADMIN_SUPER_PROJECT_NAME")
 	setStr(&cfg.AdminSuperProjectUUID, "ADMIN_SUPER_PROJECT_UUID")
