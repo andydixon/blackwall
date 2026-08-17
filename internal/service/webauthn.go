@@ -130,8 +130,7 @@ func (s *WebAuthnService) VerifyRegistrationResponse(clientDataJSONb64, expected
 	if subtle.ConstantTimeCompare(clientChallenge, serverChallenge) != 1 {
 		return false
 	}
-	expectedOrigin := s.expectedOrigin()
-	if subtle.ConstantTimeCompare([]byte(clientData.Origin), []byte(expectedOrigin)) != 1 {
+	if !s.originAllowed(clientData.Origin) {
 		return false
 	}
 	return true
@@ -235,9 +234,8 @@ func (s *WebAuthnService) VerifyAssertionDetailed(credentialID, clientDataJSONb6
 	}
 
 	// Verify origin (constant-time)
-	expectedOrigin := s.expectedOrigin()
-	if subtle.ConstantTimeCompare([]byte(clientData.Origin), []byte(expectedOrigin)) != 1 {
-		return s.verifyFail("origin_mismatch", credentialID, fmt.Sprintf("got=%q want=%q", clientData.Origin, expectedOrigin))
+	if !s.originAllowed(clientData.Origin) {
+		return s.verifyFail("origin_mismatch", credentialID, fmt.Sprintf("got=%q want=%q", clientData.Origin, strings.Join(s.allowedOrigins(), ", ")))
 	}
 
 	// Decode authenticator data
@@ -536,6 +534,31 @@ func (s *WebAuthnService) expectedOrigin() string {
 		}
 	}
 	return "https://" + s.rpID
+}
+
+// allowedOrigins is the app's own origin plus any extra origins the operator
+// configured. Extras exist for reverse proxies that publish the app on a
+// second hostname (admin.blackwall.cx fronting /admin, say): the browser puts
+// the address-bar origin in clientDataJSON, not app_url. Config validation has
+// already pinned every extra to a host under the RP ID.
+func (s *WebAuthnService) allowedOrigins() []string {
+	origins := []string{s.expectedOrigin()}
+	for _, extra := range strings.Split(config.Get().WebAuthnExtraOrigins, ",") {
+		if extra = strings.TrimSpace(extra); extra != "" {
+			origins = append(origins, extra)
+		}
+	}
+	return origins
+}
+
+// originAllowed compares in constant time against every permitted origin, and
+// keeps scanning after a match so the timing doesn't leak which one matched.
+func (s *WebAuthnService) originAllowed(origin string) bool {
+	matched := 0
+	for _, allowed := range s.allowedOrigins() {
+		matched |= subtle.ConstantTimeCompare([]byte(origin), []byte(allowed))
+	}
+	return matched == 1
 }
 
 func (s *WebAuthnService) verifyFail(reason, credentialID, detail string) (bool, string) {

@@ -43,6 +43,11 @@ csrf_secret: "CHANGE_ME_TO_ANOTHER_RANDOM_HEX"
 webauthn_rp_id: ""                     # blank = derive from app_url hostname
 webauthn_rp_name: "BlackWall OAuth"
 min_webauthn_keys: 1                   # minimum keys per active user
+# Extra browser origins allowed to complete a WebAuthn ceremony, on top of
+# app_url. Only needed when a reverse proxy publishes the app on a second
+# hostname — the browser reports its own origin, not app_url. Comma-separated,
+# https scheme+host only, and each must sit under webauthn_rp_id.
+webauthn_extra_origins: ""             # e.g. "https://admin.example.com"
 
 # ─── CryptBin ────────────────────────────────────────────────────────────────
 # End-to-end encrypted blob storage. The KEK wraps each item's DEK using
