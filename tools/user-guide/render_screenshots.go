@@ -20,6 +20,13 @@ import (
 const (
 	exampleProjectUUID = "aa88643b-889d-4ce7-a96d-4a562065c880"
 	exampleLicenceUUID = "38a46ec2-7f4d-4a77-99dc-2298b16acb08"
+
+	// Release provenance shown in the guide. Update these together with the
+	// release tag so every captured page reports the same build.
+	exampleVersion   = "1.1.0-892f16f"
+	exampleCommit    = "892f16f"
+	exampleBuildDate = "2026-08-17T15:30:04Z"
+	exampleBuildTime = "2026-08-17 15:30 UTC"
 )
 
 func main() {
@@ -34,7 +41,7 @@ func main() {
 		panic(err)
 	}
 
-	now := time.Date(2026, time.August, 16, 9, 30, 0, 0, time.UTC)
+	now := time.Date(2026, time.August, 17, 16, 0, 0, 0, time.UTC)
 	writeAdmin(outputDirectory, "dashboard", "dashboard.html", dashboardData(now))
 	writeAdmin(outputDirectory, "organisations", "organizations/list.html", organisationsData())
 	writeAdmin(outputDirectory, "projects", "projects/list.html", projectsData())
@@ -43,6 +50,11 @@ func main() {
 	writeAdmin(outputDirectory, "licences", "projects/licences.html", licencesData(now))
 	writeAdmin(outputDirectory, "audit-log", "audit/log.html", auditData(now))
 	writeDocs(outputDirectory)
+	// Rendered locally rather than captured from the live host so the guide
+	// always reports the release it documents.
+	writeStandalone(outputDirectory, "admin-login", "admin/login.html", map[string]interface{}{
+		"CSRFToken": "guide-example", "Version": exampleVersion, "BuildDate": exampleBuildDate,
+	})
 	writeStandalone(outputDirectory, "portal", "portal/dashboard.html", map[string]interface{}{
 		"CSRFToken": "guide-example", "User": map[string]interface{}{"display_label": "alex@example.com"},
 		"Projects":    []map[string]interface{}{{"name": "Customer Portal", "privilege_label": "Administrator"}, {"name": "Reporting", "privilege_label": "Viewer"}},
@@ -63,7 +75,7 @@ func main() {
 func baseData(title string) map[string]interface{} {
 	return map[string]interface{}{
 		"Title": title, "CurrentAdminRole": "super_admin", "CurrentUserID": 1,
-		"CSRFToken": "guide-example", "Version": "1.0.1-b6d19bb", "BuildDate": "2026-08-16T09:24:53Z",
+		"CSRFToken": "guide-example", "Version": exampleVersion, "BuildDate": exampleBuildDate,
 		"Capabilities": map[string]bool{"manage_users": true, "manage_projects": true, "view_maintenance": true, "view_licences": true},
 	}
 }
@@ -78,8 +90,8 @@ func dashboardData(now time.Time) map[string]interface{} {
 	data["CSRFSecurityStats"] = period(1, 4, 9)
 	data["SuccessBreakdown"] = []map[string]interface{}{{"EventType": "oauth.token.issue", "Today": 84, "Week": 522, "Month": 2102}, {"EventType": "webauthn.authentication.success", "Today": 31, "Week": 192, "Month": 802}}
 	data["FailBreakdown"] = []map[string]interface{}{{"EventType": "oauth.authorize.fail", "Today": 2, "Week": 11, "Month": 38}, {"EventType": "security.csrf.fail", "Today": 1, "Week": 4, "Month": 9}}
-	data["RecentAudit"] = []map[string]interface{}{{"EventType": "admin.licence.issue", "Outcome": "success", "ActorUUID": "5fd8ee95-f524-46df-8c02-1f92bb26a619", "CreatedAt": "2026-08-16 09:18"}, {"EventType": "oauth.authorize.approve", "Outcome": "success", "ActorUUID": "57d0378d-4879-433a-b060-84c36f30bc58", "CreatedAt": "2026-08-16 09:12"}, {"EventType": "security.csrf.fail", "Outcome": "fail", "ActorUUID": "", "CreatedAt": "2026-08-16 08:54"}}
-	data["BuildStatus"] = map[string]interface{}{"Version": "1.0.1-b6d19bb", "Commit": "b6d19bb", "BuildTime": "2026-08-16 09:24 UTC", "VulnerabilityScanRecorded": true, "VulnerabilityScanTime": "2026-08-16 09:24 UTC", "VulnerabilityScanReference": "release/20260816-licence-reminders"}
+	data["RecentAudit"] = []map[string]interface{}{{"EventType": "admin.licence.issue", "Outcome": "success", "ActorUUID": "5fd8ee95-f524-46df-8c02-1f92bb26a619", "CreatedAt": "2026-08-17 15:48"}, {"EventType": "oauth.authorize.approve", "Outcome": "success", "ActorUUID": "57d0378d-4879-433a-b060-84c36f30bc58", "CreatedAt": "2026-08-17 15:42"}, {"EventType": "security.csrf.fail", "Outcome": "fail", "ActorUUID": "", "CreatedAt": "2026-08-17 15:24"}}
+	data["BuildStatus"] = map[string]interface{}{"Version": exampleVersion, "Commit": exampleCommit, "BuildTime": exampleBuildTime, "VulnerabilityScanRecorded": true, "VulnerabilityScanTime": exampleBuildTime, "VulnerabilityScanReference": "release/20260817-portal-reskin"}
 	data["CanViewApprovals"] = true
 	data["ApprovalSummary"] = map[string]interface{}{"Pending": period(2, 4, 11), "Approved": period(7, 31, 118), "Rejected": period(1, 3, 8), "Cancelled": period(0, 1, 4)}
 	data["ApprovalSLA"] = map[string]int{"MedianSeconds": 840, "P95Seconds": 7200, "PendingOlderThanThreshold": 1, "PendingWarningDays": 3}

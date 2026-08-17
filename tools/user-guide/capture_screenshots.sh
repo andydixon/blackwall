@@ -17,22 +17,34 @@ capture() {
     local target="$2"
     local profile_dir
     local status
-    profile_dir="$(mktemp -d)"
+    local attempt
 
-    set +e
-    timeout --signal=TERM --kill-after=3s 15s \
-        "${CHROME_BIN}" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage \
-        --hide-scrollbars --allow-file-access-from-files --disable-extensions --no-first-run \
-        --user-data-dir="${profile_dir}" --force-device-scale-factor=1 \
-        --window-size=1600,1000 --screenshot="${output}" "${target}" >/dev/null 2>&1
-    status=$?
-    set -e
+    # Remove any previous capture first: Chrome leaves the old file in place
+    # when it fails, so testing only for a non-empty file would accept a stale
+    # screenshot as a successful refresh.
+    rm -f -- "${output}"
 
-    rm -rf -- "${profile_dir}"
-    if [[ ! -s "${output}" ]]; then
-        echo "Unable to capture ${target} (Chrome status ${status})" >&2
-        return 1
-    fi
+    for attempt in 1 2 3; do
+        profile_dir="$(mktemp -d)"
+
+        set +e
+        timeout --signal=TERM --kill-after=3s 30s \
+            "${CHROME_BIN}" --headless --no-sandbox --disable-gpu --disable-dev-shm-usage \
+            --hide-scrollbars --allow-file-access-from-files --disable-extensions --no-first-run \
+            --user-data-dir="${profile_dir}" --force-device-scale-factor=1 \
+            --window-size=1600,1000 --screenshot="${output}" "${target}" >/dev/null 2>&1
+        status=$?
+        set -e
+
+        rm -rf -- "${profile_dir}"
+        if [[ -s "${output}" ]]; then
+            return 0
+        fi
+        echo "Retrying ${target} (attempt ${attempt} failed, Chrome status ${status})" >&2
+    done
+
+    echo "Unable to capture ${target} (Chrome status ${status})" >&2
+    return 1
 }
 
 capture_file() {
@@ -46,12 +58,11 @@ capture_url() {
     capture "${OUTPUT_DIR}/${name}.png" "${url}"
 }
 
-for page in dashboard organisations projects users oauth-clients licences audit-log documentation portal oauth-consent cryptbin-create; do
+for page in dashboard organisations projects users oauth-clients licences audit-log documentation admin-login portal oauth-consent cryptbin-create; do
     capture_file "${page}"
 done
 
 capture_url home https://blackwall.cx/
-capture_url admin-login https://blackwall.cx/admin/login
 capture_url portal-login https://blackwall.cx/portal/login
 capture_url organisation-signup https://blackwall.cx/organisations/signup
 

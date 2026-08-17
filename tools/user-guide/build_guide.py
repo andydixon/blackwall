@@ -182,6 +182,7 @@ class GuideBuilder:
         self.page_has_content = False
         self.current_part = ""
         self.pending_part = ""
+        self.part_header_frame = None
         self.chapter_entries = []
         self.fonts = set(scribus.getFontNames())
         self.body_font = self.pick_font("Lato Regular", "DejaVu Sans Book", "DejaVu Sans")
@@ -303,13 +304,31 @@ class GuideBuilder:
         self.add_text(str(page), left + width - 32, PAGE_HEIGHT - 31, 32, 14,
                       self.bold_font, 8, "GuideMuted", scribus.ALIGN_RIGHT, leading=9)
 
+    def draw_part_header(self):
+        left, width = self.content_geometry()
+        if self.current_part:
+            self.part_header_frame = self.add_text(
+                self.current_part.upper(), left + width / 2, 28, width / 2, 12,
+                self.body_font, 6.8, "GuideMuted", scribus.ALIGN_RIGHT, leading=8)
+        else:
+            self.part_header_frame = None
+
+    def refresh_part_header(self):
+        """Redraw the current page's part header after the part has changed.
+
+        A chapter opener reaches its page before the new part becomes current,
+        so the header drawn with the page still names the part that just
+        ended. Replacing the frame is cheaper than deferring every header.
+        """
+        if self.part_header_frame is not None:
+            scribus.deleteObject(self.part_header_frame)
+        self.draw_part_header()
+
     def add_running_header(self):
         left, width = self.content_geometry()
         self.add_text("BLACKWALL USER GUIDE", left, 28, width / 2, 12,
                       self.bold_font, 6.8, "GuideMuted", leading=8)
-        if self.current_part:
-            self.add_text(self.current_part.upper(), left + width / 2, 28, width / 2, 12,
-                          self.body_font, 6.8, "GuideMuted", scribus.ALIGN_RIGHT, leading=8)
+        self.draw_part_header()
 
     def new_page(self, blank=False):
         scribus.newPage(-1)
@@ -341,6 +360,7 @@ class GuideBuilder:
         if self.pending_part:
             self.current_part = self.pending_part
             self.pending_part = ""
+            self.refresh_part_header()
         self.chapter_entries.append((self.current_part, title, self.page))
         left, width = self.content_geometry()
         if self.current_part:

@@ -17,7 +17,9 @@ Use Scribus 1.6 or later, Go, `curl`, the Playwright Chromium headless shell and
 xvfb-run -a scribus -g -py tools/user-guide/build_guide.py
 ```
 
-The screenshot tool renders BlackWall's real templates with clearly fictional, synthetic organisation, project, user and licence data. It captures the public entry pages from `https://blackwall.cx`. It does not bypass authentication, read the production database or place live credentials, licence tokens or personal data in the guide.
+The screenshot tool renders BlackWall's real templates with clearly fictional, synthetic organisation, project, user and licence data. It captures the public landing and portal sign-in pages from `https://blackwall.cx`. It does not bypass authentication, read the production database or place live credentials, licence tokens or personal data in the guide.
+
+The admin sign-in page is rendered locally rather than captured live, because its build-provenance panel must report the release the guide documents. That release string lives in the `exampleVersion`, `exampleCommit`, `exampleBuildDate` and `exampleBuildTime` constants in [`../../tools/user-guide/render_screenshots.go`](../../tools/user-guide/render_screenshots.go) — update them together with the release tag before recapturing.
 
 The layout script creates A4 facing pages, reserves cover, dedication and contents pages, and forces every chapter to begin on an odd-numbered right-hand page. It then exports both the editable `.sla` document and its PDF edition.
 
