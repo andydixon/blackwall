@@ -10,6 +10,51 @@
 
 :root {
     --bw-mono: "JetBrains Mono", ui-monospace, "SF Mono", "Fira Code", monospace;
+    /* Single source of truth for the horizontal inset of card content, so
+       body copy, headers, footers and table columns all line up. */
+    --bw-card-inset: 1.5rem;
+}
+
+/* ── Density ─────────────────────────────────────────────────────
+   Tabler's defaults are tighter than BlackWall's dense admin pages want:
+   cards inset content by 1.25rem but table cells by only 0.75rem, and most
+   admin pages put a table in a `card-body p-0`, so that 0.75rem was the only
+   thing keeping data off the card edge. Widen both and align them. */
+
+.app-page {
+    --tblr-card-spacer-y: 1.25rem;
+    --tblr-card-spacer-x: var(--bw-card-inset);
+    --tblr-card-cap-padding-y: 1rem;
+    --tblr-card-cap-padding-x: var(--bw-card-inset);
+}
+
+.app-page .table > :not(caption) > * > * {
+    padding: 0.85rem 1rem;
+}
+
+/* The outermost columns align with the card's own inset rather than sitting
+   nearer the edge than the surrounding prose. */
+.app-page .card .table > :not(caption) > * > *:first-child {
+    padding-left: var(--bw-card-inset);
+}
+
+.app-page .card .table > :not(caption) > * > *:last-child {
+    padding-right: var(--bw-card-inset);
+}
+
+.app-page .list-group-item {
+    padding: 0.85rem var(--bw-card-inset);
+}
+
+@media (max-width: 575.98px) {
+    /* Reclaim horizontal space on small screens. */
+    .app-page {
+        --bw-card-inset: 1rem;
+    }
+
+    .app-page .table > :not(caption) > * > * {
+        padding: 0.75rem 0.65rem;
+    }
 }
 
 /* ── Brand lockup ─────────────────────────────────────────────────
@@ -73,7 +118,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    padding: 1rem 1.25rem;
+    padding: 1rem var(--bw-card-inset);
     border: 1px solid var(--ns-color-border);
     border-radius: var(--ns-radius-card);
     background: var(--ns-color-surface);
