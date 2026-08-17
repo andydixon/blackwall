@@ -1,40 +1,48 @@
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
     <title>Sign In — BlackWall</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/vendor/tabler/tabler.min.css">
+    <link rel="stylesheet" href="/assets/css/theme.css">
     <link rel="stylesheet" href="/assets/css/blackwall.css">
 </head>
-<body class="bg-charcoal d-flex align-items-center justify-content-center" style="min-height:100vh">
-<div class="card" style="width:100%;max-width:420px;margin:2rem auto">
-    <div class="card-body p-4">
-        <div class="text-center mb-4">
-            {{if .Organization.LogoURL.Valid}}
-            <img src="{{.Organization.LogoURL.String}}" alt="" style="height:40px;margin-bottom:1rem">
-            {{else}}
-            <img src="/assets/blackwall.svg" alt="BlackWall" style="height:40px;filter:brightness(0) invert(1);opacity:0.85;margin-bottom:1rem">
+<body class="app-page">
+<main class="auth-layout d-flex align-items-center justify-content-center py-4">
+<div class="auth-panel">
+    <div class="card card-md">
+        <div class="card-body p-4">
+            <div class="text-center mb-4">
+                <span class="auth-brand">
+                    {{if .Organization.LogoURL.Valid}}
+                    <img src="{{.Organization.LogoURL.String}}" alt="">
+                    {{else}}
+                    <img src="/assets/blackwall.svg" alt="">
+                    {{end}}
+                </span>
+                <h1 class="h2 mb-1">Sign in to {{.ClientName}}</h1>
+                <p class="text-secondary small mb-0">Use your security key to continue</p>
+            </div>
+            {{if eq .ReauthenticationReason "max_age"}}
+            <div class="alert alert-info small">{{.ClientName}} requires a recent sign-in (within {{.MaxAge}} seconds), so BlackWall needs another passkey check.</div>
+            {{else if eq .ReauthenticationReason "prompt_login"}}
+            <div class="alert alert-info small">{{.ClientName}} requested a fresh sign-in, so BlackWall needs another passkey check.</div>
             {{end}}
-            <h5 class="mb-1">Sign in to {{.ClientName}}</h5>
-            <p class="text-muted small mb-0">Use your security key to continue</p>
+            <div id="webauthn-status" class="alert alert-info d-none"></div>
+            <form id="webauthn-form">
+                <input type="hidden" name="csrf_token" value="{{.CSRFToken}}" id="csrf_token">
+                <button type="submit" class="btn btn-primary w-100" id="signin-btn">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    Sign in with Security Key
+                </button>
+            </form>
         </div>
-        {{if eq .ReauthenticationReason "max_age"}}
-        <div class="alert alert-info small">{{.ClientName}} requires a recent sign-in (within {{.MaxAge}} seconds), so BlackWall needs another passkey check.</div>
-        {{else if eq .ReauthenticationReason "prompt_login"}}
-        <div class="alert alert-info small">{{.ClientName}} requested a fresh sign-in, so BlackWall needs another passkey check.</div>
-        {{end}}
-        <div id="webauthn-status" class="alert alert-info d-none"></div>
-        <form id="webauthn-form">
-            <input type="hidden" name="csrf_token" value="{{.CSRFToken}}" id="csrf_token">
-            <button type="submit" class="btn btn-primary w-100" id="signin-btn">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                Sign in with Security Key
-            </button>
-        </form>
     </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</main>
+<script src="/assets/vendor/tabler/tabler.min.js" defer></script>
 <script src="/assets/js/blackwall.js"></script>
 <script>
 document.getElementById('webauthn-form').addEventListener('submit', async function(e) {

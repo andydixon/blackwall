@@ -113,6 +113,245 @@
     font-size: 0.83rem;
 }
 
+/* ── Authentication screens ──────────────────────────────────────
+   Shared by the admin, portal and OAuth sign-in pages plus enrolment and
+   organisation signup. The theme supplies .auth-layout, .auth-panel and
+   .auth-intro__accent; these add the brand lockup and the wider two-column
+   arrangement the admin login needs for its build metadata. */
+
+.auth-brand {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.6rem;
+    margin-bottom: 1.25rem;
+    color: var(--ns-color-brand);
+    font-size: 1.15rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    text-decoration: none;
+}
+
+.auth-brand img {
+    display: block;
+    height: 38px;
+    width: auto;
+}
+
+/* Wider than .auth-panel: an information column beside the sign-in card. */
+.auth-shell {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    width: min(980px, calc(100% - 2rem));
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 1.25rem;
+    margin: 2rem auto;
+    align-items: start;
+}
+
+.auth-shell > .card {
+    margin: 0;
+}
+
+.auth-kicker {
+    color: var(--ns-color-action);
+    font-size: 0.69rem;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+}
+
+/* Build/version metadata table on the admin sign-in page. */
+.build-info {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.88rem;
+}
+
+.build-info th,
+.build-info td {
+    padding: 0.45rem 0;
+    border-bottom: 1px solid var(--ns-color-border);
+    vertical-align: top;
+}
+
+.build-info tr:last-child th,
+.build-info tr:last-child td {
+    border-bottom: 0;
+}
+
+.build-info th {
+    width: 8rem;
+    color: #54718b;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+}
+
+.build-info td {
+    color: var(--ns-color-text);
+    font-family: var(--bw-mono);
+    word-break: break-word;
+}
+
+@media (max-width: 991.98px) {
+    .auth-shell {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ── OAuth consent ───────────────────────────────────────────────
+   The consent screen keeps its bespoke structure — a lockup pairing BlackWall
+   with the requesting client, then one row per fact being consented to —
+   restyled onto the theme's surfaces. */
+
+.consent-connection {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin-bottom: 1.25rem;
+}
+
+.consent-logo {
+    display: flex;
+    width: 48px;
+    height: 48px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--ns-color-border);
+    border-radius: 12px;
+    background: var(--ns-color-surface);
+}
+
+.consent-logo img.consent-logo__brand {
+    height: 26px;
+    width: auto;
+}
+
+.consent-logo img.consent-logo__client {
+    width: 30px;
+    height: 30px;
+    border-radius: 6px;
+    object-fit: contain;
+}
+
+.consent-logo .consent-logo__initial {
+    color: var(--ns-color-action);
+    font-size: 1.25rem;
+    font-weight: 700;
+}
+
+.consent-dots {
+    display: flex;
+    max-width: 80px;
+    flex: 1;
+    align-items: center;
+    gap: 4px;
+}
+
+.consent-dots span {
+    position: relative;
+    height: 2px;
+    flex: 1;
+    overflow: hidden;
+    border-radius: 1px;
+    background: var(--ns-color-border);
+}
+
+.consent-dots span::after {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, var(--ns-color-action), transparent);
+    animation: consent-slide 2s linear infinite;
+    content: "";
+}
+
+@keyframes consent-slide {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(100%); }
+}
+
+.consent-detail {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.875rem;
+    padding: 0.875rem 1rem;
+    border: 1px solid var(--ns-color-border);
+    border-radius: 10px;
+    background: var(--ns-color-surface-subtle);
+}
+
+.consent-detail + .consent-detail {
+    margin-top: 0.75rem;
+}
+
+.consent-detail__icon {
+    display: flex;
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: #eaf5fd;
+    box-shadow: inset 0 0 0 1px rgba(12, 120, 201, 0.18);
+}
+
+.consent-detail__icon svg {
+    width: 16px;
+    height: 16px;
+    stroke: var(--ns-color-action);
+}
+
+.consent-detail__body {
+    min-width: 0;
+    flex: 1;
+}
+
+.consent-detail__label {
+    margin-bottom: 0.2rem;
+    color: #54718b;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.consent-detail__value {
+    color: var(--ns-color-text);
+    font-size: 0.94rem;
+    font-weight: 600;
+}
+
+.consent-detail__sub {
+    margin-top: 0.15rem;
+    color: var(--ns-color-text-muted);
+    font-family: var(--bw-mono);
+    font-size: 0.74rem;
+    word-break: break-all;
+}
+
+.consent-privilege {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.25em 0.75em;
+    border-radius: 999px;
+    background: #eaf5fd;
+    box-shadow: inset 0 0 0 1px rgba(12, 120, 201, 0.25);
+    color: #0a5f9e;
+    font-size: 0.81rem;
+    font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .consent-dots span::after { animation: none; }
+}
+
 /* ── Page headings ───────────────────────────────────────────────
    Admin pages emit `<div class="page-header"><h2>Title</h2></div>` followed by
    a muted paragraph. Map that onto the theme's page-title / page-intro pair so
