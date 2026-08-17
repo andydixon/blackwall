@@ -23,10 +23,10 @@ const (
 
 	// Release provenance shown in the guide. Update these together with the
 	// release tag so every captured page reports the same build.
-	exampleVersion   = "1.1.0-892f16f"
-	exampleCommit    = "892f16f"
-	exampleBuildDate = "2026-08-17T15:30:04Z"
-	exampleBuildTime = "2026-08-17 15:30 UTC"
+	exampleVersion   = "1.1.0-aa38181"
+	exampleCommit    = "aa38181"
+	exampleBuildDate = "2026-08-17T15:54:03Z"
+	exampleBuildTime = "2026-08-17 15:54 UTC"
 )
 
 func main() {
