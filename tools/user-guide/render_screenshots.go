@@ -206,13 +206,10 @@ func writeHTML(outputDirectory, name string, recorder *httptest.ResponseRecorder
 		panic(err)
 	}
 	body := recorder.Body.String()
+	// Every asset the templates reference is now served from /assets/, so
+	// pointing that prefix at the static directory on disk is all headless
+	// Chrome needs. Nothing is fetched from a CDN any more.
 	assetPrefix := "file://" + filepath.ToSlash(staticDirectory) + "/"
-	guideAssetPrefix := "file:///tmp/blackwall-user-guide-assets/"
-	body = strings.ReplaceAll(body, `https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css`, guideAssetPrefix+`bootstrap.min.css`)
-	body = strings.ReplaceAll(body, `https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js`, guideAssetPrefix+`bootstrap.bundle.min.js`)
-	body = strings.ReplaceAll(body, `<link rel="preconnect" href="https://fonts.googleapis.com">`, ``)
-	body = strings.ReplaceAll(body, `<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>`, ``)
-	body = strings.ReplaceAll(body, `<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">`, ``)
 	body = strings.ReplaceAll(body, `href="/assets/`, `href="`+assetPrefix)
 	body = strings.ReplaceAll(body, `src="/assets/`, `src="`+assetPrefix)
 	if err := os.WriteFile(filepath.Join(outputDirectory, name+".html"), []byte(body), 0o644); err != nil {

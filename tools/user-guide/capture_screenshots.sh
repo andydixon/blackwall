@@ -3,17 +3,13 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 HTML_DIR="${TMPDIR:-/tmp}/blackwall-user-guide-html"
-ASSET_DIR="${TMPDIR:-/tmp}/blackwall-user-guide-assets"
 OUTPUT_DIR="${ROOT_DIR}/docs/user-guide/screenshots"
 CHROME_BIN="${CHROME_BIN:-/home/andy/.cache/ms-playwright/chromium_headless_shell-1234/chrome-headless-shell-linux64/chrome-headless-shell}"
 
-mkdir -p "${HTML_DIR}" "${ASSET_DIR}" "${OUTPUT_DIR}"
-curl --fail --silent --show-error --location \
-    https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css \
-    --output "${ASSET_DIR}/bootstrap.min.css"
-curl --fail --silent --show-error --location \
-    https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js \
-    --output "${ASSET_DIR}/bootstrap.bundle.min.js"
+# No assets are downloaded: Tabler and the theme are vendored under
+# internal/templates/web/static, which render_screenshots.go points the
+# rendered HTML at directly.
+mkdir -p "${HTML_DIR}" "${OUTPUT_DIR}"
 go run "${ROOT_DIR}/tools/user-guide/render_screenshots.go" "${HTML_DIR}"
 
 capture() {

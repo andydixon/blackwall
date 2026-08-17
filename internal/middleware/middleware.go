@@ -159,10 +159,15 @@ func SecurityHeaders(next http.Handler) http.Handler {
 			formAction = "form-action 'self' https: http://localhost:* http://127.0.0.1:* http://[::1]:*"
 		}
 
+		// Every stylesheet, script and font is now served from this origin —
+		// Tabler is vendored into the embedded static assets — so no external
+		// host needs to be allowed. 'unsafe-inline' is still required by the
+		// inline <script> blocks on the WebAuthn pages and the inline style
+		// attributes in the templates.
 		csp := strings.Join([]string{
 			"default-src 'self'",
-			"script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
-			"style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net",
+			"script-src 'self' 'unsafe-inline'",
+			"style-src 'self' 'unsafe-inline'",
 			"img-src 'self' data:",
 			"connect-src 'self'",
 			"frame-ancestors 'none'",
