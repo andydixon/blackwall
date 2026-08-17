@@ -3,6 +3,9 @@ config.yaml
 prod.config.yaml
 *.local.yaml
 vendor/
+# Vendored browser assets are embedded into the binary via go:embed, so they
+# must stay tracked despite the blanket vendor/ rule above.
+!internal/templates/web/static/vendor/
 logs/*.log
 !logs/.gitkeep
 tmp/*
