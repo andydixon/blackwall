@@ -15,7 +15,7 @@
 <div class="card mt-3 border-info-subtle">
     <div class="card-header d-flex justify-content-between align-items-center">
         <span>Signing service</span>
-        {{if .IssuanceEnabled}}<span class="badge bg-success">ready</span>{{else}}<span class="badge bg-warning text-dark">issuance disabled</span>{{end}}
+        {{if .IssuanceEnabled}}<span class="badge bg-success">ready</span>{{else}}<span class="badge bg-warning">issuance disabled</span>{{end}}
     </div>
     <div class="card-body small">
         {{if .IssuanceEnabled}}
@@ -31,7 +31,7 @@
 <div class="card mt-3 border-info-subtle">
     <div class="card-header d-flex justify-content-between align-items-center">
         <span>Renewal reminders</span>
-        {{if and .Enabled .RecipientAvailable}}<span class="badge bg-success">ready</span>{{else if .Enabled}}<span class="badge bg-warning text-dark">recipient needed</span>{{else}}<span class="badge bg-secondary">disabled</span>{{end}}
+        {{if and .Enabled .RecipientAvailable}}<span class="badge bg-success">ready</span>{{else if .Enabled}}<span class="badge bg-warning">recipient needed</span>{{else}}<span class="badge bg-secondary">disabled</span>{{end}}
     </div>
     <div class="card-body small">
         {{if .Enabled}}
@@ -47,12 +47,12 @@
     </div>
     {{if $.ReminderHistory}}
     <div class="table-responsive border-top">
-        <table class="table table-dark table-sm mb-0 align-middle">
+        <table class="table table-sm mb-0 align-middle">
             <thead><tr><th>Licence</th><th>Threshold</th><th>Status</th><th>Attempts</th><th>Sent / queued</th></tr></thead>
             <tbody>{{range $.ReminderHistory}}<tr>
                 <td><code class="small">{{.LicencePublicID}}</code></td>
                 <td>{{.ThresholdDays}} {{if eq .ThresholdDays 1}}day{{else}}days{{end}}</td>
-                <td>{{if eq .Status "succeeded"}}<span class="badge bg-success">Sent</span>{{else if eq .Status "pending"}}<span class="badge bg-info text-dark">Pending</span>{{else if eq .Status "sending"}}<span class="badge bg-info text-dark">Sending</span>{{else if eq .Status "cancelled"}}<span class="badge bg-secondary">Cancelled</span>{{else}}<span class="badge bg-danger">Delivery exhausted</span>{{end}}</td>
+                <td>{{if eq .Status "succeeded"}}<span class="badge bg-success">Sent</span>{{else if eq .Status "pending"}}<span class="badge bg-info">Pending</span>{{else if eq .Status "sending"}}<span class="badge bg-info">Sending</span>{{else if eq .Status "cancelled"}}<span class="badge bg-secondary">Cancelled</span>{{else}}<span class="badge bg-danger">Delivery exhausted</span>{{end}}</td>
                 <td>{{.Attempts}}</td>
                 <td class="small">{{if .SentAt.Valid}}{{.SentAt.Time.Format "2006-01-02 15:04 UTC"}}{{else}}{{.CreatedAt.Format "2006-01-02 15:04 UTC"}}{{end}}</td>
             </tr>{{end}}</tbody>
@@ -65,7 +65,7 @@
 <div class="card mt-3">
     <div class="card-header">Issued licences</div>
     <div class="table-responsive">
-        <table class="table table-dark table-sm mb-0 align-middle">
+        <table class="table table-sm mb-0 align-middle">
             <thead><tr><th>Entity</th><th>Hostnames</th><th>Features</th><th>Instances</th><th>Issued / expires</th><th>Status</th><th></th></tr></thead>
             <tbody>
                 {{range .Licences}}
@@ -73,12 +73,12 @@
                 <tr>
                     <td><strong>{{.EntityName}}</strong><br><span class="text-muted small">{{.EntityType}}{{if .EntityReference.Valid}} · {{.EntityReference.String}}{{end}}</span><br><code class="small">{{.PublicID}}</code></td>
                     <td class="small">{{range .Hostnames}}<code class="d-block">{{.}}</code>{{end}}</td>
-                    <td class="small">{{range .Features}}<span class="badge text-bg-dark border me-1">{{.}}</span>{{else}}<span class="text-muted">No feature restrictions</span>{{end}}</td>
+                    <td class="small">{{range .Features}}<span class="badge bg-secondary border me-1">{{.}}</span>{{else}}<span class="text-muted">No feature restrictions</span>{{end}}</td>
                     <td>{{.MaxInstances}}</td>
                     <td class="small"><span class="text-muted">Issued</span> {{.IssuedAt.Format "2006-01-02 15:04 UTC"}}<br><span class="text-muted">Expires</span> {{.ExpiresAt.Format "2006-01-02 15:04 UTC"}}</td>
-                    <td>{{if eq $state "active"}}<span class="badge bg-success">Active</span>{{else if eq $state "revoked"}}<span class="badge bg-danger">Revoked</span>{{else if eq $state "expired"}}<span class="badge bg-secondary">Expired</span>{{else}}<span class="badge bg-info text-dark">Scheduled</span>{{end}}{{if .RevocationReason.Valid}}<div class="text-muted small mt-1">{{.RevocationReason.String}}</div>{{end}}</td>
+                    <td>{{if eq $state "active"}}<span class="badge bg-success">Active</span>{{else if eq $state "revoked"}}<span class="badge bg-danger">Revoked</span>{{else if eq $state "expired"}}<span class="badge bg-secondary">Expired</span>{{else}}<span class="badge bg-info">Scheduled</span>{{end}}{{if .RevocationReason.Valid}}<div class="text-muted small mt-1">{{.RevocationReason.String}}</div>{{end}}</td>
                     <td class="text-end text-nowrap">
-                        <a href="/admin/projects/{{$.Project.UUID}}/licences/{{.PublicID}}/download" class="btn btn-sm btn-outline-light">Download</a>
+                        <a href="/admin/projects/{{$.Project.UUID}}/licences/{{.PublicID}}/download" class="btn btn-sm btn-outline-secondary">Download</a>
                         {{if and $.CanManage (eq $state "active")}}
                         <button class="btn btn-sm btn-outline-danger" type="button" data-bs-toggle="collapse" data-bs-target="#revoke-{{.PublicID}}">Revoke</button>
                         {{end}}

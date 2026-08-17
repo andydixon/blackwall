@@ -1,668 +1,47 @@
 {{define "layout"}}<!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
     <title>{{.Title}} — BlackWall</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/assets/vendor/tabler/tabler.min.css">
+    <link rel="stylesheet" href="/assets/css/theme.css">
     <link rel="stylesheet" href="/assets/css/blackwall.css">
-    <style>
-        :root {
-            --bw-bg: #0b0e14;
-            --bw-surface: #161b22;
-            --bw-surface-soft: #1d232d;
-            --bw-surface-strong: #232a35;
-            --bw-border: #30363d;
-            --bw-border-soft: rgba(140, 144, 159, 0.22);
-            --bw-text: #e1e2ec;
-            --bw-text-muted: #9ba3b4;
-            --bw-text-soft: #c2c6d6;
-            --bw-primary: #adc6ff;
-            --bw-primary-strong: #8fb0ff;
-            --bw-success: #4ade80;
-            --bw-warning: #ffb86b;
-            --bw-danger: #ff9e95;
-            --bw-info: #a5bfff;
-            --bw-shadow: 0 20px 40px rgba(0, 0, 0, 0.32);
-            --bw-radius: 12px;
-        }
-
-        body {
-            background:
-                radial-gradient(circle at top center, rgba(77, 142, 255, 0.08), transparent 36%),
-                linear-gradient(180deg, #0b0e14 0%, #10131a 100%);
-            color: var(--bw-text);
-            font-family: "Inter", system-ui, sans-serif;
-            min-height: 100vh;
-            letter-spacing: -0.01em;
-        }
-
-        body::before {
-            content: "";
-            position: fixed;
-            inset: 0;
-            pointer-events: none;
-            background-image:
-                linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
-            background-size: 40px 40px;
-            mask-image: linear-gradient(to bottom, rgba(0,0,0,.35), transparent 80%);
-            z-index: 0;
-        }
-
-        a {
-            color: var(--bw-primary);
-            text-decoration: none;
-        }
-
-        a:hover {
-            color: #d3e1ff;
-        }
-
-        code, pre, .font-monospace {
-            font-family: "JetBrains Mono", ui-monospace, monospace !important;
-        }
-
-        .impersonation-bar {
-            position: relative;
-            z-index: 3;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.75rem 1.25rem;
-            border-bottom: 1px solid rgba(255, 184, 107, 0.25);
-            background: rgba(255, 184, 107, 0.12);
-            color: #ffd4a7;
-            font-size: 0.875rem;
-            backdrop-filter: blur(10px);
-        }
-
-        .admin-topbar {
-            position: sticky;
-            top: 0;
-            z-index: 20;
-            min-height: 4.75rem;
-            background: rgba(16, 19, 26, 0.88);
-            backdrop-filter: blur(14px);
-            border-bottom: 1px solid var(--bw-border);
-        }
-
-        .admin-topbar .navbar-brand {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            font-size: 2rem;
-            font-weight: 800;
-            color: #f1f4fb;
-            letter-spacing: -0.03em;
-        }
-
-        .admin-topbar .navbar-brand img {
-            height: 1.65rem;
-            filter: brightness(0) invert(1);
-            opacity: 0.92;
-        }
-
-        .admin-topbar .navbar-nav {
-            gap: 0.15rem;
-        }
-
-        .admin-topbar .nav-link {
-            position: relative;
-            padding: 1.55rem 0.95rem 1.2rem !important;
-            color: var(--bw-text-soft);
-            font-size: 0.76rem;
-            font-weight: 700;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            border-bottom: 2px solid transparent;
-            transition: color 0.16s ease, border-color 0.16s ease;
-        }
-
-        .admin-topbar .nav-link:hover,
-        .admin-topbar .nav-link.active {
-            color: var(--bw-primary);
-            border-bottom-color: var(--bw-primary-strong);
-        }
-
-        .admin-role-badge {
-            border: 1px solid var(--bw-border);
-            background: rgba(255,255,255,0.02);
-            color: var(--bw-text-soft);
-            border-radius: 8px;
-            padding: 0.4rem 0.7rem;
-            font-size: 0.7rem;
-            font-weight: 700;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-        }
-
-        .admin-main {
-            position: relative;
-            z-index: 1;
-            max-width: 1600px;
-            margin: 0 auto;
-            padding: 2rem 1.5rem 3rem;
-        }
-
-        .admin-footer {
-            position: relative;
-            z-index: 1;
-            max-width: 1600px;
-            margin: 0 auto;
-            padding: 1rem 1.5rem 2.25rem;
-            color: var(--bw-text-muted);
-        }
-
-        .admin-footer-shell {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 1rem;
-            padding: 1rem 1.25rem;
-            border: 1px solid var(--bw-border-soft);
-            border-radius: var(--bw-radius);
-            background: rgba(22, 27, 34, 0.6);
-        }
-
-        .admin-footer-meta {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-            flex-wrap: wrap;
-            font-size: 0.78rem;
-        }
-
-        .admin-footer-meta strong {
-            color: var(--bw-text-soft);
-            font-size: 0.68rem;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-            margin-right: 0.45rem;
-        }
-
-        .page-header h2,
-        h1, h2, h3, h4, h5 {
-            color: #f1f4fb;
-            letter-spacing: -0.03em;
-        }
-
-        .page-header h2 {
-            margin: 0;
-            font-size: 2.45rem;
-            font-weight: 800;
-        }
-
-        .text-muted,
-        .form-text,
-        .small.text-muted {
-            color: var(--bw-text-muted) !important;
-        }
-
-        .row.mt-4:first-child,
-        .row.mt-4.align-items-center:first-child,
-        .row.mt-4.g-4:first-child {
-            margin-top: 0 !important;
-            margin-bottom: 1.5rem;
-        }
-
-        .card,
-        .modal-content {
-            background: rgba(22, 27, 34, 0.88);
-            border: 1px solid var(--bw-border);
-            border-radius: var(--bw-radius);
-            box-shadow: var(--bw-shadow);
-            overflow: hidden;
-        }
-
-        .card + .card,
-        .card.mt-3,
-        .row + .card,
-        form.card {
-            margin-top: 1.25rem !important;
-        }
-
-        .card-header,
-        .card-footer,
-        .modal-header,
-        .modal-footer {
-            background: rgba(35, 42, 53, 0.55);
-            border-color: var(--bw-border);
-            color: #eef2fb;
-            padding: 1rem 1.25rem;
-        }
-
-        .card-header {
-            font-size: 1.2rem;
-            font-weight: 700;
-            letter-spacing: -0.02em;
-        }
-
-        .card-body,
-        .modal-body {
-            padding: 1.25rem;
-        }
-
-        .card .display-6 {
-            font-size: 2.35rem;
-            font-weight: 800;
-            letter-spacing: -0.03em;
-            color: #f1f4fb;
-        }
-
-        .card.text-center .card-body {
-            min-height: 132px;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-        }
-
-        .card .card-title,
-        .card h5,
-        .card h6 {
-            color: #f1f4fb;
-        }
-
-        .row.g-3 .card.text-center .small.text-muted {
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            font-size: 0.72rem;
-        }
-
-        .table {
-            --bs-table-bg: transparent;
-            --bs-table-color: var(--bw-text);
-            --bs-table-border-color: rgba(66, 71, 84, 0.6);
-            --bs-table-striped-bg: transparent;
-            --bs-table-hover-bg: rgba(173, 198, 255, 0.045);
-            --bs-table-hover-color: #f4f7ff;
-            margin-bottom: 0;
-        }
-
-        .table > :not(caption) > * > * {
-            padding: 0.92rem 1.15rem;
-            background: transparent !important;
-            border-bottom-color: rgba(66, 71, 84, 0.45);
-        }
-
-        .table thead th {
-            background: rgba(35, 42, 53, 0.7) !important;
-            color: var(--bw-text-soft);
-            font-size: 0.73rem;
-            font-weight: 700;
-            letter-spacing: 0.09em;
-            text-transform: uppercase;
-            border-bottom: 1px solid var(--bw-border);
-        }
-
-        .table tbody tr:hover {
-            background: rgba(173, 198, 255, 0.045);
-        }
-
-        .table-sm > :not(caption) > * > * {
-            padding-top: 0.82rem;
-            padding-bottom: 0.82rem;
-        }
-
-        .table-responsive {
-            border-radius: var(--bw-radius);
-        }
-
-        .form-label {
-            color: var(--bw-text-soft);
-            font-size: 0.76rem;
-            font-weight: 700;
-            letter-spacing: 0.09em;
-            text-transform: uppercase;
-            margin-bottom: 0.5rem;
-        }
-
-        .form-control,
-        .form-select,
-        textarea.form-control {
-            background: rgba(11, 14, 20, 0.88);
-            border: 1px solid var(--bw-border);
-            color: var(--bw-text);
-            border-radius: 10px;
-            padding: 0.78rem 0.9rem;
-            box-shadow: none;
-        }
-
-        .form-control:focus,
-        .form-select:focus,
-        textarea.form-control:focus {
-            background: rgba(11, 14, 20, 0.96);
-            color: #fff;
-            border-color: rgba(173, 198, 255, 0.8);
-            box-shadow: 0 0 0 0.18rem rgba(173, 198, 255, 0.16);
-        }
-
-        .form-check-input {
-            background-color: rgba(11, 14, 20, 0.88);
-            border-color: var(--bw-border);
-        }
-
-        .form-check-input:checked {
-            background-color: var(--bw-primary-strong);
-            border-color: var(--bw-primary-strong);
-        }
-
-        .btn {
-            border-radius: 10px;
-            font-weight: 700;
-            letter-spacing: -0.01em;
-            padding: 0.72rem 1rem;
-        }
-
-        .btn-sm {
-            border-radius: 9px;
-            padding: 0.48rem 0.78rem;
-            font-size: 0.84rem;
-        }
-
-        .btn-primary {
-            background: linear-gradient(180deg, #b9ccff 0%, #9eb8ff 100%);
-            border-color: #9eb8ff;
-            color: #0b1730;
-            box-shadow: 0 8px 22px rgba(97, 137, 255, 0.22);
-        }
-
-        .btn-primary:hover,
-        .btn-primary:focus {
-            background: linear-gradient(180deg, #c6d6ff 0%, #aabfff 100%);
-            border-color: #aabfff;
-            color: #091327;
-        }
-
-        .btn-outline-light,
-        .btn-outline-secondary {
-            background: rgba(255,255,255,0.02);
-            border-color: var(--bw-border);
-            color: var(--bw-text-soft);
-        }
-
-        .btn-outline-light:hover,
-        .btn-outline-secondary:hover {
-            background: rgba(173, 198, 255, 0.08);
-            border-color: rgba(173, 198, 255, 0.22);
-            color: #eef4ff;
-        }
-
-        .btn-outline-danger {
-            border-color: rgba(255, 158, 149, 0.35);
-            color: var(--bw-danger);
-        }
-
-        .btn-outline-danger:hover,
-        .btn-danger {
-            background: rgba(255, 158, 149, 0.12);
-            border-color: rgba(255, 158, 149, 0.45);
-            color: #ffd3cf;
-        }
-
-        .btn-outline-success {
-            border-color: rgba(74, 222, 128, 0.35);
-            color: var(--bw-success);
-        }
-
-        .btn-outline-success:hover {
-            background: rgba(74, 222, 128, 0.1);
-            color: #d9ffe8;
-        }
-
-        .btn-warning {
-            background: rgba(255, 184, 107, 0.18);
-            color: #ffd3a0;
-            border-color: rgba(255, 184, 107, 0.35);
-        }
-
-        .btn-warning:hover {
-            background: rgba(255, 184, 107, 0.28);
-            color: #fff0db;
-        }
-
-        .badge {
-            border-radius: 6px;
-            padding: 0.42rem 0.58rem;
-            font-size: 0.7rem;
-            font-weight: 800;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-        }
-
-        .bg-success {
-            background: rgba(74, 222, 128, 0.12) !important;
-            color: var(--bw-success) !important;
-            border: 1px solid rgba(74, 222, 128, 0.28);
-        }
-
-        .bg-danger {
-            background: rgba(255, 158, 149, 0.12) !important;
-            color: var(--bw-danger) !important;
-            border: 1px solid rgba(255, 158, 149, 0.28);
-        }
-
-        .bg-warning,
-        .text-bg-warning {
-            background: rgba(255, 184, 107, 0.12) !important;
-            color: var(--bw-warning) !important;
-            border: 1px solid rgba(255, 184, 107, 0.28);
-        }
-
-        .bg-info,
-        .text-bg-info {
-            background: rgba(173, 198, 255, 0.12) !important;
-            color: var(--bw-info) !important;
-            border: 1px solid rgba(173, 198, 255, 0.28);
-        }
-
-        .bg-secondary,
-        .text-bg-secondary {
-            background: rgba(255,255,255,0.05) !important;
-            color: var(--bw-text-soft) !important;
-            border: 1px solid rgba(255,255,255,0.08);
-        }
-
-        .bg-light.text-dark,
-        .text-dark.bg-light {
-            background: rgba(226, 230, 239, 0.1) !important;
-            color: #e6ebf7 !important;
-            border: 1px solid rgba(226, 230, 239, 0.18);
-        }
-
-        .alert {
-            border-radius: 12px;
-            border-width: 1px;
-            padding: 0.95rem 1.1rem;
-        }
-
-        pre {
-            background: rgba(11, 14, 20, 0.9);
-            border: 1px solid var(--bw-border);
-            border-radius: 12px;
-            color: #d7e3ff;
-            padding: 1rem 1.1rem;
-        }
-
-        dl dt {
-            color: var(--bw-text-soft);
-            font-size: 0.76rem;
-            font-weight: 700;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-        }
-
-        dl dd {
-            color: var(--bw-text);
-        }
-
-        .modal-content {
-            background: rgba(22, 27, 34, 0.96);
-            backdrop-filter: blur(14px);
-        }
-
-        .row.mt-4.align-items-center .col-auto,
-        .row.mt-4 .col-auto {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.75rem;
-            align-items: center;
-        }
-
-        .page-header + p {
-            margin-top: 0.55rem;
-        }
-
-        .admin-doc-body > *:last-child {
-            margin-bottom: 0;
-        }
-
-        .admin-doc-body h1,
-        .admin-doc-body h2,
-        .admin-doc-body h3,
-        .admin-doc-body h4 {
-            margin-top: 1.5rem;
-            margin-bottom: 0.75rem;
-        }
-
-        .admin-doc-body h1:first-child,
-        .admin-doc-body h2:first-child,
-        .admin-doc-body h3:first-child,
-        .admin-doc-body h4:first-child {
-            margin-top: 0;
-        }
-
-        .admin-doc-body p,
-        .admin-doc-body ul,
-        .admin-doc-body ol,
-        .admin-doc-body pre,
-        .admin-doc-body table {
-            margin-bottom: 1rem;
-        }
-
-        .admin-doc-body li + li {
-            margin-top: 0.35rem;
-        }
-
-        .alert-success {
-            background: rgba(74, 222, 128, 0.1);
-            border-color: rgba(74, 222, 128, 0.28);
-            color: #d9ffe8;
-        }
-
-        .alert-danger {
-            background: rgba(255, 158, 149, 0.1);
-            border-color: rgba(255, 158, 149, 0.28);
-            color: #ffd6d2;
-        }
-
-        .alert-warning {
-            background: rgba(255, 184, 107, 0.1);
-            border-color: rgba(255, 184, 107, 0.28);
-            color: #ffe0b8;
-        }
-
-        .list-group-item {
-            background: transparent;
-            border-color: rgba(66, 71, 84, 0.45);
-            color: var(--bw-text);
-        }
-
-        .list-group-item.active {
-            background: rgba(173, 198, 255, 0.12);
-            border-color: rgba(173, 198, 255, 0.3);
-            color: #eef4ff;
-        }
-
-        .pagination {
-            gap: 0.4rem;
-        }
-
-        .page-link {
-            background: rgba(22, 27, 34, 0.88);
-            color: var(--bw-text-soft);
-            border: 1px solid var(--bw-border);
-            border-radius: 10px !important;
-            padding: 0.55rem 0.85rem;
-        }
-
-        .page-link:hover {
-            background: rgba(173, 198, 255, 0.08);
-            color: #eef4ff;
-            border-color: rgba(173, 198, 255, 0.25);
-        }
-
-        .page-item.disabled .page-link {
-            background: rgba(255,255,255,0.03);
-            color: var(--bw-text-muted);
-        }
-
-        .status-dot.online {
-            display: inline-block;
-            width: 0.65rem;
-            height: 0.65rem;
-            margin-right: 0.45rem;
-            border-radius: 999px;
-            background: #1ecf6d;
-            box-shadow: 0 0 0 4px rgba(30, 207, 109, 0.12);
-        }
-
-        .sticky-top.card {
-            top: 1.5rem !important;
-        }
-
-        @media (max-width: 991.98px) {
-            .admin-topbar .nav-link {
-                padding: 0.75rem 0 !important;
-                border-bottom: none;
-            }
-
-            .page-header h2 {
-                font-size: 2rem;
-            }
-
-            .admin-main {
-                padding: 1.5rem 1rem 2.5rem;
-            }
-
-            .admin-footer-shell {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .admin-footer-meta {
-                gap: 0.5rem 1rem;
-            }
-        }
-    </style>
 </head>
-<body class="bg-charcoal">
+<body class="app-page">
 
     {{if .ImpersonatorUserID}}
     <div class="impersonation-bar">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         Switched identity active — actions are attributed to the target user
-        <form method="POST" action="/admin/switch/restore" class="ms-auto">
+        <form method="POST" action="/admin/switch/restore" class="ms-auto mb-0">
             <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-            <button class="btn btn-warning btn-sm py-0 px-2" type="submit" style="font-size:0.75rem;">Stop Switch</button>
+            <button class="btn btn-warning btn-sm" type="submit">Stop Switch</button>
         </form>
     </div>
     {{end}}
 
-    <nav class="navbar navbar-expand-xl navbar-dark admin-topbar">
+    <header class="navbar navbar-expand-xl app-header">
         <div class="container-fluid px-4">
-            <a class="navbar-brand" href="/admin">
-                <img src="/assets/blackwall.svg" alt="BlackWall">
-                <span>BlackWall</span>
-            </a>
-            <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" style="padding: 0.3rem;">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#primary-navigation" aria-controls="primary-navigation" aria-expanded="false" aria-label="Open navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
+            <a class="navbar-brand brand-link" href="/admin" aria-label="BlackWall home">
+                <span class="brand-mark brand-mark--logo"><img src="/assets/blackwall.svg" alt=""></span>
+                <span class="brand-link__name">BlackWall</span>
+            </a>
+            <div class="navbar-nav flex-row order-xl-last">
+                <div class="d-flex align-items-center gap-3">
+                    {{if .CurrentAdminRole}}<span class="admin-role-badge">{{.CurrentAdminRole}}</span>{{end}}
+                    <form method="POST" action="/admin/logout" class="d-flex mb-0">
+                        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
+                        <button class="btn btn-outline-primary btn-sm" type="submit">Sign out</button>
+                    </form>
+                </div>
+            </div>
+            <nav class="collapse navbar-collapse" id="primary-navigation" aria-label="Primary navigation">
+                <ul class="navbar-nav ms-xl-4">
                     <li class="nav-item"><a class="nav-link" href="/admin/dashboard">Dashboard</a></li>
                     {{if or (eq .CurrentAdminRole "super_admin") (eq .CurrentAdminRole "operator")}}
                     <li class="nav-item"><a class="nav-link" href="/admin/users">Users</a></li>
@@ -684,34 +63,28 @@
                     <li class="nav-item"><a class="nav-link" href="/admin/scope">Scope</a></li>
                     <li class="nav-item"><a class="nav-link" href="/admin/docs">Docs</a></li>
                 </ul>
-                <div class="d-flex align-items-center gap-3">
-                    {{if .CurrentAdminRole}}<span class="admin-role-badge">{{.CurrentAdminRole}}</span>{{end}}
-                    <form method="POST" action="/admin/logout" class="d-flex mb-0">
-                        <input type="hidden" name="csrf_token" value="{{.CSRFToken}}">
-                        <button class="btn btn-outline-light btn-sm" type="submit">Sign out</button>
-                    </form>
-                </div>
-            </div>
+            </nav>
         </div>
-    </nav>
+    </header>
 
-    <main class="container-fluid admin-main">
+    <main class="admin-main">
         {{template "content" .}}
     </main>
 
-    <footer class="container-fluid admin-footer">
+    <footer class="admin-footer">
         <div class="admin-footer-shell">
-            <div class="text-muted small">
+            <div class="small">
                 <span class="status-dot online"></span>BlackWall Authentication Service
             </div>
-            <div class="admin-footer-meta text-muted">
+            <div class="admin-footer-meta">
                 <span><strong>Version</strong><span class="font-monospace">{{.Version}}</span></span>
                 <span><strong>Build Date</strong><span class="font-monospace">{{.BuildDate}}</span></span>
             </div>
         </div>
     </footer>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="/assets/vendor/tabler/tabler.min.js" defer></script>
+    <script src="/assets/js/theme.js" defer></script>
     <script src="/assets/js/blackwall.js"></script>
     <script>
         (function () {
@@ -721,6 +94,7 @@
                 if (!href) return;
                 if (path === href || (href !== '/admin' && path.startsWith(href))) {
                     link.classList.add('active');
+                    link.setAttribute('aria-current', 'page');
                 }
             });
         })();

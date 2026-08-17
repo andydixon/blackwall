@@ -5,14 +5,14 @@
         <p class="text-muted mb-0">
             Organisation: {{if .Project.OrgUUID}}<a href="/admin/organisations/{{.Project.OrgUUID}}" class="text-light">{{.Project.OrgName}}</a>{{else}}—{{end}} ·
             <code>{{.Project.UUID}}</code>
-            {{if eq .Project.Status "active"}}<span class="badge bg-success ms-2">Active</span>{{else if eq .Project.Status "disabled"}}<span class="badge bg-secondary ms-2">Disabled</span>{{else}}<span class="badge bg-light text-dark ms-2">{{.Project.Status}}</span>{{end}}
+            {{if eq .Project.Status "active"}}<span class="badge bg-success ms-2">Active</span>{{else if eq .Project.Status "disabled"}}<span class="badge bg-secondary ms-2">Disabled</span>{{else}}<span class="badge bg-light ms-2">{{.Project.Status}}</span>{{end}}
         </p>
     </div>
     <div class="col-lg-4 text-lg-end">
         <a href="/admin/projects/{{.Project.UUID}}/test" class="btn btn-outline-info">Auth sandbox</a>
         {{if index .Capabilities "view_licences"}}<a href="/admin/projects/{{.Project.UUID}}/licences" class="btn btn-outline-info">Licences</a>{{end}}
-        <a href="/admin/projects/{{.Project.UUID}}/webhooks" class="btn btn-outline-light">Webhooks</a>
-        <a href="/admin/projects/{{.Project.UUID}}/saml" class="btn btn-outline-light">SAML</a>
+        <a href="/admin/projects/{{.Project.UUID}}/webhooks" class="btn btn-outline-secondary">Webhooks</a>
+        <a href="/admin/projects/{{.Project.UUID}}/saml" class="btn btn-outline-secondary">SAML</a>
         <a href="/admin/projects" class="btn btn-outline-secondary">Back</a>
     </div>
 </div>
@@ -25,21 +25,21 @@
         <div class="card text-center"><div class="card-body">
             <div class="display-6">{{.Project.ClientCount}}</div>
             <div class="text-muted small">OAuth clients</div>
-            <a href="/admin/projects/{{.Project.UUID}}/clients" class="btn btn-sm btn-outline-light mt-2">Manage</a>
+            <a href="/admin/projects/{{.Project.UUID}}/clients" class="btn btn-sm btn-outline-secondary mt-2">Manage</a>
         </div></div>
     </div>
     <div class="col-md-4">
         <div class="card text-center"><div class="card-body">
             <div class="display-6">{{.Project.AssignmentCount}}</div>
             <div class="text-muted small">Assignments</div>
-            <a href="/admin/projects/{{.Project.UUID}}/assignments" class="btn btn-sm btn-outline-light mt-2">Manage</a>
+            <a href="/admin/projects/{{.Project.UUID}}/assignments" class="btn btn-sm btn-outline-secondary mt-2">Manage</a>
         </div></div>
     </div>
     <div class="col-md-4">
         <div class="card text-center"><div class="card-body">
             <div class="display-6">{{.Project.PrivilegeCount}}</div>
             <div class="text-muted small">Privilege levels</div>
-            <a href="/admin/projects/{{.Project.UUID}}/privileges" class="btn btn-sm btn-outline-light mt-2">Manage</a>
+            <a href="/admin/projects/{{.Project.UUID}}/privileges" class="btn btn-sm btn-outline-secondary mt-2">Manage</a>
         </div></div>
     </div>
 </div>
@@ -70,7 +70,7 @@
         {{else}}
         <dl class="row mb-0">
             <dt class="col-sm-3">Name</dt><dd class="col-sm-9">{{.Project.Name}}</dd>
-            <dt class="col-sm-3">Status</dt><dd class="col-sm-9">{{if eq .Project.Status "active"}}<span class="badge bg-success">Active</span>{{else if eq .Project.Status "disabled"}}<span class="badge bg-secondary">Disabled</span>{{else}}<span class="badge bg-light text-dark">{{.Project.Status}}</span>{{end}}</dd>
+            <dt class="col-sm-3">Status</dt><dd class="col-sm-9">{{if eq .Project.Status "active"}}<span class="badge bg-success">Active</span>{{else if eq .Project.Status "disabled"}}<span class="badge bg-secondary">Disabled</span>{{else}}<span class="badge bg-light">{{.Project.Status}}</span>{{end}}</dd>
             <dt class="col-sm-3">Organisation</dt><dd class="col-sm-9">{{.Project.OrgName}}</dd>
         </dl>
         {{end}}
@@ -124,7 +124,7 @@
         Default OIDC claims <span class="text-muted small">(merged into every user's token issued for this project — overridden by per-user values)</span>
     </div>
     <div class="card-body p-0">
-        <table class="table table-dark table-sm mb-0 align-middle">
+        <table class="table table-sm mb-0 align-middle">
             <thead><tr><th>Key</th><th>Value</th><th class="text-end">Updated</th><th></th></tr></thead>
             <tbody>
                 {{range .DefaultClaims}}

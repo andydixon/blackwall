@@ -236,7 +236,18 @@ dl dd {
 
 .stat-card {
     border-left: 3px solid var(--ns-color-action) !important;
+    transition: transform 180ms ease, box-shadow 180ms ease;
 }
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--ns-shadow-card-hover);
+}
+
+.stat-card--green  { border-left-color: var(--ns-color-success) !important; }
+.stat-card--amber  { border-left-color: var(--ns-color-warning) !important; }
+.stat-card--purple { border-left-color: #7c4de0 !important; }
+.stat-card--red    { border-left-color: var(--ns-color-danger) !important; }
 
 .stat-card .display-6 {
     color: var(--ns-color-brand);
@@ -368,6 +379,11 @@ dl dd {
     font-size: 0.78rem;
     white-space: pre-wrap;
     word-break: break-all;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .stat-card { transition: none; }
+    .stat-card:hover { transform: none; }
 }
 
 @media (max-width: 991.98px) {

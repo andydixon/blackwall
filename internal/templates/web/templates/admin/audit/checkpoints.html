@@ -19,7 +19,7 @@
 <div class="card mt-3">
     <div class="card-header">Recent checkpoints (newest first)</div>
     <div class="card-body p-0">
-        <table class="table table-dark table-sm mb-0 align-middle">
+        <table class="table table-sm mb-0 align-middle">
             <thead><tr><th>ID</th><th>Tip audit row</th><th>Row count</th><th>Chain hash</th><th>Key ID</th><th>Created</th><th>Exported</th><th></th></tr></thead>
             <tbody>
                 {{range .Checkpoints}}
@@ -32,7 +32,7 @@
                     <td class="small">{{.CreatedAt.Format "2006-01-02 15:04:05"}}</td>
                     <td class="small">{{if .ExportedTo.Valid}}<code>{{.ExportedTo.String}}</code>{{else}}<span class="text-muted">—</span>{{end}}</td>
                     <td class="text-end">
-                        <a class="btn btn-sm btn-outline-light" href="/admin/audit/checkpoints/{{.ID}}/verify" target="_blank">Verify</a>
+                        <a class="btn btn-sm btn-outline-secondary" href="/admin/audit/checkpoints/{{.ID}}/verify" target="_blank">Verify</a>
                     </td>
                 </tr>
                 {{else}}

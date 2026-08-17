@@ -31,7 +31,7 @@
 <div class="card mt-3">
     <div class="card-header">Existing levels</div>
     <div class="card-body p-0">
-        <table class="table table-dark table-sm mb-0 align-middle">
+        <table class="table table-sm mb-0 align-middle">
             <thead><tr><th style="width:80px">Level</th><th>Name</th><th>Seats</th><th></th></tr></thead>
             <tbody>
                 {{range .Levels}}
@@ -48,7 +48,7 @@
                         {{.Name}}
                         {{end}}
                     </td>
-                    <td><span class="badge bg-info text-dark">{{.SeatCount}}</span></td>
+                    <td><span class="badge bg-info">{{.SeatCount}}</span></td>
                     <td class="text-end">
                         {{if $.CanManage}}
                         <form method="POST" action="/admin/privileges/{{.ID}}/delete" class="d-inline">

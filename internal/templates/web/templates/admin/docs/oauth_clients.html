@@ -2,16 +2,16 @@
 <p>OAuth clients are downstream applications that ask BlackWall to authenticate users. Every client is registered against exactly one project and inherits that project's user pool.</p>
 
 <h5>Client types</h5>
-<table class="table table-dark table-sm">
+<table class="table table-sm">
     <thead><tr><th>Type</th><th>When to choose</th><th>Token endpoint auth</th></tr></thead>
     <tbody>
         <tr>
-            <td><span class="badge bg-info text-dark">Confidential</span></td>
+            <td><span class="badge bg-info">Confidential</span></td>
             <td>Server-side applications that can keep a secret (Go services, PHP backends, server-side rendered apps).</td>
             <td><code>client_secret_basic</code> or <code>client_secret_post</code></td>
         </tr>
         <tr>
-            <td><span class="badge bg-warning text-dark">Public</span></td>
+            <td><span class="badge bg-warning">Public</span></td>
             <td>Browser SPAs and native mobile/desktop apps that cannot keep a secret.</td>
             <td><code>none</code> — security comes entirely from PKCE</td>
         </tr>

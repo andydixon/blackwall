@@ -47,7 +47,7 @@
 <div class="card mt-3">
     <div class="card-header">Recent job runs</div>
     <div class="card-body p-0">
-        <table class="table table-dark table-sm mb-0 align-middle">
+        <table class="table table-sm mb-0 align-middle">
             <thead><tr><th>Job</th><th>Started</th><th>Finished</th><th>Duration</th><th>Rows</th><th>Status</th><th>Error</th></tr></thead>
             <tbody>
                 {{range .Jobs}}
@@ -59,7 +59,7 @@
                     <td>{{.RowsAffected}}</td>
                     <td>
                         {{if eq .Status "success"}}<span class="badge bg-success">success</span>
-                        {{else if eq .Status "running"}}<span class="badge bg-info text-dark">running</span>
+                        {{else if eq .Status "running"}}<span class="badge bg-info">running</span>
                         {{else if eq .Status "fail"}}<span class="badge bg-danger">fail</span>
                         {{else}}<span class="badge bg-secondary">{{.Status}}</span>{{end}}
                     </td>

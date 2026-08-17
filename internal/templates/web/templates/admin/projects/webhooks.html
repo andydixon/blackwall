@@ -31,7 +31,7 @@
 <div class="card mt-3">
     <div class="card-header">Registered endpoints</div>
     <div class="card-body p-0">
-        <table class="table table-dark table-sm mb-0 align-middle">
+        <table class="table table-sm mb-0 align-middle">
             <thead><tr><th>Target URL</th><th>Events</th><th>Status</th><th>Failures</th><th>Last success</th><th></th></tr></thead>
             <tbody>
                 {{range .Endpoints}}
@@ -42,7 +42,7 @@
                     <td>{{.ConsecutiveFailures}}</td>
                     <td class="small">{{if .LastSuccessAt.Valid}}{{.LastSuccessAt.Time.Format "2006-01-02 15:04"}}{{else}}—{{end}}</td>
                     <td class="text-end">
-                        <a href="/admin/projects/{{$.Project.UUID}}/webhooks/{{.PublicID}}/deliveries" class="btn btn-sm btn-outline-light">Deliveries</a>
+                        <a href="/admin/projects/{{$.Project.UUID}}/webhooks/{{.PublicID}}/deliveries" class="btn btn-sm btn-outline-secondary">Deliveries</a>
                         {{if $.CanManage}}
                         <form method="POST" action="/admin/projects/{{$.Project.UUID}}/webhooks/{{.PublicID}}/delete" class="d-inline">
                             <input type="hidden" name="csrf_token" value="{{$.CSRFToken}}">

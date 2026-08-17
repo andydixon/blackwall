@@ -19,7 +19,7 @@
 
 <h5>Export with HMAC manifest</h5>
 <p>Export delivers CSV of the (filtered, scoped) rows followed by a manifest line:</p>
-<pre class="bg-charcoal p-2 mb-2"><code># manifest: rows=&lt;n&gt; generated_at=&lt;rfc3339&gt; hmac_sha256=&lt;hex&gt;</code></pre>
+<pre class="p-2 mb-2"><code># manifest: rows=&lt;n&gt; generated_at=&lt;rfc3339&gt; hmac_sha256=&lt;hex&gt;</code></pre>
 <p>The HMAC key is <code>audit_export_signing_key</code> from <code>config.yaml</code> (falling back to <code>csrf_secret</code> if unset). Verify the export by HMAC-SHA-256-ing all bytes <em>before</em> the manifest line under the same key and matching the result to the manifest.</p>
 
 <h5>Security indicators on the dashboard</h5>

@@ -21,7 +21,7 @@
 
 <div class="card mt-3">
     <div class="card-body p-0">
-        <table class="table table-dark table-sm mb-0 align-middle">
+        <table class="table table-sm mb-0 align-middle">
             <thead>
                 <tr>
                     <th>Display label</th>
@@ -39,10 +39,10 @@
                     <td>
                         {{if eq .Status "active"}}<span class="badge bg-success">Active</span>
                         {{else if eq .Status "disabled"}}<span class="badge bg-danger">Disabled</span>
-                        {{else}}<span class="badge bg-light text-dark">{{.Status}}</span>{{end}}
+                        {{else}}<span class="badge bg-light">{{.Status}}</span>{{end}}
                     </td>
                     <td><span class="text-muted small">{{.CreatedAt.Format "2006-01-02"}}</span></td>
-                    <td class="text-end"><a href="/admin/users/{{.UUID}}" class="btn btn-sm btn-outline-light">Open profile</a></td>
+                    <td class="text-end"><a href="/admin/users/{{.UUID}}" class="btn btn-sm btn-outline-secondary">Open profile</a></td>
                 </tr>
                 {{else}}
                 <tr><td colspan="5" class="text-center text-muted py-4">No users to display.</td></tr>
