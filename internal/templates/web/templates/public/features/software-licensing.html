@@ -1,0 +1,157 @@
+{{define "content"}}
+<section class="page-hero">
+    <div class="container">
+        <nav class="breadcrumb-trail" aria-label="Breadcrumb">
+            <a href="/">Home</a><span aria-hidden="true">/</span><a href="/platform">Platform</a><span aria-hidden="true">/</span><span>Software licensing</span>
+        </nav>
+        <div class="row">
+            <div class="col-lg-9">
+                <div class="eyebrow mb-3">Software licensing</div>
+                <h1 class="page-hero__title mb-4">Turn a contract into a cryptographic fact</h1>
+                <p class="page-hero__lead mb-0">
+                    If you sell software, your entitlements are probably a spreadsheet, a licence key generator
+                    someone wrote years ago, and an awkward conversation at renewal. BlackWall makes an
+                    entitlement a signed object: bound to named hosts, scoped to named features, and revocable
+                    the moment the commercial relationship changes.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-xl-11">
+                <figure class="mb-0">
+                    <div class="screenshot-frame">
+                        <div class="screenshot-frame__bar" aria-hidden="true">
+                            <span class="screenshot-frame__dot"></span><span class="screenshot-frame__dot"></span><span class="screenshot-frame__dot"></span>
+                            <span class="screenshot-frame__label">blackwall.cx/admin/projects/…/licences</span>
+                        </div>
+                        <img src="/assets/img/screens/licences.webp" width="1600" height="1000" decoding="async"
+                             alt="The project licences administration screen with three sections: a signing service showing the active Ed25519 key, renewal reminders showing the notified administrator and delivery history, and an issued licence register listing each entity with bound hostnames, licensed features, instance limits, issue and expiry dates and revoke controls.">
+                    </div>
+                    <figcaption class="screenshot-caption text-center">
+                        One register per project: the signing key in use, the reminder schedule and its delivery
+                        history, and every entitlement you have issued — with revocation one click away.
+                    </figcaption>
+                </figure>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad section-tint">
+    <div class="container">
+        <div class="row g-5 align-items-center">
+            <div class="col-lg-6">
+                <div class="section-rule section-rule-amber mb-3"></div>
+                <h2 class="section-title mb-4">What a licence actually asserts</h2>
+                <p class="section-lead mb-4">
+                    A BlackWall licence is not an opaque key that unlocks everything. It is a statement of
+                    specific facts, signed so that changing any one of them breaks the signature.
+                </p>
+                <ul class="spec-list">
+                    <li><strong>Who</strong> — a person or a business, by legal name, with your own customer reference.</li>
+                    <li><strong>Where</strong> — one to 32 exact DNS hostnames or IP literals. Wildcards, ports and URLs are rejected outright.</li>
+                    <li><strong>What</strong> — named feature identifiers, so tiers and add-ons are enforced, not just documented.</li>
+                    <li><strong>How many</strong> — a maximum instance count for the deployment.</li>
+                    <li><strong>When</strong> — issue, not-before and expiry timestamps in UTC.</li>
+                    <li><strong>How often to check</strong> — a signed online-check interval the integration must honour.</li>
+                </ul>
+            </div>
+            <div class="col-lg-6">
+                <div class="panel panel--brand">
+                    <h3 class="panel__title">Why Ed25519 and not a certificate</h3>
+                    <p class="mb-3">
+                        Wrapping a licence in a self-signed X.509 certificate looks reassuring but creates no trust
+                        on its own — the product would still have to pin the issuer or the public key, which is the
+                        actual security step.
+                    </p>
+                    <p class="mb-0">
+                        BlackWall does that step directly. An Ed25519 signature is small and deterministic, and the
+                        fixed HTTPS issuer, key-derived identifier and pinned public-key fingerprint are the trust
+                        anchors. Less ceremony, the same guarantee, far less that can be misconfigured.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad">
+    <div class="container">
+        <div class="row g-5">
+            <div class="col-lg-5">
+                <div class="section-rule section-rule-amber mb-3"></div>
+                <h2 class="section-title mb-3">Revocation that actually revokes</h2>
+                <p class="section-lead">
+                    An offline-only licence check cannot learn that a contract ended. BlackWall pairs the signature
+                    with an authoritative verifier so cancellation is immediate rather than eventual.
+                </p>
+            </div>
+            <div class="col-lg-7">
+                <ol class="rail">
+                    <li>
+                        <h4>Issue</h4>
+                        <p>A super-administrator issues the licence against a project. The customer receives a signed <code>BWLIC1</code> envelope as a <code>.bwlic</code> file.</p>
+                    </li>
+                    <li>
+                        <h4>Verify the signature offline</h4>
+                        <p>Your product checks the Ed25519 signature against the pinned public key. Any edited claim fails here, with no network call required.</p>
+                    </li>
+                    <li>
+                        <h4>Confirm online, on schedule</h4>
+                        <p>Within the signed check interval, your product asks the authoritative verifier. It checks the database record, revocation, project state, exact hostname, issuer and time window.</p>
+                    </li>
+                    <li>
+                        <h4>Fail closed</h4>
+                        <p>An unreachable verifier, a bad signature, an untrusted key, a hostname mismatch or an expired window all deny the licensed functionality. Ambiguity never grants access.</p>
+                    </li>
+                    <li>
+                        <h4>Renew before it bites</h4>
+                        <p>Reminders are queued to the designated administrator at 30, 14, 7, 2 and 1 days before expiry, with delivery history recorded against the licence.</p>
+                    </li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad section-tint">
+    <div class="container">
+        <div class="row justify-content-center mb-4">
+            <div class="col-lg-7 text-center">
+                <div class="section-rule mx-auto mb-3"></div>
+                <h2 class="section-title mb-3">What this replaces</h2>
+                <p class="section-lead mx-auto">The homegrown licensing system most software businesses are quietly maintaining.</p>
+            </div>
+        </div>
+        <div class="compare-wrap">
+            <table class="compare-table">
+                <thead>
+                    <tr><th scope="col">Question</th><th scope="col">Homegrown licence keys</th><th scope="col">BlackWall licensing</th></tr>
+                </thead>
+                <tbody>
+                    <tr><th scope="row">Can a customer edit their entitlement?</th><td>Often, if the format is guessable.</td><td>No — any edit invalidates the Ed25519 signature.</td></tr>
+                    <tr><th scope="row">Can you cancel mid-term?</th><td>Rarely, until the next release ships.</td><td>Yes — the authoritative verifier rejects it immediately.</td></tr>
+                    <tr><th scope="row">Is it bound to a deployment?</th><td>Usually not, so keys get shared.</td><td>Bound to exact hostnames; wildcards are refused.</td></tr>
+                    <tr><th scope="row">Does anyone chase renewals?</th><td>A calendar reminder, if you are lucky.</td><td>Automatic reminders with recorded delivery history.</td></tr>
+                    <tr><th scope="row">Is issuance auditable?</th><td>Whatever the script logged.</td><td>Issue, failure and revocation are all audited — without copying customer names or tokens into the log.</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad--tight">
+    <div class="container">
+        <div class="row g-3">
+            <div class="col-md-4"><a href="/platform/administration" class="capability-card"><h2 class="capability-card__title">Administration</h2><p class="capability-card__body">Projects, privilege levels and the approval workflow that governs issuance.</p><span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></div>
+            <div class="col-md-4"><a href="/platform/audit-and-assurance" class="capability-card"><h2 class="capability-card__title">Audit &amp; assurance</h2><p class="capability-card__body">The tamper-evident record behind every issuance and revocation.</p><span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></div>
+            <div class="col-md-4"><a href="/platform/enterprise-federation" class="capability-card"><h2 class="capability-card__title">Enterprise federation</h2><p class="capability-card__body">Webhooks that tell your billing system the moment something changes.</p><span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></div>
+        </div>
+    </div>
+</section>
+{{end}}

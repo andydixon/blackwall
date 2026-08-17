@@ -1,0 +1,135 @@
+{{define "content"}}
+<section class="page-hero">
+    <div class="container">
+        <nav class="breadcrumb-trail" aria-label="Breadcrumb">
+            <a href="/">Home</a><span aria-hidden="true">/</span><a href="/platform">Platform</a><span aria-hidden="true">/</span><span>Cryptbin</span>
+        </nav>
+        <div class="row">
+            <div class="col-lg-9">
+                <div class="eyebrow mb-3" style="color:#f59e0b">Cryptbin — secure sharing</div>
+                <h1 class="page-hero__title mb-4">Share the secret, not the plaintext</h1>
+                <p class="page-hero__lead mb-0">
+                    Sensitive material gets pasted into chat every day because the secure option is too much
+                    effort. Cryptbin makes the secure option the easy one: your browser encrypts before anything
+                    is uploaded, and BlackWall stores ciphertext it has no way to read.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad">
+    <div class="container">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-6">
+                <div class="section-rule section-rule-amber mb-3"></div>
+                <h2 class="section-title mb-4">The key never reaches the server</h2>
+                <p class="section-lead mb-4">
+                    The encryption key lives in the URL fragment — everything after the <code>#</code>. Browsers
+                    never transmit that portion of a URL in an HTTP request, so the key travels with your
+                    recipient and never with the ciphertext.
+                </p>
+                <ul class="spec-list">
+                    <li><strong>AES-256-GCM in the browser</strong> — the payload is encrypted locally before upload.</li>
+                    <li><strong>Ciphertext-only storage</strong> — the server holds the encrypted blob and public metadata.</li>
+                    <li><strong>Wrapped at rest</strong> — the stored key copy is wrapped with XChaCha20-Poly1305 and bound to the item identifier.</li>
+                    <li><strong>WebAuthn gated</strong> — creating, viewing, updating and deleting all require a live assertion.</li>
+                    <li><strong>Automatic expiry</strong> — entries disappear on a schedule, per item or by system default.</li>
+                </ul>
+            </div>
+            <div class="col-lg-6">
+                <figure class="mb-0">
+                    <div class="screenshot-frame">
+                        <div class="screenshot-frame__bar" aria-hidden="true">
+                            <span class="screenshot-frame__dot"></span><span class="screenshot-frame__dot"></span><span class="screenshot-frame__dot"></span>
+                            <span class="screenshot-frame__label">blackwall.cx/cryptbin</span>
+                        </div>
+                        <img src="/assets/img/screens/cryptbin-create.webp" width="1600" height="1000" decoding="async"
+                             alt="The Cryptbin creation screen with a choice between text and file content, the maximum accepted sizes for each, expiry options and a create button.">
+                    </div>
+                    <figcaption class="screenshot-caption">
+                        Text or file. Choose an expiry, create, and share the resulting link.
+                    </figcaption>
+                </figure>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad section-tint">
+    <div class="container">
+        <div class="row g-5">
+            <div class="col-lg-5">
+                <div class="section-rule section-rule-amber mb-3"></div>
+                <h2 class="section-title mb-3">What actually happens</h2>
+                <p class="section-lead">
+                    Four steps, none of which involve BlackWall learning your content.
+                </p>
+            </div>
+            <div class="col-lg-7">
+                <ol class="rail">
+                    <li>
+                        <h4>Your browser generates a key</h4>
+                        <p>A data-encryption key is created client-side. It is never transmitted to the server at any point in the process.</p>
+                    </li>
+                    <li>
+                        <h4>The payload is encrypted locally</h4>
+                        <p>Your browser encrypts the text or file with AES-256-GCM and uploads only the resulting ciphertext and public metadata.</p>
+                    </li>
+                    <li>
+                        <h4>You share a complete link</h4>
+                        <p>The key rides in the URL fragment. Send the whole link through a channel appropriate to the sensitivity — anyone holding it can decrypt.</p>
+                    </li>
+                    <li>
+                        <h4>The recipient decrypts in their browser</h4>
+                        <p>Ciphertext is fetched and decrypted locally. Text opens in the editor; files are offered as a local download.</p>
+                    </li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad">
+    <div class="container">
+        <div class="row justify-content-center mb-5">
+            <div class="col-lg-7 text-center">
+                <div class="section-rule mx-auto mb-3"></div>
+                <h2 class="section-title mb-3">What teams use it for</h2>
+                <p class="section-lead mx-auto">The everyday handovers that would otherwise end up in a chat history forever.</p>
+            </div>
+        </div>
+        <div class="row g-2 justify-content-center">
+            <div class="col-sm-6 col-lg-4"><div class="use-case-chip">Handing off API keys</div></div>
+            <div class="col-sm-6 col-lg-4"><div class="use-case-chip">Sharing incident logs</div></div>
+            <div class="col-sm-6 col-lg-4"><div class="use-case-chip">Credentials during onboarding</div></div>
+            <div class="col-sm-6 col-lg-4"><div class="use-case-chip">Inter-team token transfer</div></div>
+            <div class="col-sm-6 col-lg-4"><div class="use-case-chip">Encrypted security notes</div></div>
+            <div class="col-sm-6 col-lg-4"><div class="use-case-chip">Diagnostics without chat leakage</div></div>
+        </div>
+        <div class="row justify-content-center mt-5">
+            <div class="col-lg-8">
+                <div class="integrity-note">
+                    <strong>Treat the link as the secret.</strong> Anyone with the complete URL — fragment included — holds the key. That is the design: BlackWall cannot read the content, so it cannot recover it for you either.
+                </div>
+            </div>
+        </div>
+        <div class="text-center mt-4">
+            <a href="/cryptbin" class="btn btn-warning btn-lg px-4">
+                Open Cryptbin
+                <svg class="ms-2" width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad--tight section-tint">
+    <div class="container">
+        <div class="row g-3">
+            <div class="col-md-4"><a href="/platform/passwordless-identity" class="capability-card"><h2 class="capability-card__title">Passwordless identity</h2><p class="capability-card__body">The WebAuthn assertion that gates every Cryptbin action.</p><span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></div>
+            <div class="col-md-4"><a href="/platform/audit-and-assurance" class="capability-card"><h2 class="capability-card__title">Audit &amp; assurance</h2><p class="capability-card__body">Creation and access events, recorded like everything else.</p><span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></div>
+            <div class="col-md-4"><a href="/platform" class="capability-card"><h2 class="capability-card__title">The whole platform</h2><p class="capability-card__body">Every capability, from identity through licensing to assurance.</p><span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></div>
+        </div>
+    </div>
+</section>
+{{end}}

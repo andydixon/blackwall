@@ -1,0 +1,122 @@
+{{define "layout"}}<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light">
+    <title>{{.Title}}</title>
+    <meta name="description" content="{{.Description}}">
+    <link rel="stylesheet" href="/assets/vendor/tabler/tabler.min.css">
+    <link rel="stylesheet" href="/assets/css/theme.css">
+    <link rel="stylesheet" href="/assets/css/blackwall.css">
+    <link rel="stylesheet" href="/assets/css/home.css">
+    <link rel="stylesheet" href="/assets/css/features.css">
+</head>
+<body class="app-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="navbar navbar-expand-md app-header">
+        <div class="container-xl">
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#site-navigation" aria-controls="site-navigation" aria-expanded="false" aria-label="Open navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <a class="navbar-brand brand-link" href="/" aria-label="BlackWall home">
+                <span class="brand-mark brand-mark--logo"><img src="/assets/blackwall.svg" alt=""></span>
+                <span class="brand-link__name">BlackWall</span>
+            </a>
+            <div class="navbar-nav flex-row order-md-last">
+                <div class="d-flex gap-2">
+                    <a href="/admin" class="btn btn-outline-primary btn-sm">Sign in</a>
+                    <a href="/organisations/signup" class="btn btn-primary btn-sm">Get started</a>
+                </div>
+            </div>
+            <nav class="collapse navbar-collapse" id="site-navigation" aria-label="Primary navigation">
+                <ul class="navbar-nav ms-md-4">
+                    <li class="nav-item"><a class="nav-link{{if eq .Nav "platform"}} active{{end}}" href="/platform">Platform</a></li>
+                    <li class="nav-item"><a class="nav-link{{if eq .Nav "identity"}} active{{end}}" href="/platform/passwordless-identity">Identity</a></li>
+                    <li class="nav-item"><a class="nav-link{{if eq .Nav "licensing"}} active{{end}}" href="/platform/software-licensing">Licensing</a></li>
+                    <li class="nav-item"><a class="nav-link{{if eq .Nav "assurance"}} active{{end}}" href="/platform/audit-and-assurance">Assurance</a></li>
+                    <li class="nav-item"><a class="nav-link{{if eq .Nav "cryptbin"}} active{{end}}" href="/platform/cryptbin">Cryptbin</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <main id="main">
+        {{template "content" .}}
+    </main>
+
+    <section class="cta-band">
+        <div class="container">
+            <div class="row align-items-center g-4">
+                <div class="col-lg-8">
+                    <h2 class="cta-band__title">Stand up passwordless identity for your business.</h2>
+                    <p class="cta-band__lead mb-0">Create an organisation, enrol your first authenticator, and issue a token from a real OAuth 2.1 flow — without a password existing anywhere in the process.</p>
+                </div>
+                <div class="col-lg-4">
+                    <div class="d-flex flex-wrap gap-2 justify-content-lg-end">
+                        <a href="/organisations/signup" class="btn btn-primary btn-lg px-4">Create an organisation</a>
+                        <a href="/platform" class="btn btn-outline-secondary btn-lg px-4">Explore the platform</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="home-footer">
+        <div class="container">
+            <div class="row g-4 mb-4">
+                <div class="col-lg-4">
+                    <span class="home-footer__mark">//<span>BlackWall</span> v1.1.0</span>
+                    <p class="footer-blurb mt-3 mb-0">Passwordless identity, software licensing, and tamper-evident assurance in one auditable control plane.</p>
+                </div>
+                <div class="col-6 col-lg-2">
+                    <h6 class="footer-heading">Platform</h6>
+                    <ul class="footer-list">
+                        <li><a href="/platform" class="home-footer__link">Overview</a></li>
+                        <li><a href="/platform/passwordless-identity" class="home-footer__link">Passwordless identity</a></li>
+                        <li><a href="/platform/oauth-and-oidc" class="home-footer__link">OAuth &amp; OIDC</a></li>
+                        <li><a href="/platform/administration" class="home-footer__link">Administration</a></li>
+                    </ul>
+                </div>
+                <div class="col-6 col-lg-2">
+                    <h6 class="footer-heading">Capabilities</h6>
+                    <ul class="footer-list">
+                        <li><a href="/platform/software-licensing" class="home-footer__link">Software licensing</a></li>
+                        <li><a href="/platform/audit-and-assurance" class="home-footer__link">Audit &amp; assurance</a></li>
+                        <li><a href="/platform/enterprise-federation" class="home-footer__link">Enterprise federation</a></li>
+                        <li><a href="/platform/cryptbin" class="home-footer__link">Cryptbin</a></li>
+                    </ul>
+                </div>
+                <div class="col-6 col-lg-2">
+                    <h6 class="footer-heading">Product</h6>
+                    <ul class="footer-list">
+                        <li><a href="/portal" class="home-footer__link">User portal</a></li>
+                        <li><a href="/admin" class="home-footer__link">Admin console</a></li>
+                        <li><a href="/cryptbin" class="home-footer__link">Cryptbin</a></li>
+                        <li><a href="/organisations/signup" class="home-footer__link">Create organisation</a></li>
+                    </ul>
+                </div>
+                <div class="col-6 col-lg-2">
+                    <h6 class="footer-heading">Standards</h6>
+                    <ul class="footer-list">
+                        <li><a href="/.well-known/openid-configuration" class="home-footer__link">OIDC Discovery</a></li>
+                        <li><a href="/oauth/jwks" class="home-footer__link">JWKS</a></li>
+                    </ul>
+                </div>
+            </div>
+            <div class="row align-items-center justify-content-between g-3 footer-base">
+                <div class="col-md-auto">
+                    <small>&copy;2019–2026 <a href="https://dixon.cx/" class="home-footer__link">Andy Dixon</a></small>
+                </div>
+                <div class="col-md-auto">
+                    <small class="text-muted">OAuth 2.1 · OpenID Connect · WebAuthn · SAML 2.0 · SCIM 2.0</small>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="/assets/vendor/tabler/tabler.min.js" defer></script>
+</body>
+</html>
+{{end}}

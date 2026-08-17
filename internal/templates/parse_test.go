@@ -87,7 +87,7 @@ func TestStandalonePagesParse(t *testing.T) {
 func TestStandaloneRenders(t *testing.T) {
 	// Files that don't reference any template variables are safe to render
 	// with an empty data map; that's enough to validate the wiring.
-	files := []string{"home.html", "error.html"}
+	files := []string{"error.html"}
 	for _, f := range files {
 		t.Run(f, func(t *testing.T) {
 			rec := &recordingResponseWriter{header: http.Header{}, status: 200}
@@ -100,6 +100,51 @@ func TestStandaloneRenders(t *testing.T) {
 			}
 			if !bytes.Contains(rec.body.Bytes(), []byte("<html")) {
 				t.Fatalf("Standalone(%s) produced no HTML body; got: %q", f, rec.body.String())
+			}
+		})
+	}
+}
+
+// TestPublicPagesRender walks every marketing template and renders it through
+// the same helper the router uses. These pages are static, so a successful
+// render here is a genuine guarantee that the live page works — unlike the
+// admin templates, there is no handler-shaped data to stub out.
+func TestPublicPagesRender(t *testing.T) {
+	var pages []string
+	err := fs.WalkDir(templateFS, "web/templates/public", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		// layout.html is chrome: it is parsed alongside a page, never alone.
+		if path == "web/templates/public/layout.html" {
+			return nil
+		}
+		pages = append(pages, strings.TrimPrefix(path, "web/templates/public/"))
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pages) == 0 {
+		t.Fatal("no public templates found; the embed pattern is probably wrong")
+	}
+
+	for _, page := range pages {
+		t.Run(page, func(t *testing.T) {
+			rec := &recordingResponseWriter{header: http.Header{}, status: 200}
+			PublicPage(rec, page, map[string]interface{}{
+				"Title":       "test",
+				"Description": "test",
+				"Nav":         "",
+			})
+			if rec.status >= 500 {
+				t.Fatalf("PublicPage(%s) returned %d: %s", page, rec.status, rec.body.String())
+			}
+			body := rec.body.String()
+			for _, want := range []string{"<html", "</html>", "site-navigation", "home-footer"} {
+				if !strings.Contains(body, want) {
+					t.Errorf("PublicPage(%s) is missing %q — the layout did not wrap the content", page, want)
+				}
 			}
 		})
 	}

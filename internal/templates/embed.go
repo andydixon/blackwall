@@ -123,6 +123,30 @@ func AdminDocsPage(w http.ResponseWriter, bodyFile string, data interface{}) {
 	buf.WriteTo(w)
 }
 
+// PublicPage renders a marketing page inside the public site chrome.
+// pageFile is relative to web/templates/public/ e.g. "features/licensing.html".
+// The page file defines a "content" template; public/layout.html supplies the
+// shared head, navigation and footer so the marketing pages cannot drift apart.
+func PublicPage(w http.ResponseWriter, pageFile string, data interface{}) {
+	t, err := template.New("").Funcs(funcMap).ParseFS(templateFS,
+		"web/templates/public/layout.html",
+		"web/templates/public/"+pageFile,
+	)
+	if err != nil {
+		log.Printf("public template parse failed: page=%q err=%v", pageFile, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	var buf bytes.Buffer
+	if err := t.ExecuteTemplate(&buf, "layout", data); err != nil {
+		log.Printf("public template render failed: page=%q err=%v", pageFile, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	buf.WriteTo(w)
+}
+
 // Standalone renders a standalone page (no admin layout).
 // file is relative to web/templates/ e.g. "oauth/login.html".
 //
