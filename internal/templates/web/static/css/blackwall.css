@@ -15,6 +15,16 @@
     --bw-card-inset: 1.5rem;
 }
 
+/* ── Page backdrop ───────────────────────────────────────────────
+   The theme paints a radial wash behind the page. Pinning it to the viewport
+   keeps it still while content scrolls, instead of the gradient sliding up and
+   leaving the flat page colour behind on long admin pages. */
+
+body.app-page,
+.auth-layout {
+    background-attachment: fixed;
+}
+
 /* ── Density ─────────────────────────────────────────────────────
    Tabler's defaults are tighter than BlackWall's dense admin pages want:
    cards inset content by 1.25rem but table cells by only 0.75rem, and most
