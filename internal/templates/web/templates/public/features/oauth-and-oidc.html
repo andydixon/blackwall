@@ -1,0 +1,158 @@
+{{define "content"}}
+<section class="page-hero">
+    <div class="container">
+        <nav class="breadcrumb-trail" aria-label="Breadcrumb">
+            <a href="/">Home</a><span aria-hidden="true">/</span><a href="/platform">Platform</a><span aria-hidden="true">/</span><span>OAuth &amp; OIDC</span>
+        </nav>
+        <div class="row">
+            <div class="col-lg-9">
+                <div class="eyebrow mb-3">OAuth 2.1 &amp; OpenID Connect</div>
+                <h1 class="page-hero__title mb-4">The standards, implemented properly</h1>
+                <p class="page-hero__lead mb-0">
+                    Your applications should not need a bespoke SDK to talk to your identity provider. BlackWall
+                    speaks OAuth 2.1 and OpenID Connect the way the specifications describe them, so mainstream
+                    libraries configure themselves from one discovery URL and simply work.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad">
+    <div class="container">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-6">
+                <h2 class="section-title mb-4">Consent that tells the user the truth</h2>
+                <p class="section-lead mb-4">
+                    The authorisation screen names the application, the project it belongs to, and the exact
+                    privilege level the user is about to grant it. No vague "this app would like to access your
+                    account" — the user sees the scope of what they are approving.
+                </p>
+                <ul class="spec-list">
+                    <li><strong>Mandatory PKCE</strong> — S256 only, enforced on every flow, including confidential clients.</li>
+                    <li><strong>Project context</strong> — every issued token carries the project it was issued for.</li>
+                    <li><strong>Privilege claims</strong> — <code>privilege_level</code> and <code>privilege_name</code> travel inside the token.</li>
+                    <li><strong>Authentication freshness</strong> — re-authentication is enforced rather than assumed.</li>
+                </ul>
+            </div>
+            <div class="col-lg-6">
+                <figure class="mb-0">
+                    <div class="screenshot-frame">
+                        <div class="screenshot-frame__bar" aria-hidden="true">
+                            <span class="screenshot-frame__dot"></span><span class="screenshot-frame__dot"></span><span class="screenshot-frame__dot"></span>
+                            <span class="screenshot-frame__label">blackwall.cx/oauth/authorize</span>
+                        </div>
+                        <img src="/assets/img/screens/oauth-consent.webp" width="1600" height="1000" decoding="async"
+                             alt="The OAuth authorisation consent screen naming the requesting client application, the project it belongs to, the privilege level being granted and the requested scopes, with approve and deny controls.">
+                    </div>
+                    <figcaption class="screenshot-caption">
+                        The consent screen names the client, the project and the privilege level being granted.
+                    </figcaption>
+                </figure>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad section-tint">
+    <div class="container">
+        <div class="row g-5">
+            <div class="col-lg-5">
+                <div class="section-rule mb-3"></div>
+                <h2 class="section-title mb-3">A flow with no weak link</h2>
+                <p class="section-lead">
+                    The authorisation code flow is only as strong as its weakest step. BlackWall closes the
+                    usual gaps by policy rather than by configuration you might forget to set.
+                </p>
+            </div>
+            <div class="col-lg-7">
+                <ol class="rail">
+                    <li>
+                        <h4>The application redirects</h4>
+                        <p>Your app sends the user to BlackWall with a PKCE challenge. Plain challenges are rejected — S256 is the only accepted method.</p>
+                    </li>
+                    <li>
+                        <h4>The user proves who they are</h4>
+                        <p>A WebAuthn assertion, bound to the BlackWall origin. There is no password step to phish or replay.</p>
+                    </li>
+                    <li>
+                        <h4>They grant a named privilege</h4>
+                        <p>The consent screen states the client, project and privilege. The decision is written to the audit log with a correlation ID.</p>
+                    </li>
+                    <li>
+                        <h4>Your app exchanges the code</h4>
+                        <p>The code is single-use and must arrive with the matching PKCE verifier. Tokens come back as signed JWTs or opaque handles.</p>
+                    </li>
+                    <li>
+                        <h4>You verify, revoke or introspect</h4>
+                        <p>Validate JWTs against the JWKS endpoint, or ask the introspection endpoint about opaque tokens. Revocation takes effect immediately.</p>
+                    </li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad">
+    <div class="container">
+        <div class="row align-items-center g-5 flex-lg-row-reverse">
+            <div class="col-lg-6">
+                <h2 class="section-title mb-4">Client registration without guesswork</h2>
+                <p class="section-lead mb-4">
+                    Register confidential or public clients per project, decide whether they issue OpenID Connect
+                    identity tokens, and pin their redirect URIs. Secrets are shown once and stored hashed.
+                </p>
+                <ul class="spec-list">
+                    <li><strong>Confidential and public clients</strong> — server-side apps, SPAs and mobile, each with the right rules applied.</li>
+                    <li><strong>Exact redirect URIs</strong> — no wildcard matching, so an open redirect cannot be engineered.</li>
+                    <li><strong>JWT or opaque tokens</strong> — signed RS256 tokens your services verify locally, or opaque handles you introspect.</li>
+                    <li><strong>Custom claims</strong> — attach organisation-specific claims with recorded provenance.</li>
+                </ul>
+            </div>
+            <div class="col-lg-6">
+                <figure class="mb-0">
+                    <div class="screenshot-frame">
+                        <div class="screenshot-frame__bar" aria-hidden="true">
+                            <span class="screenshot-frame__dot"></span><span class="screenshot-frame__dot"></span><span class="screenshot-frame__dot"></span>
+                            <span class="screenshot-frame__label">blackwall.cx/admin/projects/…/clients</span>
+                        </div>
+                        <img src="/assets/img/screens/oauth-clients.webp" width="1600" height="1000" loading="lazy" decoding="async"
+                             alt="The OAuth client registry for a project, listing each client by name and public identifier, whether it is confidential, whether OpenID Connect is enabled, its status and when it was created.">
+                    </div>
+                    <figcaption class="screenshot-caption">
+                        The per-project client registry: confidentiality, OIDC support and status at a glance.
+                    </figcaption>
+                </figure>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad section-tint">
+    <div class="container">
+        <div class="row g-3">
+            <div class="col-md-6 col-lg-3"><div class="panel h-100"><h3 class="panel__title">Discovery</h3><p class="panel__body">A standards-compliant document at <code>/.well-known/openid-configuration</code> lets OIDC-aware libraries configure themselves from one URL.</p></div></div>
+            <div class="col-md-6 col-lg-3"><div class="panel h-100"><h3 class="panel__title">JWKS</h3><p class="panel__body">Published signing keys so your services verify identity tokens locally, with overlap during rotation so in-flight tokens keep validating.</p></div></div>
+            <div class="col-md-6 col-lg-3"><div class="panel h-100"><h3 class="panel__title">UserInfo</h3><p class="panel__body">A standard endpoint returning the claims a client is entitled to see for the authenticated subject.</p></div></div>
+            <div class="col-md-6 col-lg-3"><div class="panel h-100"><h3 class="panel__title">Revocation &amp; introspection</h3><p class="panel__body">RFC 7009 revocation and RFC 7662 introspection, so a withdrawn token stops working rather than merely expiring eventually.</p></div></div>
+        </div>
+        <div class="row justify-content-center mt-4">
+            <div class="col-lg-8">
+                <div class="integrity-note">
+                    <strong>OIDC Discovery is live at <a href="/.well-known/openid-configuration"><code>/.well-known/openid-configuration</code></a></strong> — point a library at it and see for yourself.
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad--tight">
+    <div class="container">
+        <div class="row g-3">
+            <div class="col-md-4"><a href="/platform/passwordless-identity" class="capability-card"><h2 class="capability-card__title">Passwordless identity</h2><p class="capability-card__body">The WebAuthn foundation every one of these flows is built on.</p><span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></div>
+            <div class="col-md-4"><a href="/platform/administration" class="capability-card"><h2 class="capability-card__title">Administration</h2><p class="capability-card__body">Where privilege levels are defined and users are assigned to projects.</p><span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></div>
+            <div class="col-md-4"><a href="/platform/audit-and-assurance" class="capability-card"><h2 class="capability-card__title">Audit &amp; assurance</h2><p class="capability-card__body">Every authorisation decision, recorded in a tamper-evident chain.</p><span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></div>
+        </div>
+    </div>
+</section>
+{{end}}

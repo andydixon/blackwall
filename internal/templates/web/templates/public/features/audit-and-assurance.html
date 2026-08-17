@@ -1,0 +1,138 @@
+{{define "content"}}
+<section class="page-hero">
+    <div class="container">
+        <nav class="breadcrumb-trail" aria-label="Breadcrumb">
+            <a href="/">Home</a><span aria-hidden="true">/</span><a href="/platform">Platform</a><span aria-hidden="true">/</span><span>Audit &amp; assurance</span>
+        </nav>
+        <div class="row">
+            <div class="col-lg-9">
+                <div class="eyebrow mb-3">Audit &amp; assurance</div>
+                <h1 class="page-hero__title mb-4">An audit log that can defend itself</h1>
+                <p class="page-hero__lead mb-0">
+                    A log that anyone with database access can quietly edit is a formality, not evidence.
+                    BlackWall chains every entry into the one before it, so altering a single historical row
+                    invalidates every row that follows — and the tampering announces itself.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad">
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-xl-11">
+                <figure class="mb-0">
+                    <div class="screenshot-frame">
+                        <div class="screenshot-frame__bar" aria-hidden="true">
+                            <span class="screenshot-frame__dot"></span><span class="screenshot-frame__dot"></span><span class="screenshot-frame__dot"></span>
+                            <span class="screenshot-frame__label">blackwall.cx/admin/audit</span>
+                        </div>
+                        <img src="/assets/img/screens/audit-log.webp" width="1600" height="1000" decoding="async"
+                             alt="The audit log screen showing filters and a paginated table of events, each row carrying a timestamp, dotted event type, success or failure outcome, actor identifier, project, target type and identifier, source IP address and correlation identifier.">
+                    </div>
+                    <figcaption class="screenshot-caption text-center">
+                        Every event carries its actor, target, source address and correlation ID. Filter by any of
+                        them, page through the history, and export it with an HMAC-signed manifest.
+                    </figcaption>
+                </figure>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad section-tint">
+    <div class="container">
+        <div class="row g-5 align-items-center">
+            <div class="col-lg-6">
+                <div class="section-rule mb-3"></div>
+                <h2 class="section-title mb-4">Two defences, not one</h2>
+                <p class="section-lead mb-4">
+                    Row chaining stops selective edits. It does not, on its own, stop someone replacing the whole
+                    table. Signed checkpoints close that second gap.
+                </p>
+                <ul class="spec-list">
+                    <li><strong>Per-row chaining</strong> — each entry's hash commits to its predecessor and its own canonical payload.</li>
+                    <li><strong>Serialised writes</strong> — hashes are computed under a database lock, so concurrent activity cannot corrupt the chain.</li>
+                    <li><strong>Signed tip checkpoints</strong> — the last identifier, row count and chain hash are signed together and published outside the database.</li>
+                    <li><strong>Verification on demand</strong> — recompute the tip and confirm the signature; any drift surfaces as a structured failure.</li>
+                </ul>
+            </div>
+            <div class="col-lg-6">
+                <div class="panel panel--brand">
+                    <h3 class="panel__title">What a checkpoint proves</h3>
+                    <ol class="rail mt-3" style="--rail-on-dark: 1">
+                        <li><h4 style="color:#fff">Tip stability</h4><p style="color:rgba(232,241,249,0.78)">The row at the recorded identifier still carries the recorded chain hash.</p></li>
+                        <li><h4 style="color:#fff">Row-count stability</h4><p style="color:rgba(232,241,249,0.78)">The number of rows up to that tip matches what was signed, so silent truncation is visible.</p></li>
+                        <li><h4 style="color:#fff">Signature validity</h4><p style="color:rgba(232,241,249,0.78)">The signature still validates under an active or retired signing key.</p></li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad">
+    <div class="container">
+        <div class="row justify-content-center mb-5">
+            <div class="col-lg-7 text-center">
+                <div class="section-rule mx-auto mb-3"></div>
+                <h2 class="section-title mb-3">What gets recorded</h2>
+                <p class="section-lead mx-auto">Every administrative mutation, every OAuth flow and every WebAuthn assertion — not a configurable subset.</p>
+            </div>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-6 col-lg-3"><div class="panel h-100"><h3 class="panel__title">Event type &amp; outcome</h3><p class="panel__body">A dotted action name such as <code>oauth.authorize.approve</code>, with a success, failure or informational outcome.</p></div></div>
+            <div class="col-md-6 col-lg-3"><div class="panel h-100"><h3 class="panel__title">Correlation ID</h3><p class="panel__body">Propagated from the inbound request header, so one end-user action can be traced across every service it touched.</p></div></div>
+            <div class="col-md-6 col-lg-3"><div class="panel h-100"><h3 class="panel__title">Actor &amp; target</h3><p class="panel__body">User, project, OAuth client, WebAuthn credential and target object, each identified without exposing secrets.</p></div></div>
+            <div class="col-md-6 col-lg-3"><div class="panel h-100"><h3 class="panel__title">Request origin</h3><p class="panel__body">Source IP address and user agent, derived from validated request headers rather than trusted blindly.</p></div></div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad section-tint">
+    <div class="container">
+        <div class="row align-items-center g-5 flex-lg-row-reverse">
+            <div class="col-lg-6">
+                <h2 class="section-title mb-4">Know exactly what is running</h2>
+                <p class="section-lead mb-4">
+                    "Which version is in production?" should not require a deployment archaeologist. The dashboard
+                    states the running version, the commit it was built from, when it was built, and when it last
+                    passed a vulnerability scan.
+                </p>
+                <ul class="spec-list">
+                    <li><strong>Release provenance</strong> — version, commit and build time, visible to any administrator.</li>
+                    <li><strong>Scan attestation</strong> — the time of the last successful scan and an opaque reference for it.</li>
+                    <li><strong>Deliberately minimal</strong> — package names and scanner findings are excluded, so the panel cannot become a shopping list for an attacker.</li>
+                    <li><strong>Operational signal</strong> — outcome trends and CSRF pressure sit alongside it, so anomalies surface early.</li>
+                </ul>
+            </div>
+            <div class="col-lg-6">
+                <figure class="mb-0">
+                    <div class="screenshot-frame">
+                        <div class="screenshot-frame__bar" aria-hidden="true">
+                            <span class="screenshot-frame__dot"></span><span class="screenshot-frame__dot"></span><span class="screenshot-frame__dot"></span>
+                            <span class="screenshot-frame__label">blackwall.cx/admin</span>
+                        </div>
+                        <img src="/assets/img/screens/dashboard.webp" width="1600" height="1000" loading="lazy" decoding="async"
+                             alt="The administrator dashboard with a build and security status panel reporting application version, commit, build time, last successful vulnerability scan and an opaque scan reference, alongside outcome profiles, CSRF pressure and a recent audit event stream.">
+                    </div>
+                    <figcaption class="screenshot-caption">
+                        Build and security provenance, next to the operational signals that would reveal a problem.
+                    </figcaption>
+                </figure>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad--tight">
+    <div class="container">
+        <div class="row g-3">
+            <div class="col-md-4"><a href="/platform/administration" class="capability-card"><h2 class="capability-card__title">Administration</h2><p class="capability-card__body">Approval workflows that create the evidence in the first place.</p><span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></div>
+            <div class="col-md-4"><a href="/platform/enterprise-federation" class="capability-card"><h2 class="capability-card__title">Enterprise federation</h2><p class="capability-card__body">Stream the same events to your SIEM over signed webhooks.</p><span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></div>
+            <div class="col-md-4"><a href="/platform/software-licensing" class="capability-card"><h2 class="capability-card__title">Software licensing</h2><p class="capability-card__body">Issuance and revocation, audited without leaking customer detail.</p><span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></div>
+        </div>
+    </div>
+</section>
+{{end}}

@@ -1,0 +1,111 @@
+{{define "content"}}
+<section class="page-hero">
+    <div class="container">
+        <nav class="breadcrumb-trail" aria-label="Breadcrumb">
+            <a href="/">Home</a><span aria-hidden="true">/</span><span>Platform</span>
+        </nav>
+        <div class="row">
+            <div class="col-lg-9">
+                <h1 class="page-hero__title mb-4">The platform, capability by capability</h1>
+                <p class="page-hero__lead mb-0">
+                    BlackWall is one control plane covering three problems that are normally solved by three
+                    vendors: who someone is, what they are entitled to, and what they did. Everything below runs
+                    against the same tenancy model and writes to the same tamper-evident audit trail.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad">
+    <div class="container">
+        <div class="row g-3">
+            <div class="col-md-6 col-lg-4">
+                <a href="/platform/passwordless-identity" class="capability-card">
+                    <div class="feature-icon fi-blue">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    </div>
+                    <h2 class="capability-card__title">Passwordless identity</h2>
+                    <p class="capability-card__body">WebAuthn as the only authentication method. Enrolment by one-time link, multiple authenticators per user, and self-service key management in the portal.</p>
+                    <span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                </a>
+            </div>
+
+            <div class="col-md-6 col-lg-4">
+                <a href="/platform/oauth-and-oidc" class="capability-card">
+                    <div class="feature-icon fi-green">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    </div>
+                    <h2 class="capability-card__title">OAuth 2.1 &amp; OpenID Connect</h2>
+                    <p class="capability-card__body">Authorisation code with mandatory PKCE, JWT or opaque access tokens, custom claims, revocation, introspection and a discovery document your libraries configure themselves from.</p>
+                    <span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                </a>
+            </div>
+
+            <div class="col-md-6 col-lg-4">
+                <a href="/platform/software-licensing" class="capability-card">
+                    <div class="feature-icon fi-amber">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg>
+                    </div>
+                    <h2 class="capability-card__title">Software licensing</h2>
+                    <p class="capability-card__body">Ed25519-signed entitlements bound to exact hostnames, features and instance counts, with an authoritative verifier, immediate revocation and automatic renewal reminders.</p>
+                    <span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                </a>
+            </div>
+
+            <div class="col-md-6 col-lg-4">
+                <a href="/platform/administration" class="capability-card">
+                    <div class="feature-icon fi-purple">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                    </div>
+                    <h2 class="capability-card__title">Multi-tenant administration</h2>
+                    <p class="capability-card__body">Organisations, projects, ten named privilege rungs, per-project feature flags, and an approval workflow that holds sensitive changes for a second decision-maker.</p>
+                    <span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                </a>
+            </div>
+
+            <div class="col-md-6 col-lg-4">
+                <a href="/platform/audit-and-assurance" class="capability-card">
+                    <div class="feature-icon fi-red">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+                    </div>
+                    <h2 class="capability-card__title">Audit &amp; assurance</h2>
+                    <p class="capability-card__body">A hash-chained audit log, signed tip checkpoints that detect truncation, correlation IDs for cross-service tracing, and release provenance on the dashboard.</p>
+                    <span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                </a>
+            </div>
+
+            <div class="col-md-6 col-lg-4">
+                <a href="/platform/enterprise-federation" class="capability-card">
+                    <div class="feature-icon fi-teal">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M19 5l-3 3M8 16l-3 3"/></svg>
+                    </div>
+                    <h2 class="capability-card__title">Enterprise federation</h2>
+                    <p class="capability-card__body">A SAML 2.0 identity provider for applications that cannot speak OIDC, SCIM 2.0 provisioning from your HR platform, and HMAC-signed webhooks for event-driven integration.</p>
+                    <span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                </a>
+            </div>
+
+            <div class="col-md-6 col-lg-4">
+                <a href="/platform/cryptbin" class="capability-card">
+                    <div class="feature-icon fi-amber">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>
+                    </div>
+                    <h2 class="capability-card__title">Cryptbin</h2>
+                    <p class="capability-card__body">End-to-end encrypted sharing for text and files. The browser holds the key, the server holds ciphertext it cannot read, and entries expire on a schedule.</p>
+                    <span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                </a>
+            </div>
+
+            <div class="col-md-6 col-lg-4">
+                <div class="panel panel--brand h-100 d-flex flex-column justify-content-center">
+                    <h2 class="panel__title">One tenancy model</h2>
+                    <p class="mb-0">Every capability on this page is scoped by organisation and project. A privilege
+                    level, a licence, a webhook and an audit row all point at the same project — which is why
+                    revoking access in one place actually revokes it everywhere.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{{end}}

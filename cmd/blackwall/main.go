@@ -172,9 +172,9 @@ func main() {
 	r.Handle("/assets/*", http.StripPrefix("/assets/", templates.StaticHandler()))
 
 	// Public pages
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		templates.Standalone(w, "home.html", map[string]interface{}{"Title": "BlackWall"})
-	})
+	for _, page := range publicPages {
+		r.Get(page.Path, publicPageHandler(page))
+	}
 	r.Get("/metrics", metricsHandler.Index)
 
 	// OIDC / OAuth discovery
@@ -460,6 +460,76 @@ func main() {
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
 		log.Printf("shutdown: %v", err)
+	}
+}
+
+// publicPage describes one marketing surface. Keeping them in a table rather
+// than a route per closure means the navigation highlight, the <title> and the
+// meta description cannot drift away from the route that serves them.
+type publicPage struct {
+	Path        string
+	Template    string
+	Nav         string
+	Title       string
+	Description string
+}
+
+var publicPages = []publicPage{
+	{
+		Path: "/", Template: "home.html", Nav: "home",
+		Title:       "BlackWall — Passwordless Auth. Encrypted Sharing.",
+		Description: "BlackWall is a production-grade OAuth 2.1 and OpenID Connect provider built entirely on WebAuthn, with Ed25519 software licensing and a tamper-evident audit trail. No passwords. No compromise.",
+	},
+	{
+		Path: "/platform", Template: "platform.html", Nav: "platform",
+		Title:       "Platform — BlackWall",
+		Description: "One control plane for passwordless identity, OAuth 2.1, software licensing, tamper-evident audit, enterprise federation and encrypted sharing.",
+	},
+	{
+		Path: "/platform/passwordless-identity", Template: "features/passwordless-identity.html", Nav: "identity",
+		Title:       "Passwordless Identity — BlackWall",
+		Description: "WebAuthn-only authentication: hardware keys, passkeys and platform authenticators, with self-service enrolment and per-credential revocation. No password exists to steal.",
+	},
+	{
+		Path: "/platform/oauth-and-oidc", Template: "features/oauth-and-oidc.html", Nav: "oauth",
+		Title:       "OAuth 2.1 & OpenID Connect — BlackWall",
+		Description: "Authorisation code with mandatory PKCE, JWT or opaque tokens, privilege claims, discovery, JWKS, UserInfo, revocation and introspection.",
+	},
+	{
+		Path: "/platform/software-licensing", Template: "features/software-licensing.html", Nav: "licensing",
+		Title:       "Software Licensing — BlackWall",
+		Description: "Ed25519-signed entitlements bound to exact hostnames, features and instance counts, with an authoritative verifier, immediate revocation and automatic renewal reminders.",
+	},
+	{
+		Path: "/platform/administration", Template: "features/administration.html", Nav: "administration",
+		Title:       "Multi-Tenant Administration — BlackWall",
+		Description: "Organisations, projects, named privilege levels, per-project feature flags and an approval workflow that puts a second pair of eyes on sensitive changes.",
+	},
+	{
+		Path: "/platform/audit-and-assurance", Template: "features/audit-and-assurance.html", Nav: "assurance",
+		Title:       "Audit & Assurance — BlackWall",
+		Description: "A hash-chained audit log where altering one row invalidates every row after it, signed tip checkpoints that detect truncation, and release provenance on the dashboard.",
+	},
+	{
+		Path: "/platform/enterprise-federation", Template: "features/enterprise-federation.html", Nav: "federation",
+		Title:       "Enterprise Federation — BlackWall",
+		Description: "A SAML 2.0 identity provider for applications that cannot speak OIDC, SCIM 2.0 provisioning from your HR platform, and HMAC-signed webhooks.",
+	},
+	{
+		Path: "/platform/cryptbin", Template: "features/cryptbin.html", Nav: "cryptbin",
+		Title:       "Cryptbin — BlackWall",
+		Description: "End-to-end encrypted sharing for text and files. The browser holds the key, BlackWall stores ciphertext it cannot read, and entries expire on a schedule.",
+	},
+}
+
+func publicPageHandler(page publicPage) http.HandlerFunc {
+	data := map[string]interface{}{
+		"Title":       page.Title,
+		"Description": page.Description,
+		"Nav":         page.Nav,
+	}
+	return func(w http.ResponseWriter, r *http.Request) {
+		templates.PublicPage(w, page.Template, data)
 	}
 }
 

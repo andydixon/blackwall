@@ -1,0 +1,121 @@
+{{define "content"}}
+<section class="page-hero">
+    <div class="container">
+        <nav class="breadcrumb-trail" aria-label="Breadcrumb">
+            <a href="/">Home</a><span aria-hidden="true">/</span><a href="/platform">Platform</a><span aria-hidden="true">/</span><span>Enterprise federation</span>
+        </nav>
+        <div class="row">
+            <div class="col-lg-9">
+                <div class="eyebrow mb-3">Enterprise federation</div>
+                <h1 class="page-hero__title mb-4">Fits the estate you already have</h1>
+                <p class="page-hero__lead mb-0">
+                    Enterprise deals are rarely lost on features. They are lost because the buyer's HR platform
+                    cannot provision users, or a critical application only speaks SAML. BlackWall meets those
+                    systems where they are — without asking your users to authenticate twice.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad">
+    <div class="container">
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <div class="panel h-100">
+                    <div class="feature-icon fi-blue mb-3">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9"/><path d="M16 3l5 2-2 5"/></svg>
+                    </div>
+                    <h2 class="panel__title">SAML 2.0 identity provider</h2>
+                    <p class="panel__body mb-0">Many enterprise applications cannot speak OIDC and never will. BlackWall acts as a SAML 2.0 IdP for them, reusing the same WebAuthn portal login — so users never meet a second authentication surface.</p>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="panel h-100">
+                    <div class="feature-icon fi-teal mb-3">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                    </div>
+                    <h2 class="panel__title">SCIM 2.0 provisioning</h2>
+                    <p class="panel__body mb-0">Workday, Okta, Entra ID, Google Workspace, BambooHR and Rippling push user-lifecycle changes straight into BlackWall. A leaver in HR becomes a deprovisioned user here, with no operator retyping anything.</p>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="panel h-100">
+                    <div class="feature-icon fi-purple mb-3">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v12H5.17L4 17.17z"/><path d="M8 9h8M8 12h5"/></svg>
+                    </div>
+                    <h2 class="panel__title">Signed webhooks</h2>
+                    <p class="panel__body mb-0">Every project-scoped audit event can be fanned out to your own systems, HMAC-signed and delivered in the background so the originating request never waits on your endpoint.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad section-tint">
+    <div class="container">
+        <div class="row g-5">
+            <div class="col-lg-5">
+                <div class="section-rule mb-3"></div>
+                <h2 class="section-title mb-3">One login, many protocols</h2>
+                <p class="section-lead">
+                    The point of federation is that the user should not care which protocol an application chose.
+                    Whichever door they arrive at, the proof of identity is the same WebAuthn assertion.
+                </p>
+            </div>
+            <div class="col-lg-7">
+                <ul class="spec-list">
+                    <li><strong>Per-project service provider registry</strong> — each project keeps its own list of registered SAML applications.</li>
+                    <li><strong>Standard bindings</strong> — HTTP-Redirect and HTTP-POST for requests, HTTP-POST for responses.</li>
+                    <li><strong>Metadata endpoint</strong> — hand the downstream application one URL and let it configure itself.</li>
+                    <li><strong>No second password</strong> — SAML sign-on reuses the portal's passwordless login rather than introducing a fallback credential.</li>
+                    <li><strong>Project-scoped provisioning</strong> — every SCIM operation targets one project, so users land in the right place with the right assignment.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad">
+    <div class="container">
+        <div class="row g-5 align-items-center">
+            <div class="col-lg-6">
+                <h2 class="section-title mb-4">Events your systems can trust</h2>
+                <p class="section-lead mb-4">
+                    A webhook that cannot be verified is a liability. BlackWall signs every delivery so your
+                    receiver can prove the payload came from your identity provider and has not been replayed.
+                </p>
+                <ul class="spec-list">
+                    <li><strong>HMAC-SHA256 signature</strong> — a timestamped signature header your receiver recomputes over the raw body.</li>
+                    <li><strong>Stable event identity</strong> — an event ID that stays constant across retries, so idempotent handling is straightforward.</li>
+                    <li><strong>Versioned envelope</strong> — a declared payload version, so your receivers are not broken by a future change.</li>
+                    <li><strong>Non-blocking dispatch</strong> — deliveries run in the background; a slow endpoint never slows a user's login.</li>
+                </ul>
+            </div>
+            <div class="col-lg-6">
+                <div class="panel panel--tint">
+                    <h3 class="panel__title">Where federation earns its keep</h3>
+                    <div class="row g-2 mt-3">
+                        <div class="col-sm-6"><div class="use-case-chip">Joiner, mover, leaver automation</div></div>
+                        <div class="col-sm-6"><div class="use-case-chip">Legacy SaaS that only speaks SAML</div></div>
+                        <div class="col-sm-6"><div class="use-case-chip">Streaming audit events to a SIEM</div></div>
+                        <div class="col-sm-6"><div class="use-case-chip">Triggering billing on entitlement change</div></div>
+                        <div class="col-sm-6"><div class="use-case-chip">Security alerting on failed assertions</div></div>
+                        <div class="col-sm-6"><div class="use-case-chip">Keeping a CRM in step with tenants</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad--tight section-tint">
+    <div class="container">
+        <div class="row g-3">
+            <div class="col-md-4"><a href="/platform/oauth-and-oidc" class="capability-card"><h2 class="capability-card__title">OAuth 2.1 &amp; OIDC</h2><p class="capability-card__body">The modern path for everything that does speak OIDC.</p><span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></div>
+            <div class="col-md-4"><a href="/platform/administration" class="capability-card"><h2 class="capability-card__title">Administration</h2><p class="capability-card__body">The project structure every federated surface is scoped by.</p><span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></div>
+            <div class="col-md-4"><a href="/platform/audit-and-assurance" class="capability-card"><h2 class="capability-card__title">Audit &amp; assurance</h2><p class="capability-card__body">The event stream your webhooks are fanning out.</p><span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></div>
+        </div>
+    </div>
+</section>
+{{end}}

@@ -1,0 +1,170 @@
+{{define "content"}}
+<section class="page-hero">
+    <div class="container">
+        <nav class="breadcrumb-trail" aria-label="Breadcrumb">
+            <a href="/">Home</a><span aria-hidden="true">/</span><a href="/platform">Platform</a><span aria-hidden="true">/</span><span>Administration</span>
+        </nav>
+        <div class="row">
+            <div class="col-lg-9">
+                <div class="eyebrow mb-3">Multi-tenant administration</div>
+                <h1 class="page-hero__title mb-4">Structure that survives growth</h1>
+                <p class="page-hero__lead mb-0">
+                    Identity systems rarely fail on day one. They fail in year three, when nobody can say who has
+                    access to what and why. BlackWall gives you an explicit hierarchy — organisations, projects,
+                    named privilege rungs — and makes every change to it visible, reversible and reviewable.
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad">
+    <div class="container">
+        <div class="row align-items-center g-5">
+            <div class="col-lg-6">
+                <h2 class="section-title mb-4">Organisations and projects, isolated by default</h2>
+                <p class="section-lead mb-4">
+                    An organisation is a tenant. A project is a product or environment inside it. Users, OAuth
+                    clients, licences, webhooks and audit rows all hang off a project, so isolation is the
+                    default rather than something you remember to configure.
+                </p>
+                <ul class="spec-list">
+                    <li><strong>Scoped operators</strong> — an administrator can be limited to the projects they are responsible for and sees nothing else.</li>
+                    <li><strong>Project context in tokens</strong> — every issued token records which project it belongs to.</li>
+                    <li><strong>Disable without deleting</strong> — projects and users can be suspended, preserving the audit history.</li>
+                    <li><strong>Self-service signup</strong> — new organisations can provision themselves and onboard their first administrator.</li>
+                </ul>
+            </div>
+            <div class="col-lg-6">
+                <figure class="mb-0">
+                    <div class="screenshot-frame">
+                        <div class="screenshot-frame__bar" aria-hidden="true">
+                            <span class="screenshot-frame__dot"></span><span class="screenshot-frame__dot"></span><span class="screenshot-frame__dot"></span>
+                            <span class="screenshot-frame__label">blackwall.cx/admin/organisations</span>
+                        </div>
+                        <img src="/assets/img/screens/organisations.webp" width="1600" height="1000" decoding="async"
+                             alt="The organisations administration screen listing each tenant with its name, slug, designated administrator, number of users and projects, and active status.">
+                    </div>
+                    <figcaption class="screenshot-caption">
+                        Each tenant with its designated administrator, user and project counts, and status.
+                    </figcaption>
+                </figure>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad section-tint">
+    <div class="container">
+        <div class="row align-items-center g-5 flex-lg-row-reverse">
+            <div class="col-lg-6">
+                <h2 class="section-title mb-4">Privilege that travels with the token</h2>
+                <p class="section-lead mb-4">
+                    Every project defines its own ordered privilege rungs — up to ten — and lower numbers always
+                    carry more authority. The level and its name are embedded in the access token, so your
+                    services authorise from a claim instead of calling back for a permissions lookup.
+                </p>
+                <div class="compare-wrap mb-4">
+                    <table class="compare-table">
+                        <thead><tr><th scope="col">Level</th><th scope="col">Default name</th><th scope="col">Convention</th></tr></thead>
+                        <tbody>
+                            <tr><th scope="row">1</th><td>Owner</td><td>Project lifecycle decisions.</td></tr>
+                            <tr><th scope="row">2</th><td>Administrator</td><td>Full operations within the project.</td></tr>
+                            <tr><th scope="row">3</th><td>Editor</td><td>Routine writes.</td></tr>
+                            <tr><th scope="row">4</th><td>Member</td><td>Read with limited write.</td></tr>
+                            <tr><th scope="row">5</th><td>Viewer</td><td>Read-only.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <p class="panel__body mb-0">Rename or add rungs to match how your business actually talks about access — the ordering invariant is what the platform enforces.</p>
+            </div>
+            <div class="col-lg-6">
+                <figure class="mb-0">
+                    <div class="screenshot-frame">
+                        <div class="screenshot-frame__bar" aria-hidden="true">
+                            <span class="screenshot-frame__dot"></span><span class="screenshot-frame__dot"></span><span class="screenshot-frame__dot"></span>
+                            <span class="screenshot-frame__label">blackwall.cx/admin/projects</span>
+                        </div>
+                        <img src="/assets/img/screens/projects.webp" width="1600" height="1000" loading="lazy" decoding="async"
+                             alt="The projects administration screen listing projects with their name, unique identifier, owning organisation and active or disabled status.">
+                    </div>
+                    <figcaption class="screenshot-caption">
+                        Projects across every organisation an operator is scoped to see.
+                    </figcaption>
+                </figure>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad">
+    <div class="container">
+        <div class="row g-5">
+            <div class="col-lg-5">
+                <div class="section-rule mb-3"></div>
+                <h2 class="section-title mb-3">A second pair of eyes, enforced</h2>
+                <p class="section-lead">
+                    Sensitive changes should not depend on one person having a good day. When an operator lacks
+                    the direct capability for a mutation, BlackWall stores the proposed change instead of
+                    applying it, and waits for a decision.
+                </p>
+            </div>
+            <div class="col-lg-7">
+                <ol class="rail">
+                    <li>
+                        <h4>The change is captured, not applied</h4>
+                        <p>The full proposed change is persisted as a pending approval request. Nothing has taken effect yet.</p>
+                    </li>
+                    <li>
+                        <h4>A reviewer decides</h4>
+                        <p>Someone holding the decision capability approves or rejects, recording a short reason the requester can act on and longer context for anyone reviewing later.</p>
+                    </li>
+                    <li>
+                        <h4>The decision is audited</h4>
+                        <p>Approval and denial are written to the audit log as distinct events, attributable to the individual who made the call.</p>
+                    </li>
+                    <li>
+                        <h4>Latency is measured</h4>
+                        <p>The dashboard reports decision counts, median and 95th-percentile latency, and flags requests left pending beyond your warning threshold.</p>
+                    </li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad section-tint">
+    <div class="container">
+        <div class="row justify-content-center mb-5">
+            <div class="col-lg-7 text-center">
+                <div class="section-rule mx-auto mb-3"></div>
+                <h2 class="section-title mb-3">Per-project control, without forks</h2>
+                <p class="section-lead mx-auto">Feature flags let one tenant adopt a capability without changing behaviour for anyone else.</p>
+            </div>
+        </div>
+        <div class="row g-3">
+            <div class="col-md-6 col-lg-3"><div class="panel h-100"><h3 class="panel__title">Server-backed sessions</h3><p class="panel__body">Record each authenticated session so it can be listed and revoked centrally, rather than waiting for a token to expire.</p></div></div>
+            <div class="col-md-6 col-lg-3"><div class="panel h-100"><h3 class="panel__title">Concurrent session caps</h3><p class="panel__body">Limit a user to a fixed number of parallel sessions per project. A login beyond the cap revokes the oldest session first.</p></div></div>
+            <div class="col-md-6 col-lg-3"><div class="panel h-100"><h3 class="panel__title">Custom branding</h3><p class="panel__body">Apply an organisation's branding overlay to the login screens served for a project, on your own domain.</p></div></div>
+            <div class="col-md-6 col-lg-3"><div class="panel h-100"><h3 class="panel__title">Outbound webhooks</h3><p class="panel__body">Gate event delivery per project. Endpoints can be registered while the flag is off and nothing is dispatched until you turn it on.</p></div></div>
+        </div>
+        <div class="row justify-content-center mt-4">
+            <div class="col-lg-9">
+                <div class="integrity-note">
+                    <strong>Upgrades never change behaviour silently.</strong> New projects start with modern defaults on; projects that predate a flag start with it off, so an upgrade cannot alter how an in-flight tenant behaves.
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="section-pad--tight">
+    <div class="container">
+        <div class="row g-3">
+            <div class="col-md-4"><a href="/platform/passwordless-identity" class="capability-card"><h2 class="capability-card__title">Passwordless identity</h2><p class="capability-card__body">How users get in, and how they manage their own authenticators.</p><span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></div>
+            <div class="col-md-4"><a href="/platform/audit-and-assurance" class="capability-card"><h2 class="capability-card__title">Audit &amp; assurance</h2><p class="capability-card__body">Where every administrative decision is permanently recorded.</p><span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></div>
+            <div class="col-md-4"><a href="/platform/software-licensing" class="capability-card"><h2 class="capability-card__title">Software licensing</h2><p class="capability-card__body">Entitlements issued against the same project structure.</p><span class="capability-card__more">Read more <svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></span></a></div>
+        </div>
+    </div>
+</section>
+{{end}}
