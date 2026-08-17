@@ -4,7 +4,7 @@
 <h5>Base URL and authentication</h5>
 <ul>
     <li><strong>Base URL:</strong> <code>https://&lt;your-blackwall&gt;/scim/v2</code></li>
-    <li><strong>Auth:</strong> <code>Authorization: Bearer bw_admin_...</code> (see <a href="/admin/docs/api-tokens" class="text-light">Admin API Tokens</a>).</li>
+    <li><strong>Auth:</strong> <code>Authorization: Bearer bw_admin_...</code> (see <a href="/admin/docs/api-tokens">Admin API Tokens</a>).</li>
     <li><strong>Target project:</strong> <code>X-BlackWall-Project: &lt;project-uuid&gt;</code> — every SCIM operation is scoped to one project; this is the project users get assigned to on create.</li>
 </ul>
 
@@ -44,7 +44,7 @@
 <p>Every SCIM mutation logs as <code>scim.user.create</code>, <code>scim.user.replace</code>, <code>scim.user.patch</code>, or <code>scim.user.deactivate</code>, with <code>actor_user_id</code> set to the token owner.</p>
 
 <h5>Smoke test</h5>
-<pre class="bg-black text-light p-3 small mb-0"><code>curl -H "Authorization: Bearer bw_admin_..." \
+<pre class="p-3 small mb-0"><code>curl -H "Authorization: Bearer bw_admin_..." \
      -H "X-BlackWall-Project: 11111111-2222-3333-4444-555555555555" \
      "https://auth.example.com/scim/v2/ServiceProviderConfig"</code></pre>
 {{end}}

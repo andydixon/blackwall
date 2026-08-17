@@ -4,7 +4,7 @@
 <p>The <code>Signer</code> interface in <code>internal/service/signer.go</code> abstracts the signing operation so the private key can live outside the process — in AWS KMS, GCP KMS, HashiCorp Vault, or any HSM with a SIGN/VERIFY profile.</p>
 
 <h5>The interface</h5>
-<pre class="bg-black text-light p-3 small mb-0"><code>type Signer interface {
+<pre class="p-3 small mb-0"><code>type Signer interface {
     KeyID() string
     Algorithm() string                  // "RS256"
     PublicKey() *rsa.PublicKey          // for JWKS export

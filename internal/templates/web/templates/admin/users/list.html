@@ -34,7 +34,7 @@
             <tbody>
                 {{range .Users}}
                 <tr>
-                    <td><a href="/admin/users/{{.UUID}}" class="text-light">{{.DisplayLabel}}</a></td>
+                    <td><a href="/admin/users/{{.UUID}}">{{.DisplayLabel}}</a></td>
                     <td><span class="text-muted">{{if .OrganizationName}}{{.OrganizationName}}{{else}}—{{end}}</span></td>
                     <td>
                         {{if eq .Status "active"}}<span class="badge bg-success">Active</span>

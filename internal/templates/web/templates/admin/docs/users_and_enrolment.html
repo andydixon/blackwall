@@ -3,7 +3,7 @@
 
 <h5>Lifecycle</h5>
 <ol>
-    <li>Operator fills <a href="/admin/users/create" class="text-light">/admin/users/create</a>: display label, optional email, organisation, status.</li>
+    <li>Operator fills <a href="/admin/users/create">/admin/users/create</a>: display label, optional email, organisation, status.</li>
     <li>BlackWall generates a 32-byte enrolment token, valid for 24 hours, stored in <code>system_config</code>.</li>
     <li>Operator copies the enrolment URL from the user's detail page and sends it out-of-band (email, signal, etc.).</li>
     <li>The user opens the URL in a WebAuthn-capable browser and registers their authenticator.</li>

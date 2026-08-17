@@ -2,7 +2,7 @@
 <div class="row mt-4 align-items-center">
     <div class="col">
         <div class="page-header"><h2>Authentication sandbox</h2></div>
-        <p class="text-muted small mb-0">Project: <a href="/admin/projects/{{.Project.UUID}}" class="text-light">{{.Project.Name}}</a></p>
+        <p class="text-muted small mb-0">Project: <a href="/admin/projects/{{.Project.UUID}}">{{.Project.Name}}</a></p>
     </div>
     <div class="col-auto">
         <a href="/admin/projects/{{.Project.UUID}}" class="btn btn-outline-secondary">Back to project</a>
@@ -55,11 +55,11 @@
 <div class="card mt-3">
     <div class="card-header">
         <code>/oauth/userinfo</code> response for
-        <a href="/admin/users/{{.SelectedUser.UUID}}" class="text-light">{{.SelectedUser.DisplayLabel}}</a>
+        <a href="/admin/users/{{.SelectedUser.UUID}}">{{.SelectedUser.DisplayLabel}}</a>
     </div>
     <div class="card-body">
         <p class="text-muted small mb-2">Pretty-printed JSON — what a downstream OIDC client would receive after exchanging an authorization code for tokens issued under this project.</p>
-        <pre class="bg-black text-light p-3 rounded border border-secondary small mb-0"><code>{{.PreviewJSON}}</code></pre>
+        <pre class="p-3 rounded border border-secondary small mb-0"><code>{{.PreviewJSON}}</code></pre>
     </div>
 </div>
 

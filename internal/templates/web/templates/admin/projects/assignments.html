@@ -2,7 +2,7 @@
 <div class="row mt-4 align-items-center">
     <div class="col">
         <div class="page-header"><h2>Assignments</h2></div>
-        <p class="text-muted small mb-0">Project: <a href="/admin/projects/{{.Project.UUID}}" class="text-light">{{.Project.Name}}</a></p>
+        <p class="text-muted small mb-0">Project: <a href="/admin/projects/{{.Project.UUID}}">{{.Project.Name}}</a></p>
     </div>
     <div class="col-auto">
         <a href="/admin/projects/{{.Project.UUID}}" class="btn btn-outline-secondary">Back</a>
@@ -41,7 +41,7 @@
             <tbody>
                 {{range .Assignments}}
                 <tr>
-                    <td><a href="/admin/users/{{.UserUUID}}" class="text-light">{{.UserLabel}}</a></td>
+                    <td><a href="/admin/users/{{.UserUUID}}">{{.UserLabel}}</a></td>
                     <td>
                         {{if $.CanManage}}
                         <form method="POST" action="/admin/assignments/{{.ID}}/update" class="d-flex gap-2">

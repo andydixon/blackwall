@@ -3,7 +3,7 @@
     <div class="col-lg-8">
         <div class="page-header"><h2>{{.Client.Name}}</h2></div>
         <p class="text-muted mb-0">
-            Project: <a href="/admin/projects/{{.Client.ProjectUUID}}" class="text-light">{{.Client.ProjectName}}</a> ·
+            Project: <a href="/admin/projects/{{.Client.ProjectUUID}}">{{.Client.ProjectName}}</a> ·
             <code>{{.Client.PublicID}}</code>
             {{if .Client.Confidential}}<span class="badge bg-info ms-2">Confidential</span>{{else}}<span class="badge bg-warning ms-2">Public (PKCE)</span>{{end}}
             {{if eq .Client.Status "active"}}<span class="badge bg-success ms-2">Active</span>{{else if eq .Client.Status "disabled"}}<span class="badge bg-secondary ms-2">Disabled</span>{{else}}<span class="badge bg-light ms-2">{{.Client.Status}}</span>{{end}}

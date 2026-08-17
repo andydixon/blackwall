@@ -2,7 +2,7 @@
 <div class="row mt-4">
     <div class="col-xl-10 offset-xl-1">
         <div class="page-header"><h2>Create OAuth client</h2></div>
-        <p class="text-muted small">Project: <a href="/admin/projects/{{.Project.UUID}}" class="text-light">{{.Project.Name}}</a></p>
+        <p class="text-muted small">Project: <a href="/admin/projects/{{.Project.UUID}}">{{.Project.Name}}</a></p>
         {{if .Error}}<div class="alert alert-danger mt-3">{{.Error}}</div>{{end}}
 
         <div class="row mt-3 g-3">

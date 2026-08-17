@@ -24,7 +24,7 @@
 </ul>
 
 <h5>Build &amp; install locally</h5>
-<pre class="bg-black text-light p-3 small mb-0"><code>cd tools/terraform-provider-blackwall
+<pre class="p-3 small mb-0"><code>cd tools/terraform-provider-blackwall
 go mod tidy
 go build -o terraform-provider-blackwall .
 
@@ -33,7 +33,7 @@ mkdir -p "$PLUGIN_DIR"
 cp terraform-provider-blackwall "$PLUGIN_DIR/"</code></pre>
 
 <h5>Configuration</h5>
-<pre class="bg-black text-light p-3 small mb-0"><code>terraform {
+<pre class="p-3 small mb-0"><code>terraform {
   required_providers {
     blackwall = {
       source = "blackwall.io/identity/blackwall"
@@ -47,7 +47,7 @@ provider "blackwall" {
 }</code></pre>
 
 <h5>Grafana project worked example</h5>
-<pre class="bg-black text-light p-3 small mb-0"><code>data "blackwall_organization" "acme" {
+<pre class="p-3 small mb-0"><code>data "blackwall_organization" "acme" {
   slug = "acme"
 }
 
@@ -79,6 +79,6 @@ resource "blackwall_webhook_endpoint" "audit_sink" {
 
 <h5>See also</h5>
 <ul>
-    <li><a href="/admin/docs/api-tokens" class="text-light">Admin API Tokens</a> — how to mint the bearer token Terraform consumes.</li>
+    <li><a href="/admin/docs/api-tokens">Admin API Tokens</a> — how to mint the bearer token Terraform consumes.</li>
 </ul>
 {{end}}

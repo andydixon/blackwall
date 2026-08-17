@@ -5,7 +5,7 @@
 <p>Sign out and sign back in. If WebAuthn doesn't recognise your passkey, your enrolment didn't take — re-bootstrap with a fresh enrolment link before doing anything else.</p>
 
 <h5>2. Confirm the audit chain is being written</h5>
-<p>Open <a href="/admin/audit" class="text-light">/admin/audit</a> and look for entries from the last few minutes. Each entry carries a <code>chain_hash</code>; if those are blank, audit writes are failing — stop and fix the database connection before continuing.</p>
+<p>Open <a href="/admin/audit">/admin/audit</a> and look for entries from the last few minutes. Each entry carries a <code>chain_hash</code>; if those are blank, audit writes are failing — stop and fix the database connection before continuing.</p>
 
 <h5>2a. Match the deployed build to the release</h5>
 <p>On the dashboard, compare the version, commit, build time, vulnerability-scan time, and scan reference with the artefacts approved in your release pipeline. Missing scan metadata is a warning, not evidence of a clean scan.</p>
@@ -20,7 +20,7 @@
 <p>Register an OIDC-enabled confidential client against any project and run an authorisation-code+PKCE flow from your preferred client. Include <code>max_age=0</code> for the test, complete the passkey prompt, and confirm the ID token contains matching <code>nonce</code>, <code>at_hash</code>, and numeric <code>auth_time</code> claims.</p>
 
 <h5>6. Trigger maintenance</h5>
-<p>Open <a href="/admin/maintenance" class="text-light">/admin/maintenance</a> and run the scheduled jobs once manually. Verify all jobs land at <code>success</code> with non-zero <code>rows_affected</code> on a populated database.</p>
+<p>Open <a href="/admin/maintenance">/admin/maintenance</a> and run the scheduled jobs once manually. Verify all jobs land at <code>success</code> with non-zero <code>rows_affected</code> on a populated database.</p>
 
 <h5>Safety checks before going live</h5>
 <ul>

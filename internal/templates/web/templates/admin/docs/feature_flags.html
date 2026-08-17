@@ -7,13 +7,13 @@
 <h5>The flags</h5>
 <dl class="row mb-0">
     <dt class="col-sm-4">webhooks_enabled</dt>
-    <dd class="col-sm-8">Gate the outbound webhook dispatcher. Registered endpoints can still be edited while off; nothing gets delivered until on. See <a href="/admin/docs/webhooks" class="text-light">Webhooks</a>.</dd>
+    <dd class="col-sm-8">Gate the outbound webhook dispatcher. Registered endpoints can still be edited while off; nothing gets delivered until on. See <a href="/admin/docs/webhooks">Webhooks</a>.</dd>
     <dt class="col-sm-4">db_sessions_enabled</dt>
-    <dd class="col-sm-8">Records each authenticated session in the <code>user_sessions</code> table so it can be revoked server-side. With this off, only the cookie's natural expiry ends a session. See <a href="/admin/docs/sessions" class="text-light">Server-Backed Sessions</a>.</dd>
+    <dd class="col-sm-8">Records each authenticated session in the <code>user_sessions</code> table so it can be revoked server-side. With this off, only the cookie's natural expiry ends a session. See <a href="/admin/docs/sessions">Server-Backed Sessions</a>.</dd>
     <dt class="col-sm-4">max_concurrent_sessions</dt>
     <dd class="col-sm-8">When &gt; 0 and DB sessions are on, capping a user to N parallel sessions across this project. A login that would exceed N revokes the oldest session first. <code>0</code> means unbounded.</dd>
     <dt class="col-sm-4">custom_branding_enabled</dt>
-    <dd class="col-sm-8">Pull the organisation's branding overlay onto login screens served for this project. See <a href="/admin/docs/branding-and-domains" class="text-light">Branding and Custom Domains</a>.</dd>
+    <dd class="col-sm-8">Pull the organisation's branding overlay onto login screens served for this project. See <a href="/admin/docs/branding-and-domains">Branding and Custom Domains</a>.</dd>
     <dt class="col-sm-4">step_up_required</dt>
     <dd class="col-sm-8">Reserved for the upcoming step-up auth surface (force a fresh WebAuthn touch for high-impact actions). Off by default; turning it on without the step-up surface in place is a no-op.</dd>
 </dl>

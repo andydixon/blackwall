@@ -1,8 +1,8 @@
 {{define "doc_body"}}
 <h5>Triage order</h5>
 <ol>
-    <li>Check <a href="/admin/audit" class="text-light">/admin/audit</a> filtered by the user's UUID, the failing event_type, and a 5-minute window. The <code>metadata_json</code> column usually has the precise reason.</li>
-    <li>Cross-reference the user's correlation ID. If they were given an error trace code, decode it at <a href="/admin/error-trace" class="text-light">/admin/error-trace</a>.</li>
+    <li>Check <a href="/admin/audit">/admin/audit</a> filtered by the user's UUID, the failing event_type, and a 5-minute window. The <code>metadata_json</code> column usually has the precise reason.</li>
+    <li>Cross-reference the user's correlation ID. If they were given an error trace code, decode it at <a href="/admin/error-trace">/admin/error-trace</a>.</li>
     <li>Check the dashboard for a recent spike in <code>fail</code> events of the relevant type — the issue may not be specific to one user.</li>
 </ol>
 
@@ -27,9 +27,9 @@
 
 <h5>Diagnostic surfaces</h5>
 <ul>
-    <li><a href="/admin/scope" class="text-light">/admin/scope</a> — what your role can see and act on right now.</li>
-    <li><a href="/admin/error-trace" class="text-light">/admin/error-trace</a> — decode the short opaque code shown to end-users on error pages.</li>
-    <li><a href="/admin/maintenance" class="text-light">/admin/maintenance</a> — last run results for each cleanup job.</li>
+    <li><a href="/admin/scope">/admin/scope</a> — what your role can see and act on right now.</li>
+    <li><a href="/admin/error-trace">/admin/error-trace</a> — decode the short opaque code shown to end-users on error pages.</li>
+    <li><a href="/admin/maintenance">/admin/maintenance</a> — last run results for each cleanup job.</li>
     <li><code>/metrics</code> + your scrape stack — quantitative views.</li>
 </ul>
 {{end}}

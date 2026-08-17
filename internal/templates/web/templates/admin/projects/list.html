@@ -33,7 +33,7 @@
             <tbody>
                 {{range .Projects}}
                 <tr>
-                    <td><a href="/admin/projects/{{.UUID}}" class="text-light">{{.Name}}</a></td>
+                    <td><a href="/admin/projects/{{.UUID}}">{{.Name}}</a></td>
                     <td><span class="text-muted">{{if .OrgName}}{{.OrgName}}{{else}}—{{end}}</span></td>
                     <td>
                         {{if eq .Status "active"}}<span class="badge bg-success">Active</span>

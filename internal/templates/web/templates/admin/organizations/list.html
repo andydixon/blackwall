@@ -25,10 +25,10 @@
                     <tbody>
                         {{range .Organizations}}
                         <tr>
-                            <td><a href="/admin/organisations/{{.UUID}}" class="text-light">{{.Name}}</a></td>
+                            <td><a href="/admin/organisations/{{.UUID}}">{{.Name}}</a></td>
                             <td><code class="small">{{.Slug}}</code></td>
                             <td>
-                                {{if .AdminUUID}}<a href="/admin/users/{{.AdminUUID}}" class="text-light">{{.AdminLabel}}</a>
+                                {{if .AdminUUID}}<a href="/admin/users/{{.AdminUUID}}">{{.AdminLabel}}</a>
                                 {{else}}<span class="text-muted">—</span>{{end}}
                             </td>
                             <td>{{.UserCount}}</td>

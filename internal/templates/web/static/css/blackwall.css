@@ -585,6 +585,36 @@ dl dd {
     vertical-align: middle;
 }
 
+/* ── Documentation ───────────────────────────────────────────────
+   The guide's contents card sticks while the prose scrolls. It has to clear
+   the sticky header, which Bootstrap's own sticky-top (top: 0) does not, and
+   it must be able to scroll internally: the list is longer than the viewport
+   on short screens, and a plain sticky card would strand its lower entries. */
+
+.admin-doc-nav {
+    position: sticky;
+    top: calc(var(--ns-header-height) + 1rem);
+    max-height: calc(100vh - var(--ns-header-height) - 2rem);
+    max-height: calc(100dvh - var(--ns-header-height) - 2rem);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.admin-doc-nav > .list-group {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+@media (max-width: 991.98px) {
+    /* Stacked single column below lg: sticking would cover the prose. */
+    .admin-doc-nav {
+        position: static;
+        max-height: none;
+    }
+}
+
 /* ── Documentation prose ────────────────────────────────────────── */
 
 .admin-doc-body > *:last-child {

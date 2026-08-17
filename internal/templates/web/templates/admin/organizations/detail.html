@@ -2,7 +2,7 @@
 <div class="row mt-4 align-items-end g-4">
     <div class="col-lg-8">
         <div class="page-header"><h2>{{.Org.Name}}</h2></div>
-        <p class="text-muted mb-0"><code class="small">{{.Org.UUID}}</code> · slug <code>{{.Org.Slug}}</code> · status <span class="text-light">{{.Org.Status}}</span></p>
+        <p class="text-muted mb-0"><code class="small">{{.Org.UUID}}</code> · slug <code>{{.Org.Slug}}</code> · status <span>{{.Org.Status}}</span></p>
     </div>
     <div class="col-lg-4 text-lg-end">
         <a href="/admin/organisations" class="btn btn-outline-secondary">Back</a>
@@ -28,7 +28,7 @@
     <div class="col-md-4">
         <div class="card text-center"><div class="card-body">
             <h6>Admin</h6>
-            {{if .Org.AdminUUID}}<a href="/admin/users/{{.Org.AdminUUID}}" class="text-light">{{.Org.AdminLabel}}</a>
+            {{if .Org.AdminUUID}}<a href="/admin/users/{{.Org.AdminUUID}}">{{.Org.AdminLabel}}</a>
             {{else}}<span class="text-muted">— not assigned —</span>{{end}}
         </div></div>
     </div>
@@ -97,7 +97,7 @@
                     <thead><tr><th>Name</th><th>Status</th></tr></thead>
                     <tbody>
                         {{range .Projects}}
-                        <tr><td><a href="/admin/projects/{{.UUID}}" class="text-light">{{.Name}}</a></td><td>{{.Status}}</td></tr>
+                        <tr><td><a href="/admin/projects/{{.UUID}}">{{.Name}}</a></td><td>{{.Status}}</td></tr>
                         {{else}}
                         <tr><td colspan="2" class="text-center text-muted py-3">No projects.</td></tr>
                         {{end}}
@@ -114,7 +114,7 @@
                     <thead><tr><th>Display label</th><th>Status</th></tr></thead>
                     <tbody>
                         {{range .Users}}
-                        <tr><td><a href="/admin/users/{{.UUID}}" class="text-light">{{.DisplayLabel}}</a></td><td>{{.Status}}</td></tr>
+                        <tr><td><a href="/admin/users/{{.UUID}}">{{.DisplayLabel}}</a></td><td>{{.Status}}</td></tr>
                         {{else}}
                         <tr><td colspan="2" class="text-center text-muted py-3">No users.</td></tr>
                         {{end}}

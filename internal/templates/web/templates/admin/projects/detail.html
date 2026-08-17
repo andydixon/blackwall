@@ -3,7 +3,7 @@
     <div class="col-lg-8">
         <div class="page-header"><h2>{{.Project.Name}}</h2></div>
         <p class="text-muted mb-0">
-            Organisation: {{if .Project.OrgUUID}}<a href="/admin/organisations/{{.Project.OrgUUID}}" class="text-light">{{.Project.OrgName}}</a>{{else}}—{{end}} ·
+            Organisation: {{if .Project.OrgUUID}}<a href="/admin/organisations/{{.Project.OrgUUID}}">{{.Project.OrgName}}</a>{{else}}—{{end}} ·
             <code>{{.Project.UUID}}</code>
             {{if eq .Project.Status "active"}}<span class="badge bg-success ms-2">Active</span>{{else if eq .Project.Status "disabled"}}<span class="badge bg-secondary ms-2">Disabled</span>{{else}}<span class="badge bg-light ms-2">{{.Project.Status}}</span>{{end}}
         </p>

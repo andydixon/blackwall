@@ -12,7 +12,10 @@
 .hero {
     position: relative;
     display: flex;
-    min-height: calc(100vh - 64px);
+    /* Fills the viewport below the sticky header. dvh keeps it honest on
+       phones, where vh ignores the browser toolbar and overshoots. */
+    min-height: calc(100vh - var(--ns-header-height));
+    min-height: calc(100dvh - var(--ns-header-height));
     flex-direction: column;
     justify-content: center;
     overflow: hidden;

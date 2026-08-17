@@ -5,13 +5,13 @@
 <ol>
     <li>Operator submits a mutation through a normal admin form.</li>
     <li>BlackWall stores an <code>approval_requests</code> row with the full proposed change in <code>payload_json</code>, status <code>pending</code>.</li>
-    <li>An actor with <code>decide_approvals</code> reviews the request at <a href="/admin/approvals" class="text-light">/admin/approvals</a>.</li>
+    <li>An actor with <code>decide_approvals</code> reviews the request at <a href="/admin/approvals">/admin/approvals</a>.</li>
     <li>The decision (approved / rejected) updates the row and logs <code>admin.approval.decision.approved</code> or <code>admin.approval.decision.denied</code> with the reviewer's user ID and decision note.</li>
     <li>The original mutation must then be re-applied by an actor with the <code>_direct</code> capability — approvals do not auto-apply changes.</li>
 </ol>
 
 <h5>What gets enqueued</h5>
-<p>See the <a href="/admin/docs/access-model" class="text-light">Access Model</a> page for the full list. Common cases:</p>
+<p>See the <a href="/admin/docs/access-model">Access Model</a> page for the full list. Common cases:</p>
 <ul>
     <li>User status changes</li>
     <li>WebAuthn credential deletions</li>

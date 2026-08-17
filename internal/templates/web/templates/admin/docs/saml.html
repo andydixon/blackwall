@@ -43,7 +43,7 @@
     <li>The AuthnRequest's <code>AssertionConsumerServiceURL</code> (when present) must match the registered ACS URL exactly. This prevents an attacker from making us POST our signed assertion to their server.</li>
     <li>The Audience defaults to the SP's Entity ID, so the assertion can't be replayed against a different SP.</li>
     <li>Subject confirmation has <code>NotOnOrAfter</code> = +5 minutes; Conditions has the same window.</li>
-    <li>Self-signed signing cert is generated from the active JWT key, so JWKS and SAML metadata advertise the same key identity. When you move JWT signing to a KMS (see <a href="/admin/docs/kms-signer" class="text-light">KMS-pluggable signing</a>), SAML signing follows.</li>
+    <li>Self-signed signing cert is generated from the active JWT key, so JWKS and SAML metadata advertise the same key identity. When you move JWT signing to a KMS (see <a href="/admin/docs/kms-signer">KMS-pluggable signing</a>), SAML signing follows.</li>
 </ul>
 
 <h5>What's intentionally not implemented</h5>

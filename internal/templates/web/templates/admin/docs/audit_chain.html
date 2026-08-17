@@ -25,5 +25,5 @@
 </ul>
 
 <h5>What the signature uses</h5>
-<p>The same RSA private key as JWT signing. Reuse is intentional: the audit chain shares a security boundary with token issuance, so a compromise that lets an attacker rewrite audit rows also gives them token-issuance capability anyway. When you move JWT signing to a cloud KMS (see <a href="/admin/docs/kms-signer" class="text-light">KMS-pluggable signing</a>), checkpoint signing follows automatically.</p>
+<p>The same RSA private key as JWT signing. Reuse is intentional: the audit chain shares a security boundary with token issuance, so a compromise that lets an attacker rewrite audit rows also gives them token-issuance capability anyway. When you move JWT signing to a cloud KMS (see <a href="/admin/docs/kms-signer">KMS-pluggable signing</a>), checkpoint signing follows automatically.</p>
 {{end}}

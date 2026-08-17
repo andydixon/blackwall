@@ -2,7 +2,7 @@
 <div class="row mt-4 align-items-end g-4">
     <div class="col-lg-8">
         <div class="page-header"><h2>OAuth clients</h2></div>
-        <p class="text-muted mb-0">Project: <a href="/admin/projects/{{.Project.UUID}}" class="text-light">{{.Project.Name}}</a></p>
+        <p class="text-muted mb-0">Project: <a href="/admin/projects/{{.Project.UUID}}">{{.Project.Name}}</a></p>
     </div>
     <div class="col-lg-4">
         <div class="d-flex justify-content-lg-end align-items-center gap-3">
@@ -26,7 +26,7 @@
             <tbody>
                 {{range .Clients}}
                 <tr>
-                    <td><a href="/admin/clients/{{.PublicID}}" class="text-light">{{.Name}}</a></td>
+                    <td><a href="/admin/clients/{{.PublicID}}">{{.Name}}</a></td>
                     <td><code class="small">{{.PublicID}}</code></td>
                     <td>
                         {{if .Confidential}}<span class="badge bg-info">Confidential</span>

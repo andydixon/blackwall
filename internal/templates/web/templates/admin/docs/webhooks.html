@@ -2,7 +2,7 @@
 <p>BlackWall fans every project-scoped audit event out to registered webhook receivers. The dispatcher runs in the background; the originating HTTP request never blocks on a downstream callout.</p>
 
 <h5>Where to manage them</h5>
-<p>Open <code>/admin/projects/&#123;uuid&#125;/webhooks</code>. Requires <code>view_projects</code> to see, <code>manage_projects</code> to register / edit / delete. The project's <code>webhooks_enabled</code> feature flag must be on for the dispatcher to deliver — see <a href="/admin/docs/feature-flags" class="text-light">Feature flags</a>.</p>
+<p>Open <code>/admin/projects/&#123;uuid&#125;/webhooks</code>. Requires <code>view_projects</code> to see, <code>manage_projects</code> to register / edit / delete. The project's <code>webhooks_enabled</code> feature flag must be on for the dispatcher to deliver — see <a href="/admin/docs/feature-flags">Feature flags</a>.</p>
 
 <h5>Delivery contract</h5>
 <ul>
@@ -13,7 +13,7 @@
 </ul>
 
 <h5>Verifying signatures (receiver side)</h5>
-<pre class="bg-black text-light p-3 small mb-0"><code># Pseudocode — every language's HMAC is the same shape.
+<pre class="p-3 small mb-0"><code># Pseudocode — every language's HMAC is the same shape.
 sig_header = request.headers["X-BlackWall-Signature"]
 ts         = parse "t=" from sig_header
 v1         = parse "v1=" from sig_header

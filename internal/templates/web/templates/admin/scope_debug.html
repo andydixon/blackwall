@@ -109,7 +109,7 @@
                     <tbody>
                         {{range .ClientScopes}}
                         <tr>
-                            <td class="small">{{.ProjectName}} / <a href="/admin/clients/{{.ClientPublicID}}" class="text-light">{{.ClientName}}</a></td>
+                            <td class="small">{{.ProjectName}} / <a href="/admin/clients/{{.ClientPublicID}}">{{.ClientName}}</a></td>
                             <td class="small font-monospace">{{range .Scopes}}{{.}} {{end}}</td>
                         </tr>
                         {{else}}
