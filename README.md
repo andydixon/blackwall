@@ -108,9 +108,9 @@ Or use the bundled `docker-compose.yml`, which also starts MySQL. The Compose
 file does not seed Blackwall's historical base schema: restore that baseline
 into the database volume before starting the application for the first time.
 
-## Run behind Apache 2
+## Run behind a reverse proxy
 
-A reference reverse-proxy unit is at `docker/blackwall.apache.conf`. It does
+A reference Apache 2 unit is at `docker/blackwall.apache.conf`. It does
 HTTPS termination, redirects HTTP → HTTPS, propagates the real client IP
 via `mod_remoteip`, sets `X-Forwarded-Proto` / `X-Forwarded-Host` so
 Blackwall builds correct OIDC issuer URLs, and bumps `LimitRequestBody` to
@@ -121,11 +121,40 @@ trusts the forwarded headers:
 
 ```yaml
 trust_proxy: true
-trusted_proxies: "127.0.0.1, ::1"   # add any other Apache hosts
+trusted_proxies: "127.0.0.1, ::1"   # add any other proxy hosts
 ```
 
 Without those, `audit_log.ip_address` will read `127.0.0.1` for every
 request, the per-IP rate limits stop working, and HSTS won't be emitted.
+
+If you terminate with nginx instead, note that Blackwall's OAuth responses
+carry large header blocks — signed session cookies plus the security header
+set — which overflow nginx's default 4 KB `proxy_buffer_size` and surface as
+`upstream sent too big header` 502s. Raise it:
+
+```nginx
+proxy_buffer_size       16k;
+proxy_buffers           8 16k;
+proxy_busy_buffers_size 32k;
+```
+
+### Publish the admin console on its own hostname
+
+`docker/admin.blackwall.cx.nginx.conf` is a working nginx vhost that maps
+`admin.example.com/foo` onto Blackwall's `/admin/foo`. Adapt the
+`server_name`, certificate paths and upstream port.
+
+It also needs the new hostname on the WebAuthn origin allow-list, or admin
+sign-in fails with `origin_mismatch` — the browser reports its own origin,
+not `app_url`:
+
+```yaml
+webauthn_extra_origins: "https://admin.example.com"
+```
+
+Existing passkeys keep working: they are scoped to `webauthn_rp_id`, which
+the new hostname must sit under. See the reverse-proxy chapter of
+`docs/MANUAL.md` for the full rationale and the caveats.
 
 ## Run with supervisord on the host
 
@@ -154,6 +183,8 @@ The application refuses to start if any of these are wrong:
 - `session_secret` shorter than 32 characters
 - `csrf_secret` shorter than 32 characters
 - `session_secret` equal to `csrf_secret`
+- `webauthn_extra_origins` holding an entry that is not a bare `https://host`
+  sitting under `webauthn_rp_id`
 
 Generate strong values with:
 
