@@ -54,8 +54,12 @@ correct by construction rather than by hand. It is unit-tested in
 The schema is generated from a live MySQL database:
 
 ```bash
-python3 tools/pgmigrate/gen_schema.py > internal/db/schema.sql
+BW_MYSQL_HOST=... BW_MYSQL_PASSWORD=... \
+  python3 tools/pgmigrate/gen_schema.py > internal/db/schema.sql
 ```
+
+(Only needed to re-derive the baseline from a MySQL database. schema.sql is
+now maintained by hand — see the note at the top of that file.)
 
 Create the database and load the schema. Load it **as the application role**,
 not as a superuser: whoever runs the DDL owns the tables, and only the owner

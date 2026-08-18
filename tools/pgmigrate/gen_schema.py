@@ -19,15 +19,21 @@ Mapping rules (kept deliberately mechanical so the output is reviewable):
 MySQL's ON UPDATE CURRENT_TIMESTAMP has no PostgreSQL equivalent and is
 reproduced with a shared trigger.
 """
-import subprocess, collections, re, sys
+import subprocess, collections, re, sys, os
 
-DB = "blackwall"
-MYSQL = ["mysql", "-h", "172.17.0.1", "-u", "blackwall", DB, "-N", "-B", "-e"]
+DB = os.environ.get("BW_MYSQL_DB", "blackwall")
+HOST = os.environ.get("BW_MYSQL_HOST", "127.0.0.1")
+USER = os.environ.get("BW_MYSQL_USER", "blackwall")
+PASSWORD = os.environ.get("BW_MYSQL_PASSWORD")
+if not PASSWORD:
+    sys.exit("set BW_MYSQL_PASSWORD (and optionally BW_MYSQL_HOST/USER/DB)")
+
+MYSQL = ["mysql", "-h", HOST, "-u", USER, DB, "-N", "-B", "-e"]
 
 
 def q(sql):
     out = subprocess.run(MYSQL + [sql], capture_output=True, text=True,
-                         env={"MYSQL_PWD": "***REMOVED***", "PATH": "/usr/bin:/bin"})
+                         env={"MYSQL_PWD": PASSWORD, "PATH": "/usr/bin:/bin"})
     if out.returncode:
         sys.exit("mysql failed: " + out.stderr)
     return [line.split("\t") for line in out.stdout.strip("\n").split("\n") if line]
