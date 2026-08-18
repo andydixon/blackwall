@@ -100,19 +100,34 @@ those rows exist only in PostgreSQL and are not replicated back. Sessions,
 tokens, and audit entries created after the switch would be lost. Roll back
 promptly or not at all.
 
-## Known pre-existing defects (not introduced by this migration)
+## Pre-existing defects found and fixed
 
-Statement validation surfaced three queries that reference objects which do not
-exist in the MariaDB schema either, so they were already failing at runtime:
+Statement validation surfaced three queries referencing objects that did not
+exist in the MariaDB schema either, so they had been failing at runtime long
+before this migration. They were fixed in a follow-up commit:
 
-- `internal/handler/metrics.go` queries a table `oauth_tokens` that does not
-  exist (the real tables are `oauth_access_tokens` / `oauth_refresh_tokens`).
-- `internal/handler/admin.go` selects `rows_affected` from
-  `maintenance_job_runs`, which has no such column.
-- `internal/service/branding.go` reads and writes `primary_color`,
-  `login_message`, and `support_email` on `organizations`; migration 3 was
-  recorded as applied but those three columns are absent, so per-organisation
-  branding is broken.
+**Metrics reported zero active tokens.** `internal/handler/metrics.go` queried
+a table `oauth_tokens` that has never existed; the scan error was discarded, so
+`oauth_tokens_active` silently reported 0 forever. It now reads
+`oauth_access_tokens`, with `oauth_refresh_tokens_active` added alongside —
+summing two different kinds of token into one gauge would not be meaningful.
 
-These were left as-is so the migration reproduces current behaviour exactly.
-They should be fixed separately.
+**The maintenance page read two columns that do not exist.**
+`maintenance_job_runs` has `stats_json` and `error_trace`, not `rows_affected`
+and `error_message`. The page now reads the real columns. The underlying
+problem was one level deeper: `MaintenanceService.runJob` computed each job's
+counts and then discarded them, never writing `stats_json` at all, so there was
+nothing to display even with a correct query. It now persists them, and the
+"rows affected" figure is the sum of the job's counters.
+
+**Organisation branding was broken by a swallowed migration error.** Migration 3
+added `logo_url`, `primary_color`, `login_message` and `support_email` in a
+single multi-column `ALTER`. `logo_url` already existed in the base schema, so
+MySQL rejected the whole statement as a duplicate column — and the handler
+treated "duplicate column" as "already applied" and carried on, recording the
+migration as complete while three columns were never added. Migration 8 restores
+them.
+
+That failure mode cannot recur here: PostgreSQL applies
+`ADD COLUMN IF NOT EXISTS` per column, so a partially-applicable `ALTER` no
+longer depends on error-swallowing to be idempotent.

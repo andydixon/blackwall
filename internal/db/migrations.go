@@ -12,7 +12,9 @@ import (
 // carried at the point of the PostgreSQL migration, which is to say it already
 // includes the effect of historical migrations 1 through 7.
 //
-// Regenerate with tools/pgmigrate/gen_schema.py.
+// It is maintained by hand: a schema change must be added both to schema.sql
+// (for fresh installs) and as a numbered migration below (for existing
+// databases), so the two paths converge on the same shape.
 //
 //go:embed schema.sql
 var schemaSQL string
@@ -58,7 +60,28 @@ type migration struct {
 // Versions 1 to 7 are deliberately absent: they were MySQL DDL that cannot run
 // against PostgreSQL, they are already folded into schema.sql, and every live
 // database records them as applied.
-var migrations = []migration{}
+var migrations = []migration{
+	{
+		Version:     8,
+		Description: "Restore the organisation branding columns migration 3 failed to add",
+		Apply: func(db *sql.DB) error {
+			// Migration 3 added logo_url, primary_color, login_message and
+			// support_email in a single multi-column ALTER. logo_url already
+			// existed, so MySQL rejected the whole statement as a duplicate
+			// column — and the error was swallowed as "already applied",
+			// leaving the other three columns absent while the migration was
+			// recorded as complete. Branding has been broken ever since.
+			//
+			// PostgreSQL applies ADD COLUMN IF NOT EXISTS per column, so this
+			// class of partial failure cannot recur here.
+			_, err := db.Exec(`ALTER TABLE organizations
+				ADD COLUMN IF NOT EXISTS primary_color VARCHAR(16),
+				ADD COLUMN IF NOT EXISTS login_message VARCHAR(2048),
+				ADD COLUMN IF NOT EXISTS support_email VARCHAR(255)`)
+			return err
+		},
+	},
+}
 
 // Migrate brings the database up to date: it installs the baseline schema on an
 // empty database, then applies any pending migrations in order. Safe to call on

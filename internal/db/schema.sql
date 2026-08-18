@@ -1,5 +1,10 @@
--- BlackWall PostgreSQL schema — generated from the live MariaDB schema.
--- Regenerate with tools/pgmigrate/gen_schema.py; do not hand-edit.
+-- BlackWall PostgreSQL baseline schema.
+--
+-- Originally generated from the live MariaDB schema by
+-- tools/pgmigrate/gen_schema.py as a one-time bootstrap. MariaDB is no longer
+-- the source of truth, so do NOT regenerate this file — it is now maintained
+-- by hand, and every change must land here AND as a numbered migration in
+-- migrations.go so fresh installs and existing databases converge.
 
 CREATE EXTENSION IF NOT EXISTS citext;
 
@@ -291,6 +296,9 @@ CREATE TABLE organizations (
     CHECK (length(slug) <= 80),
     logo_url CITEXT,
     CHECK (length(logo_url) <= 500),
+    primary_color VARCHAR(16),
+    login_message VARCHAR(2048),
+    support_email VARCHAR(255),
     status TEXT NOT NULL DEFAULT 'active',
     CHECK (status IN ('active', 'disabled')),
     admin_user_id BIGINT,
@@ -429,12 +437,9 @@ CREATE TABLE saml_service_providers (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE schema_migrations (
-    version BIGINT NOT NULL,
-    description CITEXT NOT NULL,
-    CHECK (length(description) <= 255),
-    applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
+-- schema_migrations is deliberately absent here: Migrate() in migrations.go
+-- creates it before installing this baseline, so defining it twice would
+-- collide. If you load this file by hand, that table is created on first boot.
 
 CREATE TABLE scim_user_mapping (
     id BIGSERIAL NOT NULL,
@@ -595,7 +600,6 @@ ALTER TABLE project_oidc_claim_defaults ADD PRIMARY KEY (id);
 ALTER TABLE project_privilege_levels ADD PRIMARY KEY (id);
 ALTER TABLE rate_limits ADD PRIMARY KEY (id);
 ALTER TABLE saml_service_providers ADD PRIMARY KEY (id);
-ALTER TABLE schema_migrations ADD PRIMARY KEY (version);
 ALTER TABLE scim_user_mapping ADD PRIMARY KEY (id);
 ALTER TABLE system_config ADD PRIMARY KEY (config_key);
 ALTER TABLE users ADD PRIMARY KEY (id);

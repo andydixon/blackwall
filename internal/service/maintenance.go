@@ -2,6 +2,7 @@ package service
 
 import (
 	"database/sql"
+	"encoding/json"
 	"time"
 
 	"blackwall/internal/config"
@@ -40,8 +41,17 @@ func (s *MaintenanceService) runJob(name, triggeredBy string, fn func() (map[str
 		errMsg = sql.NullString{String: err.Error(), Valid: true}
 	}
 
-	s.db.Exec(`UPDATE maintenance_job_runs SET status=?, finished_at=?, duration_ms=?, error_trace=? WHERE id=?`,
-		status, time.Now(), dur, errMsg, jobID)
+	// Persist the per-job counts. These were previously computed and then
+	// discarded, which is why the admin maintenance page had nothing to show.
+	statsJSON := sql.NullString{}
+	if len(stats) > 0 {
+		if encoded, mErr := json.Marshal(stats); mErr == nil {
+			statsJSON = sql.NullString{String: string(encoded), Valid: true}
+		}
+	}
+
+	s.db.Exec(`UPDATE maintenance_job_runs SET status=?, finished_at=?, duration_ms=?, stats_json=?, error_trace=? WHERE id=?`,
+		status, time.Now(), dur, statsJSON, errMsg, jobID)
 
 	result := map[string]interface{}{
 		"status":   status,
