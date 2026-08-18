@@ -57,12 +57,36 @@ The schema is generated from a live MySQL database:
 python3 tools/pgmigrate/gen_schema.py > internal/db/schema.sql
 ```
 
-Create the database and load the schema:
+Create the database and load the schema. Load it **as the application role**,
+not as a superuser: whoever runs the DDL owns the tables, and only the owner
+can `ALTER` them. Loading the schema as `postgres` leaves the application
+unable to apply its own future migrations — it fails at boot with
+`must be owner of table` and, because the container runs with `--rm`, the
+error disappears with it.
 
 ```bash
 createdb -O blackwall blackwall
-psql -d blackwall -c 'CREATE EXTENSION IF NOT EXISTS citext;'
-psql -d blackwall -f internal/db/schema.sql
+psql -d blackwall -c 'CREATE EXTENSION IF NOT EXISTS citext;'   # needs superuser
+PGPASSWORD=... psql -h HOST -U blackwall -d blackwall -f internal/db/schema.sql
+```
+
+If the schema was already loaded as the wrong role, transfer ownership:
+
+```sql
+DO $$
+DECLARE r record;
+BEGIN
+  FOR r IN SELECT tablename FROM pg_tables WHERE schemaname='public' LOOP
+    EXECUTE format('ALTER TABLE public.%I OWNER TO blackwall', r.tablename);
+  END LOOP;
+  FOR r IN SELECT sequence_name FROM information_schema.sequences WHERE sequence_schema='public' LOOP
+    EXECUTE format('ALTER SEQUENCE public.%I OWNER TO blackwall', r.sequence_name);
+  END LOOP;
+  FOR r IN SELECT p.oid::regprocedure AS sig FROM pg_proc p
+           JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' LOOP
+    EXECUTE format('ALTER FUNCTION %s OWNER TO blackwall', r.sig);
+  END LOOP;
+END $$;
 ```
 
 Copy the data. The tool is type-aware in both directions, runs in a single
