@@ -230,7 +230,10 @@ func (s *ApprovalService) SummariseSlaVisibleToUser(userID int, includeAll bool,
 	latencyConds := append([]string{}, baseConds...)
 	latencyConds = append(latencyConds, "status IN ('approved','rejected')")
 	latencyWhere := "WHERE " + strings.Join(latencyConds, " AND ")
-	latencyQ := `SELECT TIMESTAMPDIFF(SECOND, created_at, decided_at) AS decision_seconds
+	// MySQL's TIMESTAMPDIFF has no PostgreSQL equivalent; subtracting two
+	// timestamps yields an interval, and EXTRACT(EPOCH ...) converts it to
+	// seconds. The cast keeps the value scannable into sql.NullInt64.
+	latencyQ := `SELECT EXTRACT(EPOCH FROM (decided_at - created_at))::bigint AS decision_seconds
 	             FROM approval_requests ` + latencyWhere + `
 	             ORDER BY decision_seconds ASC`
 
