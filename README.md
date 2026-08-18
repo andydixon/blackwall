@@ -51,7 +51,7 @@ authentication. Single static binary, no external runtime dependencies.
 - Go 1.25+ (for compiling from source)
 - PostgreSQL 14+ (16 recommended; the `citext` extension must be available)
 - Docker + Docker Compose for the supported deployment path
-- `supervisord` on the host if you want process supervision (sample unit included)
+- `systemd` on the host for process supervision (sample unit included)
 
 ## Build
 
@@ -157,20 +157,30 @@ Existing passkeys keep working: they are scoped to `webauthn_rp_id`, which
 the new hostname must sit under. See the reverse-proxy chapter of
 `docs/MANUAL.md` for the full rationale and the caveats.
 
-## Run with supervisord on the host
+## Run under systemd on the host
 
-A sample supervisor unit is at `docker/blackwall.supervisor.conf`. It runs
-`docker run --rm` so supervisord (not Docker's `--restart` flag) owns the
-process lifecycle — that gives you exponential-backoff retries and a clean
-single-source-of-truth config file for all the environment variables.
+A sample unit is at `docker/blackwall.service`. It runs `docker run --rm` in
+the foreground so systemd — not Docker's `--restart` flag — owns the process
+lifecycle. Do not enable both: they fight over the container, and a container
+left behind by one makes the other's next start fail on a name conflict. The
+unit's `ExecStartPre` clears any stale container for that reason.
 
 ```bash
-sudo cp docker/blackwall.supervisor.conf /etc/supervisor/conf.d/blackwall.conf
-# edit the env vars + image tag
-sudo supervisorctl reread
-sudo supervisorctl update
-sudo supervisorctl status blackwall
+sudo cp docker/blackwall.service /etc/systemd/system/blackwall.service
+# adjust the bind-mount paths and image tag to match your host
+sudo systemctl daemon-reload
+sudo systemctl enable --now blackwall
+systemctl status blackwall
 ```
+
+Three bind mounts matter, and all three are required: the config file, the
+Cryptbin storage directory, and the licence signing key. Dropping the licence
+mount does not fail loudly — it silently disables licence issuance.
+
+The unit is ordered `After=postgresql.service`, which is ordering only. If the
+database is remote the directive simply has no effect; if it is local but not
+yet accepting connections, BlackWall exits and systemd retries on
+`RestartSec`.
 
 ## Configuration
 
@@ -326,7 +336,9 @@ internal/
                        approval, admin scope, OIDC claims, JWT, maintenance)
   templates/           embed wrappers + web assets + parse tests
 docker/
-  blackwall.supervisor.conf   sample host-side supervisord unit
+  blackwall.service           sample host-side systemd unit
+  blackwall.apache.conf       sample Apache reverse-proxy vhost
+  admin.blackwall.cx.nginx.conf  sample nginx vhost for the admin subdomain
 ```
 
 ## Security notes

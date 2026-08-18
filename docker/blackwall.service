@@ -1,0 +1,47 @@
+# BlackWall — host-side systemd unit.
+#
+# Install:
+#   sudo cp docker/blackwall.service /etc/systemd/system/blackwall.service
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now blackwall
+#
+# The container runs in the foreground with --rm so systemd, not Docker's
+# --restart flag, owns the process lifecycle. Keep it that way: with both in
+# play they fight over the container, and a stale container makes the next
+# start fail on a name conflict. ExecStartPre clears any leftover for exactly
+# that reason.
+#
+# Update the three bind mounts to match your host layout. All three are
+# required — omitting the licence key silently disables licence issuance.
+
+[Unit]
+Description=blackwall (docker container)
+After=docker.service network-online.target postgresql.service
+Requires=docker.service
+# Ordering only, not a hard requirement: PostgreSQL usually runs on the host,
+# but it may equally be remote, in which case this simply has no effect. If it
+# is not up yet, BlackWall exits and systemd retries on RestartSec.
+Wants=network-online.target postgresql.service
+
+[Service]
+Restart=always
+RestartSec=5
+TimeoutStartSec=0
+ExecStartPre=-/usr/bin/docker rm -f blackwall
+ExecStart=/usr/bin/docker run --rm \
+    --memory 512m --cpus 1.0 --pids-limit 256 \
+    --name blackwall \
+    -p 127.0.0.1:8471:8080 \
+    -v /opt/blackwall/config.yaml:/etc/blackwall/config.yaml:ro \
+    -v /opt/blackwall/secrets/licence-ed25519.pem:/run/secrets/blackwall_licence_ed25519.pem:ro \
+    -v /opt/blackwall/storage:/var/lib/blackwall/cryptbin \
+    --health-cmd='wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1' \
+    --health-interval=30s \
+    --health-timeout=5s \
+    --health-retries=3 \
+    --health-start-period=15s \
+    blackwall:latest
+ExecStop=/usr/bin/docker stop -t 30 blackwall
+
+[Install]
+WantedBy=multi-user.target
