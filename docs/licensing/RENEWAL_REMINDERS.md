@@ -2,7 +2,7 @@
 
 Blackwall can email the designated administrator of a project's organisation
 when an active licence has 30, 14, 7, 2, and 1 UTC calendar days remaining.
-The worker runs inside the Blackwall process and uses a durable MySQL queue, so
+The worker runs inside the Blackwall process and uses a durable database queue, so
 a restart or temporary mail-provider outage does not discard pending work.
 
 ## Recipient and countdown rules
@@ -70,7 +70,7 @@ certificate, configuration, sender, or recipient failures are exhausted
 without futile retries.
 
 SMTP cannot provide true exactly-once delivery across a process crash after a
-mail server accepts `DATA` but before MySQL records success. Blackwall therefore
+mail server accepts `DATA` but before the database records success. Blackwall therefore
 uses a stable, opaque Message-ID for every licence/threshold/recipient reminder,
 allowing receiving systems to suppress that rare duplicate. The database
 uniqueness constraint and row lease prevent duplicates during normal operation.

@@ -96,15 +96,16 @@ func (s *ApprovalService) Create(actionType string, payload map[string]interface
 	if projectID != nil {
 		pid = sql.NullInt64{Int64: int64(*projectID), Valid: true}
 	}
-	res, err := s.db.Exec(
+	var id int64
+	err = s.db.QueryRow(
 		`INSERT INTO approval_requests (action_type, status, payload_json, requested_by_user_id, project_id)
-		 VALUES (?, 'pending', ?, ?, ?)`,
+		 VALUES (?, 'pending', ?, ?, ?) RETURNING id`,
 		actionType, string(payloadJSON), requestedByUserID, pid,
-	)
+	).Scan(&id)
 	if err != nil {
 		return 0, err
 	}
-	return res.LastInsertId()
+	return id, nil
 }
 
 // GetByID returns a single approval request or nil if it doesn't exist.
@@ -170,9 +171,9 @@ func (s *ApprovalService) SummariseVisibleToUser(userID int, includeAll bool, vi
 		where = "WHERE " + strings.Join(conds, " AND ")
 	}
 	q := `SELECT status,
-	             SUM(created_at >= CURDATE())                            AS today_count,
-	             SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY))      AS week_count,
-	             SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY))     AS month_count
+	             COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE)                            AS today_count,
+	             COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 day')      AS week_count,
+	             COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 day')     AS month_count
 	      FROM approval_requests ` + where + `
 	      GROUP BY status`
 	rows, err := s.db.Query(q, args...)
@@ -215,7 +216,7 @@ func (s *ApprovalService) SummariseSlaVisibleToUser(userID int, includeAll bool,
 	pendingConds = append(pendingConds, "status='pending'")
 	pendingWhere := "WHERE " + strings.Join(pendingConds, " AND ")
 	pendingQ := `SELECT
-	               COALESCE(SUM(created_at < DATE_SUB(NOW(), INTERVAL ? DAY)), 0) AS old_count,
+	               COUNT(*) FILTER (WHERE created_at < NOW() - (? * INTERVAL '1 day')) AS old_count,
 	               MIN(created_at) AS oldest_pending
 	             FROM approval_requests ` + pendingWhere
 	pendingArgs := append([]interface{}{pendingWarningDays}, baseArgs...)
@@ -313,11 +314,12 @@ func (s *ApprovalService) queryWithJoins(whereClause string, args []interface{},
 	             ar.approved_by_user_id, appr.uuid, appr.display_label,
 	             ar.project_id, p.uuid, p.name,
 	             ar.decision_note, ar.decided_at, ar.created_at,
-	             (SELECT JSON_UNQUOTE(JSON_EXTRACT(al.metadata_json, '$.failure_reason'))
+	             (SELECT bw_json_text(al.metadata_json, 'failure_reason')
 	              FROM audit_log al
 	              WHERE al.event_type='admin.approval.decision.denied'
 	                AND al.target_type='approval_request'
-	                AND CAST(al.target_id AS UNSIGNED) = ar.id
+	                AND (CASE WHEN al.target_id ~ '^[0-9]+$'
+	                          THEN al.target_id::bigint END) = ar.id
 	              ORDER BY al.id DESC LIMIT 1) AS latest_denial_reason
 	      FROM approval_requests ar
 	      JOIN users req ON req.id = ar.requested_by_user_id
@@ -394,8 +396,9 @@ func applyApprovalFilters(conds []string, args []interface{}, f ApprovalFilters,
 		conds = append(conds, `EXISTS (SELECT 1 FROM audit_log al
 		                       WHERE al.event_type='admin.approval.decision.denied'
 		                         AND al.target_type='approval_request'
-		                         AND CAST(al.target_id AS UNSIGNED) = `+alias+`.id
-		                         AND JSON_UNQUOTE(JSON_EXTRACT(al.metadata_json, '$.failure_reason')) = ?)`)
+		                         AND (CASE WHEN al.target_id ~ '^[0-9]+$'
+		                                   THEN al.target_id::bigint END) = `+alias+`.id
+		                         AND bw_json_text(al.metadata_json, 'failure_reason') = ?)`)
 		args = append(args, f.FailureReason)
 	}
 	if f.DateFrom != "" {

@@ -114,7 +114,7 @@ What you can do with Blackwall:
 - Drive everything declaratively via a **JSON Admin API** or **Terraform provider**.
 - Track everything through an integrity-chained **audit log** with signed exports.
 
-Blackwall is a single statically linked Go binary backed by MySQL. There is no microservice layout, no daemon mesh, and no scheduler service — background work runs in goroutines inside the same process as the HTTP server.
+Blackwall is a single statically linked Go binary backed by PostgreSQL. There is no microservice layout, no daemon mesh, and no scheduler service — background work runs in goroutines inside the same process as the HTTP server.
 
 ### Who this guide is for
 

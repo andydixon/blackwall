@@ -16,6 +16,12 @@ import (
 	"blackwall/internal/config"
 )
 
+// auditChainLockKey serialises audit-chain writers. PostgreSQL advisory locks
+// are keyed by integer rather than by name, so this constant stands in for the
+// "blackwall:audit_chain" lock name MySQL used. The value is arbitrary but must
+// not collide with any other advisory lock taken against this database.
+const auditChainLockKey int64 = 7_263_461_009_112_233
+
 type AuditLogger struct {
 	db            *sql.DB
 	correlationID string
@@ -158,16 +164,20 @@ func (a *AuditLogger) log(eventType, outcome string, meta AuditMeta) {
 		}
 	}()
 
-	var lockAcquired int
-	if err := tx.QueryRow(`SELECT COALESCE(GET_LOCK(?, 2), 0)`, "blackwall:audit_chain").Scan(&lockAcquired); err != nil || lockAcquired != 1 {
-		if err != nil {
-			log.Printf("audit lock failed: event_type=%s err=%v", eventType, err)
-		} else {
-			log.Printf("audit lock not acquired: event_type=%s", eventType)
-		}
+	// Serialise chain writers. pg_advisory_xact_lock is scoped to this
+	// transaction and is released automatically at COMMIT or ROLLBACK, so
+	// unlike MySQL's session-scoped GET_LOCK there is no separate release to
+	// leak on an error path. lock_timeout bounds the wait the way GET_LOCK's
+	// 2-second argument did, turning contention into a skipped entry rather
+	// than a stalled request.
+	if _, err := tx.Exec(`SET LOCAL lock_timeout = '2s'`); err != nil {
+		log.Printf("audit lock setup failed: event_type=%s err=%v", eventType, err)
 		return
 	}
-	defer func() { _, _ = a.db.Exec(`SELECT RELEASE_LOCK(?)`, "blackwall:audit_chain") }()
+	if _, err := tx.Exec(`SELECT pg_advisory_xact_lock(?)`, auditChainLockKey); err != nil {
+		log.Printf("audit lock failed: event_type=%s err=%v", eventType, err)
+		return
+	}
 
 	var prevHash sql.NullString
 	_ = tx.QueryRow(`SELECT chain_hash FROM audit_log WHERE chain_hash IS NOT NULL ORDER BY id DESC LIMIT 1`).Scan(&prevHash)

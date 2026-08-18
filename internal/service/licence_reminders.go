@@ -175,18 +175,25 @@ func (s *LicenceReminderService) QueueDue(ctx context.Context, now time.Time) (i
 			return queued, err
 		}
 		for _, c := range candidates {
-			result, err := s.db.ExecContext(ctx, `INSERT INTO licence_renewal_reminders
+			// PostgreSQL reports one affected row for both arms of an upsert,
+			// where MySQL distinguished insert (1) from unchanged update (0).
+			// xmax is zero only on a row this statement actually inserted, so
+			// it recovers the "newly queued" signal the counter depends on.
+			var inserted bool
+			err := s.db.QueryRowContext(ctx, `INSERT INTO licence_renewal_reminders
 				(licence_id, threshold_days, recipient_user_id, recipient_email, status, next_attempt_at)
 				VALUES (?, ?, ?, ?, 'pending', ?)
-				ON DUPLICATE KEY UPDATE recipient_email=IF(status='pending',VALUES(recipient_email),recipient_email)`,
-				c.licenceID, threshold, c.userID, c.email, now.UTC())
+				ON CONFLICT (licence_id, threshold_days, recipient_user_id) DO UPDATE
+				SET recipient_email=CASE WHEN licence_renewal_reminders.status='pending'
+					THEN EXCLUDED.recipient_email
+					ELSE licence_renewal_reminders.recipient_email END
+				RETURNING (xmax = 0)`,
+				c.licenceID, threshold, c.userID, c.email, now.UTC()).Scan(&inserted)
 			if err != nil {
 				return queued, err
 			}
-			if affected, err := result.RowsAffected(); err == nil {
-				if affected > 0 {
-					queued++
-				}
+			if inserted {
+				queued++
 			}
 		}
 	}
@@ -210,15 +217,16 @@ func (s *LicenceReminderService) DeliverPending(ctx context.Context, now time.Ti
 		WHERE status='sending' AND locked_at<?`, now.UTC(), leaseExpiry); err != nil {
 		return 0, err
 	}
-	if _, err := s.db.ExecContext(ctx, `UPDATE licence_renewal_reminders r
-		JOIN project_licences pl ON pl.id=r.licence_id
-		JOIN projects p ON p.id=pl.project_id
-		JOIN organizations o ON o.id=p.organization_id
-		LEFT JOIN users u ON u.id=r.recipient_user_id
-		SET r.status='cancelled', r.lock_token=NULL, r.locked_at=NULL, r.last_error_code='no_longer_eligible'
-		WHERE r.status='pending' AND (
-			pl.revoked_at IS NOT NULL OR pl.expires_at<=? OR p.status<>'active' OR o.status<>'active'
-			OR o.admin_user_id IS NULL OR o.admin_user_id<>r.recipient_user_id OR u.id IS NULL OR u.status<>'active'
+	if _, err := s.db.ExecContext(ctx, `UPDATE licence_renewal_reminders
+		SET status='cancelled', lock_token=NULL, locked_at=NULL, last_error_code='no_longer_eligible'
+		WHERE status='pending' AND id IN (
+			SELECT r.id FROM licence_renewal_reminders r
+			JOIN project_licences pl ON pl.id=r.licence_id
+			JOIN projects p ON p.id=pl.project_id
+			JOIN organizations o ON o.id=p.organization_id
+			LEFT JOIN users u ON u.id=r.recipient_user_id
+			WHERE pl.revoked_at IS NOT NULL OR pl.expires_at<=? OR p.status<>'active' OR o.status<>'active'
+				OR o.admin_user_id IS NULL OR o.admin_user_id<>r.recipient_user_id OR u.id IS NULL OR u.status<>'active'
 		)`, now.UTC()); err != nil {
 		return 0, err
 	}

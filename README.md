@@ -40,6 +40,8 @@ authentication. Single static binary, no external runtime dependencies.
 - [Editable Scribus source](docs/user-guide/BlackWall-User-Guide.sla) and its
   [rebuild notes](docs/user-guide/README.md).
 - [Complete repository manual](docs/MANUAL.md).
+- [MySQL to PostgreSQL migration notes](docs/POSTGRES_MIGRATION.md) — what
+  changed, how to re-run the migration, and the rollback position.
 - [Normative project licence verification guide](docs/licensing/VERIFYING_LICENCES.md)
   with PHP, Go, Rust, and Java examples.
 - [Licence renewal reminder operations guide](docs/licensing/RENEWAL_REMINDERS.md).
@@ -47,7 +49,7 @@ authentication. Single static binary, no external runtime dependencies.
 ## Requirements
 
 - Go 1.25+ (for compiling from source)
-- MySQL 8.0+
+- PostgreSQL 14+ (16 recommended; the `citext` extension must be available)
 - Docker + Docker Compose for the supported deployment path
 - `supervisord` on the host if you want process supervision (sample unit included)
 
@@ -104,9 +106,8 @@ docker run -d --name blackwall \
     blackwall:latest
 ```
 
-Or use the bundled `docker-compose.yml`, which also starts MySQL. The Compose
-file does not seed Blackwall's historical base schema: restore that baseline
-into the database volume before starting the application for the first time.
+Or use the bundled `docker-compose.yml`, which also starts PostgreSQL. An empty
+database is fine: the application installs its baseline schema on first start.
 
 ## Run behind a reverse proxy
 
@@ -195,7 +196,7 @@ openssl rand -base64 32    # cryptbin_kek_base64
 
 To enable project licence issuance, generate a separate Ed25519 PKCS#8 key and
 mount it read-only. The application refuses loose permissions and never stores
-the private key in MySQL:
+the private key in the database:
 
 ```bash
 umask 077
@@ -207,20 +208,24 @@ Set `licence_signing_key_file` to that path. Leave it blank when the instance
 must verify and revoke existing licences without issuing new ones. See the
 [complete verification and key-rotation guide](docs/licensing/VERIFYING_LICENCES.md).
 
-Renewal email is independently optional. It uses a duplicate-safe MySQL queue,
+Renewal email is independently optional. It uses a duplicate-safe database queue,
 the active designated organisation administrator, and mandatory encrypted SMTP.
 See the [renewal reminder operations guide](docs/licensing/RENEWAL_REMINDERS.md)
 for configuration, recipient rules, retries, privacy, and monitoring.
 
 ## Schema migrations
 
-On startup, the binary applies any pending migrations from
-`internal/db/migrations.go`, tracked in a `schema_migrations` table.
-The application assumes the established Blackwall base schema already exists;
-this source tree does not include a fresh-install baseline SQL file. Restore
-the correct baseline from an existing deployment or obtain the baseline for
-your deployment before first start. An empty database will fail when the first
-incremental migration refers to a base table such as `users` or `projects`.
+On startup the binary brings the database up to date, tracked in a
+`schema_migrations` table:
+
+1. An empty database gets the complete baseline schema from
+   `internal/db/schema.sql`, recorded as versions 1-7. No manual restore step
+   is needed for a fresh install.
+2. Any migrations in `internal/db/migrations.go` above the baseline version are
+   then applied in order.
+
+`internal/db/schema.sql` is generated — regenerate it with
+`tools/pgmigrate/gen_schema.py` rather than editing it by hand.
 
 ## Bootstrap
 
@@ -311,7 +316,7 @@ internal/templates/web/
 cmd/blackwall/         entry point, router setup, graceful shutdown
 internal/
   config/              YAML + env-var configuration with start-up validation
-  db/                  MySQL pool + forward-only schema migrations
+  db/                  PostgreSQL pool, baseline schema, forward-only migrations
   handler/             HTTP handlers (admin, oauth, portal, cryptbin, bootstrap, metrics)
   middleware/          chi middleware (auth, rate limit, audit context, IP extraction)
   model/               shared data types
@@ -335,9 +340,9 @@ docker/
   the raw token, the database column never does).
 - CSRF tokens are single-use HMAC-SHA-256 values stored in the encrypted
   session.
-- Audit log entries are SHA-256 chained under a MySQL `GET_LOCK` so
-  concurrent writes serialise correctly; tampering is detectable. Export
-  CSV ends with an HMAC-signed manifest line.
+- Audit log entries are SHA-256 chained under a PostgreSQL transaction-scoped
+  advisory lock so concurrent writes serialise correctly; tampering is
+  detectable. Export CSV ends with an HMAC-signed manifest line.
 - CryptBin blobs are encrypted client-side; the server only stores ciphertext
   and a wrapped DEK. Server-side wrapping uses XChaCha20-Poly1305-IETF
   (libsodium-compatible) with the blob ID bound via AAD.

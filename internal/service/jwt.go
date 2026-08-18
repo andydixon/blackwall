@@ -41,7 +41,7 @@ type signingKey struct {
 
 func (m *JWTManager) ensureSigningKey() error {
 	var count int
-	err := m.db.QueryRow(`SELECT COUNT(*) FROM jwt_signing_keys WHERE is_active = 1`).Scan(&count)
+	err := m.db.QueryRow(`SELECT COUNT(*) FROM jwt_signing_keys WHERE is_active = TRUE`).Scan(&count)
 	if err != nil {
 		return err
 	}
@@ -68,14 +68,14 @@ func (m *JWTManager) generateSigningKey() error {
 	}
 	kidHex := fmt.Sprintf("%x", kid)
 
-	_, err = m.db.Exec(`INSERT INTO jwt_signing_keys (kid, private_key, public_key, algorithm, is_active) VALUES (?, ?, ?, 'RS256', 1)`,
+	_, err = m.db.Exec(`INSERT INTO jwt_signing_keys (kid, private_key, public_key, algorithm, is_active) VALUES (?, ?, ?, 'RS256', TRUE)`,
 		kidHex, string(privPEM), string(pubPEM))
 	return err
 }
 
 func (m *JWTManager) getActiveKey() (*signingKey, string, error) {
 	var kid, privPEM, pubPEM string
-	err := m.db.QueryRow(`SELECT kid, private_key, public_key FROM jwt_signing_keys WHERE is_active = 1 ORDER BY created_at DESC LIMIT 1`).
+	err := m.db.QueryRow(`SELECT kid, private_key, public_key FROM jwt_signing_keys WHERE is_active = TRUE ORDER BY created_at DESC LIMIT 1`).
 		Scan(&kid, &privPEM, &pubPEM)
 	if err != nil {
 		return nil, "", fmt.Errorf("no active JWT signing key: %w", err)
@@ -279,7 +279,7 @@ type ParsedToken struct {
 
 func (m *JWTManager) ParseAndValidate(tokenStr string) (*ParsedToken, error) {
 	// Collect active public keys
-	rows, err := m.db.Query(`SELECT kid, public_key FROM jwt_signing_keys WHERE is_active = 1`)
+	rows, err := m.db.Query(`SELECT kid, public_key FROM jwt_signing_keys WHERE is_active = TRUE`)
 	if err != nil {
 		return nil, err
 	}
@@ -332,7 +332,7 @@ func (m *JWTManager) ParseAndValidate(tokenStr string) (*ParsedToken, error) {
 }
 
 func (m *JWTManager) GetJWKS() map[string]interface{} {
-	rows, err := m.db.Query(`SELECT kid, public_key, algorithm FROM jwt_signing_keys WHERE is_active = 1`)
+	rows, err := m.db.Query(`SELECT kid, public_key, algorithm FROM jwt_signing_keys WHERE is_active = TRUE`)
 	if err != nil {
 		return map[string]interface{}{"keys": []interface{}{}}
 	}

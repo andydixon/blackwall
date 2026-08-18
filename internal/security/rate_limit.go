@@ -49,7 +49,7 @@ func (rl *RateLimiter) Check(identifier, action string, maxAttempts, windowSecon
 		// First attempt — create record
 		_, err = rl.db.Exec(
 			`INSERT INTO rate_limits (identifier, action, attempts, window_start) VALUES (?, ?, 1, ?)
-			 ON DUPLICATE KEY UPDATE attempts=attempts+1`,
+			 ON CONFLICT (identifier, action) DO UPDATE SET attempts=rate_limits.attempts+1`,
 			identifier, action, now)
 		return err == nil
 	}
@@ -85,5 +85,5 @@ func (rl *RateLimiter) Check(identifier, action string, maxAttempts, windowSecon
 }
 
 func (rl *RateLimiter) cleanup() {
-	_, _ = rl.db.Exec(`DELETE FROM rate_limits WHERE window_start < DATE_SUB(NOW(), INTERVAL 24 HOUR) AND (blocked_until IS NULL OR blocked_until < NOW())`)
+	_, _ = rl.db.Exec(`DELETE FROM rate_limits WHERE window_start < NOW() - INTERVAL '24 hour' AND (blocked_until IS NULL OR blocked_until < NOW())`)
 }

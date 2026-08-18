@@ -85,14 +85,14 @@ func (s *SessionStore) Create(userID int, scope, ip, ua string, lifetime time.Du
 	}
 	now := time.Now()
 	expires := now.Add(lifetime)
-	res, err := s.db.Exec(`INSERT INTO user_sessions
+	var id int64
+	err = s.db.QueryRow(`INSERT INTO user_sessions
 		(session_id, user_id, scope, ip_address, user_agent, created_at, last_seen_at, expires_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-		sid, userID, scope, nullable(ip), nullable(ua), now, now, expires)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		sid, userID, scope, nullable(ip), nullable(ua), now, now, expires).Scan(&id)
 	if err != nil {
 		return nil, err
 	}
-	id, _ := res.LastInsertId()
 	return &SessionRecord{
 		ID: int(id), SessionID: sid, UserID: userID, Scope: scope,
 		CreatedAt: now, LastSeenAt: now, ExpiresAt: expires,
@@ -204,7 +204,7 @@ func (s *SessionStore) ListActiveForUser(userID int) ([]SessionRecord, error) {
 // CleanupExpired removes session rows older than the retention window. Called
 // from the maintenance job loop so the table doesn't grow unbounded.
 func (s *SessionStore) CleanupExpired() (int64, error) {
-	r, err := s.db.Exec(`DELETE FROM user_sessions WHERE expires_at < DATE_SUB(NOW(), INTERVAL 7 DAY) OR (revoked_at IS NOT NULL AND revoked_at < DATE_SUB(NOW(), INTERVAL 7 DAY))`)
+	r, err := s.db.Exec(`DELETE FROM user_sessions WHERE expires_at < NOW() - INTERVAL '7 day' OR (revoked_at IS NOT NULL AND revoked_at < NOW() - INTERVAL '7 day')`)
 	if err != nil {
 		return 0, err
 	}

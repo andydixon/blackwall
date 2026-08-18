@@ -478,13 +478,14 @@ func verifyRS256(key map[interface{}]interface{}, data, sig []byte) bool {
 }
 
 func (s *WebAuthnService) StoreCredential(userID int, credentialID, publicKey string, signCounter int, label string) (int64, error) {
-	result, err := s.db.Exec(
-		`INSERT INTO webauthn_credentials (user_id, credential_id, public_key, sign_counter, attestation_type, label) VALUES (?, ?, ?, ?, 'none', ?)`,
-		userID, credentialID, publicKey, signCounter, nullString(label))
+	var id int64
+	err := s.db.QueryRow(
+		`INSERT INTO webauthn_credentials (user_id, credential_id, public_key, sign_counter, attestation_type, label) VALUES (?, ?, ?, ?, 'none', ?) RETURNING id`,
+		userID, credentialID, publicKey, signCounter, nullString(label)).Scan(&id)
 	if err != nil {
 		return 0, err
 	}
-	return result.LastInsertId()
+	return id, nil
 }
 
 func (s *WebAuthnService) GetUserCredentials(userID int) ([]*WebAuthnCredential, error) {

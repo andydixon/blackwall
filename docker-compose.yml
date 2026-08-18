@@ -14,16 +14,15 @@ services:
     restart: unless-stopped
 
   db:
-    image: mysql:8.0
+    image: postgres:16
     environment:
-      MYSQL_ROOT_PASSWORD: rootpassword
-      MYSQL_DATABASE: blackwall
-      MYSQL_USER: blackwall
-      MYSQL_PASSWORD: blackwallpass
+      POSTGRES_DB: blackwall
+      POSTGRES_USER: blackwall
+      POSTGRES_PASSWORD: blackwallpass
     volumes:
-      - db_data:/var/lib/mysql
+      - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "blackwall", "-pblackwallpass"]
+      test: ["CMD-SHELL", "pg_isready -U blackwall -d blackwall"]
       interval: 5s
       timeout: 5s
       retries: 10

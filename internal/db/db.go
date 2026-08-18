@@ -3,9 +3,9 @@ package db
 import (
 	"database/sql"
 	"fmt"
+	"net"
+	"net/url"
 	"sync"
-
-	_ "github.com/go-sql-driver/mysql"
 
 	"blackwall/internal/config"
 )
@@ -18,9 +18,8 @@ var (
 func Connect(cfg *config.Config) (*sql.DB, error) {
 	var err error
 	once.Do(func() {
-		dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s?parseTime=true&charset=utf8mb4&loc=UTC",
-			cfg.DBUser, cfg.DBPass, cfg.DBHost, cfg.DBPort, cfg.DBName)
-		instance, err = sql.Open("mysql", dsn)
+		registerDriver()
+		instance, err = sql.Open(driverName, dsn(cfg))
 		if err != nil {
 			return
 		}
@@ -33,6 +32,49 @@ func Connect(cfg *config.Config) (*sql.DB, error) {
 	return instance, nil
 }
 
+// dsn builds a PostgreSQL connection URI. Every component is URL-escaped, so
+// passwords containing reserved characters survive intact — MySQL's DSN format
+// tolerated them positionally, a URI does not.
+//
+// sslmode defaults to disable to preserve the transport posture the MySQL DSN
+// had; set db_sslmode to require (or stricter) once the server presents a
+// certificate the client can verify.
+func dsn(cfg *config.Config) string {
+	port := cfg.DBPort
+	if port == "" {
+		port = "5432"
+	}
+	sslMode := cfg.DBSSLMode
+	if sslMode == "" {
+		sslMode = "disable"
+	}
+
+	u := url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(cfg.DBUser, cfg.DBPass),
+		Host:   net.JoinHostPort(cfg.DBHost, port),
+		Path:   "/" + cfg.DBName,
+	}
+	q := url.Values{}
+	q.Set("sslmode", sslMode)
+	// The schema carries TIMESTAMPTZ columns; pinning the session to UTC keeps
+	// values round-tripping identically to the MySQL loc=UTC behaviour.
+	q.Set("options", "-c timezone=UTC")
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
 func Get() *sql.DB {
 	return instance
+}
+
+// Ping verifies the configured database is reachable and speaking PostgreSQL,
+// so a misconfigured host fails at boot with a clear message rather than on
+// the first request that touches it.
+func Ping(d *sql.DB) error {
+	var version string
+	if err := d.QueryRow("SELECT version()").Scan(&version); err != nil {
+		return fmt.Errorf("database unreachable: %w", err)
+	}
+	return nil
 }

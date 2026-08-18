@@ -73,13 +73,14 @@ func (s *FeatureFlagService) Get(projectID int) (ProjectFeatures, error) {
 
 // EnsureForNewProject inserts a row carrying DefaultProjectFeatures for a
 // project that was just created. Safe to call on an already-present row —
-// the INSERT IGNORE pattern silently no-ops in that case so we don't clobber
+// the ON CONFLICT DO NOTHING arm silently no-ops in that case so we don't clobber
 // an admin's manual override.
 func (s *FeatureFlagService) EnsureForNewProject(projectID int) error {
 	d := DefaultProjectFeatures()
-	_, err := s.db.Exec(`INSERT IGNORE INTO project_features
+	_, err := s.db.Exec(`INSERT INTO project_features
 		(project_id, webhooks_enabled, db_sessions_enabled, max_concurrent_sessions, custom_branding_enabled, step_up_required)
-		VALUES (?, ?, ?, ?, ?, ?)`,
+		VALUES (?, ?, ?, ?, ?, ?)
+		ON CONFLICT (project_id) DO NOTHING`,
 		projectID, d.WebhooksEnabled, d.DBSessionsEnabled, d.MaxConcurrentSessions,
 		d.CustomBrandingEnabled, d.StepUpRequired)
 	return err
@@ -98,12 +99,12 @@ func (s *FeatureFlagService) Update(projectID int, f ProjectFeatures) error {
 	_, err := s.db.Exec(`INSERT INTO project_features
 		(project_id, webhooks_enabled, db_sessions_enabled, max_concurrent_sessions, custom_branding_enabled, step_up_required)
 		VALUES (?, ?, ?, ?, ?, ?)
-		ON DUPLICATE KEY UPDATE
-			webhooks_enabled=VALUES(webhooks_enabled),
-			db_sessions_enabled=VALUES(db_sessions_enabled),
-			max_concurrent_sessions=VALUES(max_concurrent_sessions),
-			custom_branding_enabled=VALUES(custom_branding_enabled),
-			step_up_required=VALUES(step_up_required)`,
+		ON CONFLICT (project_id) DO UPDATE SET
+			webhooks_enabled=EXCLUDED.webhooks_enabled,
+			db_sessions_enabled=EXCLUDED.db_sessions_enabled,
+			max_concurrent_sessions=EXCLUDED.max_concurrent_sessions,
+			custom_branding_enabled=EXCLUDED.custom_branding_enabled,
+			step_up_required=EXCLUDED.step_up_required`,
 		projectID, f.WebhooksEnabled, f.DBSessionsEnabled, f.MaxConcurrentSessions,
 		f.CustomBrandingEnabled, f.StepUpRequired)
 	return err

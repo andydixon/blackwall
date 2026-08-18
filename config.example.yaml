@@ -19,12 +19,16 @@ server_addr: ":8080"
 # ciphertext plus metadata; the default supports the 5 MiB upload limit below.
 request_body_max_bytes: 8388608
 
-# ─── Database (MySQL 8.0+) ───────────────────────────────────────────────────
+# ─── Database (PostgreSQL 14+) ───────────────────────────────────────────────
 db_host: "localhost"
-db_port: "3306"
+db_port: "5432"
 db_name: "blackwall"
 db_user: "blackwall"
 db_pass: "changeme"
+# sslmode for the PostgreSQL connection: disable, require, verify-ca, verify-full.
+# Defaults to disable; use require or stricter when the database is not reached
+# over a trusted local network.
+db_sslmode: "disable"
 
 # ─── Session ─────────────────────────────────────────────────────────────────
 # Refuses to start if session_secret is shorter than 32 characters or matches

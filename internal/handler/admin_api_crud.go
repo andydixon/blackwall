@@ -60,13 +60,13 @@ func (h *AdminHandler) APICreateProject(w http.ResponseWriter, r *http.Request) 
 	}
 
 	projectUUID := uuid.NewString()
-	res, err := h.DB.Exec(`INSERT INTO projects (organization_id, uuid, name, status) VALUES (?,?,?,'active')`,
-		orgID, projectUUID, name)
+	var projID int64
+	err := h.DB.QueryRow(`INSERT INTO projects (organization_id, uuid, name, status) VALUES (?,?,?,'active') RETURNING id`,
+		orgID, projectUUID, name).Scan(&projID)
 	if err != nil {
 		jsonAPIError(w, http.StatusConflict, "create_failed", err.Error())
 		return
 	}
-	projID, _ := res.LastInsertId()
 
 	// Seed privilege ladder identically to the UI path so SCIM / API users
 	// have the same default assignment ladder available.
@@ -257,19 +257,19 @@ func (h *AdminHandler) APICreateOAuthClient(w http.ResponseWriter, r *http.Reque
 	grantJSON, _ := json.Marshal(body.Grants)
 	scopeJSON, _ := json.Marshal(body.Scopes)
 
-	res, err := h.DB.Exec(`INSERT INTO oauth_clients
+	var newID int64
+	err := h.DB.QueryRow(`INSERT INTO oauth_clients
 		(project_id, client_id, client_secret_hash, name, redirect_uris, grants, scopes,
 		 pkce_required, access_token_type, access_token_lifetime, refresh_token_lifetime, oidc_enabled, status)
-		VALUES (?,?,?,?,?,?,?,1,?,?,?,?,'active')`,
+		VALUES (?,?,?,?,?,?,?,TRUE,?,?,?,?,'active') RETURNING id`,
 		pid, clientPublicID, secretHashVal, body.Name,
 		string(redirJSON), string(grantJSON), string(scopeJSON),
 		body.AccessTokenType, body.AccessTokenLifetime, body.RefreshTokenLifetime,
-		boolToInt(body.OIDCEnabled))
+		body.OIDCEnabled).Scan(&newID)
 	if err != nil {
 		jsonAPIError(w, http.StatusConflict, "create_failed", err.Error())
 		return
 	}
-	newID, _ := res.LastInsertId()
 	getAudit(r).LogSuccess("api.client.create", service.AuditMeta{
 		"actor_user_id":          a.UserID,
 		"project_id":             pid,
@@ -424,7 +424,7 @@ func (h *AdminHandler) APIPatchOAuthClient(w http.ResponseWriter, r *http.Reques
 	}
 	if body.OIDCEnabled != nil {
 		updates = append(updates, "oidc_enabled=?")
-		args = append(args, boolToInt(*body.OIDCEnabled))
+		args = append(args, *body.OIDCEnabled)
 	}
 	if len(updates) == 0 {
 		jsonAPIError(w, http.StatusBadRequest, "empty_patch", "no fields to update")
@@ -616,4 +616,4 @@ func samlSPToMap(sp *service.SAMLSP) map[string]interface{} {
 	}
 }
 
-// (hexToken, hashSecret, and boolToInt live in admin.go — same package.)
+// (hexToken and hashSecret live in admin.go — same package.)

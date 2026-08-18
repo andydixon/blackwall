@@ -50,7 +50,7 @@ func (s *OAuthService) CreateAuthorizationCode(clientID, userID, projectID int, 
 	scopesJSON, _ := json.Marshal(scopes)
 	_, err := s.db.Exec(`INSERT INTO oauth_auth_codes
 		(code_hash, client_id, user_id, project_id, redirect_uri, scopes, code_challenge, code_challenge_method, nonce, auth_time, expires_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, DATE_ADD(NOW(), INTERVAL 10 MINUTE))`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW() + INTERVAL '10 minute')`,
 		codeHash, clientID, userID, projectID, redirectURI, scopesJSON,
 		codeChallenge, codeChallengeMethod, nullStringVal(nonce), authTime)
 	if err != nil {
@@ -251,7 +251,7 @@ func (s *OAuthService) issueTokensTx(db dbExecer, clientID, userID, projectID in
 	}
 
 	tokenHash := security.HashToken(accessToken)
-	_, err := db.Exec(`INSERT INTO oauth_access_tokens (token_hash, client_id, user_id, project_id, scopes, privilege_level, expires_at) VALUES (?,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL ? SECOND))`,
+	_, err := db.Exec(`INSERT INTO oauth_access_tokens (token_hash, client_id, user_id, project_id, scopes, privilege_level, expires_at) VALUES (?,?,?,?,?,?,NOW() + (? * INTERVAL '1 second'))`,
 		tokenHash, clientID, userID, projectID, scopesJSON, privilegeLevel, accessLifetime)
 	if err != nil {
 		return nil, err
@@ -262,7 +262,7 @@ func (s *OAuthService) issueTokensTx(db dbExecer, clientID, userID, projectID in
 	if containsScope(scopes, "offline_access") {
 		rt := security.GenerateToken(32)
 		rtHash := security.HashToken(rt)
-		_, err = db.Exec(`INSERT INTO oauth_refresh_tokens (token_hash, client_id, user_id, project_id, scopes, privilege_level, auth_time, expires_at) VALUES (?,?,?,?,?,?,?,DATE_ADD(NOW(), INTERVAL ? SECOND))`,
+		_, err = db.Exec(`INSERT INTO oauth_refresh_tokens (token_hash, client_id, user_id, project_id, scopes, privilege_level, auth_time, expires_at) VALUES (?,?,?,?,?,?,?,NOW() + (? * INTERVAL '1 second'))`,
 			rtHash, clientID, userID, projectID, scopesJSON, privilegeLevel, authTime, refreshLifetime)
 		if err != nil {
 			return nil, err

@@ -87,7 +87,7 @@ func (s *OIDCClaimsService) SetUserClaim(userID int, key, value string) error {
 	}
 	_, err := s.db.Exec(`INSERT INTO user_oidc_claims (user_id, claim_key, claim_value)
 		VALUES (?, ?, ?)
-		ON DUPLICATE KEY UPDATE claim_value = VALUES(claim_value)`,
+		ON CONFLICT (user_id, claim_key) DO UPDATE SET claim_value = EXCLUDED.claim_value`,
 		userID, key, value)
 	return err
 }
@@ -114,7 +114,7 @@ func (s *OIDCClaimsService) SetProjectClaim(userID, projectID int, key, value st
 	}
 	_, err := s.db.Exec(`INSERT INTO user_project_oidc_claims (user_id, project_id, claim_key, claim_value)
 		VALUES (?, ?, ?, ?)
-		ON DUPLICATE KEY UPDATE claim_value = VALUES(claim_value)`,
+		ON CONFLICT (user_id, project_id, claim_key) DO UPDATE SET claim_value = EXCLUDED.claim_value`,
 		userID, projectID, key, value)
 	return err
 }
@@ -144,7 +144,7 @@ func (s *OIDCClaimsService) SetOrgDefault(orgID int, key, value string) error {
 	}
 	_, err := s.db.Exec(`INSERT INTO organization_oidc_claim_defaults (organization_id, claim_key, claim_value)
 		VALUES (?, ?, ?)
-		ON DUPLICATE KEY UPDATE claim_value = VALUES(claim_value)`,
+		ON CONFLICT (organization_id, claim_key) DO UPDATE SET claim_value = EXCLUDED.claim_value`,
 		orgID, key, value)
 	return err
 }
@@ -172,7 +172,7 @@ func (s *OIDCClaimsService) SetProjectDefault(projectID int, key, value string) 
 	}
 	_, err := s.db.Exec(`INSERT INTO project_oidc_claim_defaults (project_id, claim_key, claim_value)
 		VALUES (?, ?, ?)
-		ON DUPLICATE KEY UPDATE claim_value = VALUES(claim_value)`,
+		ON CONFLICT (project_id, claim_key) DO UPDATE SET claim_value = EXCLUDED.claim_value`,
 		projectID, key, value)
 	return err
 }

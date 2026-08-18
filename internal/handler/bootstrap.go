@@ -191,7 +191,7 @@ func (h *BootstrapHandler) EnrollWebAuthn(w http.ResponseWriter, r *http.Request
 
 	audit.LogSuccess("webauthn.registration.success", service.AuditMeta{"actor_user_id": userID, "webauthn_credential_id": credDBID, "webauthn_credential_public_id": credentialID})
 
-	h.DB.Exec("INSERT INTO system_config (config_key, config_value) VALUES ('bootstrap_complete','1') ON DUPLICATE KEY UPDATE config_value='1'")
+	h.DB.Exec("INSERT INTO system_config (config_key, config_value) VALUES ('bootstrap_complete','1') ON CONFLICT (config_key) DO UPDATE SET config_value='1'")
 	h.DB.Exec("DELETE FROM system_config WHERE config_key IN ('bootstrap_token','bootstrap_expiry','bootstrap_user_id')")
 
 	sess.Save()
@@ -396,26 +396,26 @@ func (h *BootstrapHandler) OrgSignup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	orgUUID := uuid.NewString()
-	res, err := h.DB.Exec("INSERT INTO organizations (uuid, name, slug, status) VALUES (?,?,?,'active')", orgUUID, name, slug)
+	var orgID int64
+	err := h.DB.QueryRow("INSERT INTO organizations (uuid, name, slug, status) VALUES (?,?,?,'active') RETURNING id", orgUUID, name, slug).Scan(&orgID)
 	if err != nil {
 		sess.Save()
 		redirect(w, r, "/organisations/signup?error=duplicate")
 		return
 	}
-	orgID, _ := res.LastInsertId()
 
 	userUUID := uuid.NewString()
-	userRes, _ := h.DB.Exec("INSERT INTO users (organization_id, uuid, display_label, status) VALUES (?,?,?,'active')", orgID, userUUID, adminLabel)
-	userID, _ := userRes.LastInsertId()
+	var userID int64
+	h.DB.QueryRow("INSERT INTO users (organization_id, uuid, display_label, status) VALUES (?,?,?,'active') RETURNING id", orgID, userUUID, adminLabel).Scan(&userID)
 
 	h.DB.Exec("UPDATE organizations SET admin_user_id=? WHERE id=?", userID, orgID)
 
 	token := generateHexToken(32)
 	signupTokenHash := security.HashToken(token)
 	expiry := time.Now().Add(24 * time.Hour).Format("2006-01-02 15:04:05")
-	h.DB.Exec("INSERT INTO system_config (config_key, config_value) VALUES (?,?) ON DUPLICATE KEY UPDATE config_value=VALUES(config_value)",
+	h.DB.Exec("INSERT INTO system_config (config_key, config_value) VALUES (?,?) ON CONFLICT (config_key) DO UPDATE SET config_value=EXCLUDED.config_value",
 		"enrollment_token_"+signupTokenHash, fmt.Sprintf("%d", userID))
-	h.DB.Exec("INSERT INTO system_config (config_key, config_value) VALUES (?,?) ON DUPLICATE KEY UPDATE config_value=VALUES(config_value)",
+	h.DB.Exec("INSERT INTO system_config (config_key, config_value) VALUES (?,?) ON CONFLICT (config_key) DO UPDATE SET config_value=EXCLUDED.config_value",
 		"enrollment_expiry_"+signupTokenHash, expiry)
 
 	cfg := config.Get()
