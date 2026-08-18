@@ -369,6 +369,43 @@ server {
 }
 ```
 
+### Optional — publish the admin console on its own hostname
+
+You can front `/admin` on a separate hostname, so `admin.example.com/users`
+reaches Blackwall's `/admin/users`. A working nginx vhost ships at
+`docker/admin.blackwall.cx.nginx.conf`; adapt the `server_name`, certificate
+paths and upstream port.
+
+Two details make or break this, and neither is obvious:
+
+**The admin templates emit absolute `/admin/...` links.** Stripping the prefix
+on the way in is not enough — the HTML that comes back still points at
+`/admin/...`, so the vhost must also accept those paths unchanged, or the
+first click doubles the prefix and 404s. `/assets/` likewise has to pass
+through unprefixed, because static files live at the site root rather than
+under `/admin`. The net effect is that the console answers on both
+`admin.example.com/users` and `admin.example.com/admin/users`.
+
+**Admin sign-in is a WebAuthn ceremony, and the browser stamps the
+address-bar origin into `clientDataJSON`.** Blackwall compares that against
+`app_url`, so without extra configuration every login from the new hostname
+fails with `origin_mismatch`. Add it to the allow-list:
+
+```yaml
+webauthn_extra_origins: "https://admin.example.com"
+```
+
+Credentials themselves are unaffected. They are scoped to `webauthn_rp_id`,
+and as long as the new hostname sits under that domain the existing passkeys
+authenticate there with no re-enrolment. Blackwall enforces exactly that
+constraint at startup: an entry outside `webauthn_rp_id` is rejected, because
+a credential for this RP could never be presented from it.
+
+One consequence worth planning for: session cookies carry no `Domain`
+attribute, so they are host-only. A session on `admin.example.com` is separate
+from one on the main hostname — signing in on one does not sign you in on the
+other.
+
 ## Chapter 3: Bootstrapping the First Administrator
 
 The first time Blackwall starts with an empty database it exposes a bootstrap flow at `/bootstrap`. Anyone who reaches that page can claim the super-administrator account, so restrict access at the proxy layer until you have completed the bootstrap.
@@ -2468,6 +2505,7 @@ KMS backends version their keys natively. Today Blackwall's JWKS endpoint reflec
 |---|---|
 | Blackwall refuses to start with `config: session_secret must be at least 32 characters` | Generate proper secrets (`openssl rand -hex 32`). Refuses by design — running with weak material is worse than not running. |
 | Login page shows but WebAuthn prompt never appears | Browser blocks WebAuthn outside HTTPS. Verify TLS at the proxy. Verify `webauthn_rp_id` matches the hostname. |
+| Sign-in fails and the log shows `webauthn verify failed: reason=origin_mismatch` | The browser's origin is not `app_url`. Expected when a proxy publishes Blackwall on a second hostname — add that origin to `webauthn_extra_origins`. `webauthn_rp_id` is unchanged, so existing passkeys keep working without re-enrolment. |
 | Users sign in but immediately see `access_denied` at a downstream client | The user is not assigned to that project. Open `/admin/projects/{uuid}/assignments`. |
 | ID tokens fail nonce check | Your application's pre-auth session is being lost between redirect and callback. Check cookie SameSite and the `Secure` attribute. |
 | `/metrics` returns 401 | Set `metrics_token` in `config.yaml` and send `Authorization: Bearer <token>`. |
@@ -2797,6 +2835,7 @@ The main configuration file is `config.yaml`. Every key can also be supplied via
 | `webauthn_rp_id` | derived from `app_url` | Relying party ID. Must match the public hostname. |
 | `webauthn_rp_name` | `BlackWall OAuth` | Display name in WebAuthn prompts. |
 | `min_webauthn_keys` | 1 | Minimum credentials a user must retain. |
+| `webauthn_extra_origins` | (empty) | Extra browser origins allowed to complete a ceremony, on top of `app_url`. Comma-separated `https://host` entries, each of which must sit under `webauthn_rp_id`. Needed only when a reverse proxy publishes Blackwall on a second hostname. |
 
 ### Audit and approvals
 
