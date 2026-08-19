@@ -117,6 +117,24 @@ Two checks are worth repeating after any re-run:
    `PREPARE` against a populated database, which catches missing columns and
    unported syntax without executing anything.
 
+## Boot ordering when PostgreSQL is on the same host
+
+Containers on Docker's default bridge reach the host at `172.17.0.1`, which is
+the `docker0` address — created by dockerd. A host PostgreSQL that serves
+containers must therefore start *after* Docker, and nothing orders them by
+default.
+
+When PostgreSQL loses that race it fails silently: it binds `localhost`,
+downgrades the miss to `WARNING: could not create listen socket for
+"172.17.0.1"`, and starts anyway. systemd reports it active; containers cannot
+connect. Observed on this host's 2026-08-17 boot, where PostgreSQL bound at
+10:44:20 and Docker did not start until 10:46:15 — the cluster ran without its
+bridge socket for six hours.
+
+`docker/systemd/postgresql-10-after-docker.conf` adds the missing edge. Ordering
+BlackWall after PostgreSQL is not a substitute: the problem is upstream of
+BlackWall entirely.
+
 ## Rollback
 
 The MariaDB database is left untouched by the migration — it is read-only

@@ -182,6 +182,35 @@ database is remote the directive simply has no effect; if it is local but not
 yet accepting connections, BlackWall exits and systemd retries on
 `RestartSec`.
 
+### If PostgreSQL is on the same host
+
+A container on Docker's default bridge reaches the host at `172.17.0.1`, so a
+host PostgreSQL typically has that address in `listen_addresses`. That address
+belongs to the `docker0` interface, which **dockerd creates** — so PostgreSQL
+cannot bind it until Docker is running, and by default nothing orders the two.
+
+The failure is quiet rather than loud. PostgreSQL still binds `localhost`, so
+it logs the miss as a `WARNING`, starts anyway, and systemd reports it active
+and healthy — while every containerised client is locked out until someone
+restarts it by hand.
+
+Install the drop-in to order PostgreSQL after Docker:
+
+```bash
+sudo mkdir -p /etc/systemd/system/postgresql@.service.d
+sudo cp docker/systemd/postgresql-10-after-docker.conf \
+        /etc/systemd/system/postgresql@.service.d/10-after-docker.conf
+sudo systemctl daemon-reload
+```
+
+Verify the whole chain resolves as
+`docker.service` → `postgresql@<version>-main` → `postgresql.service` →
+`blackwall.service`:
+
+```bash
+systemctl show postgresql@16-main.service -p After --value | tr ' ' '\n' | grep docker
+```
+
 ## Configuration
 
 See `config.example.yaml` for every setting with comments explaining what it
