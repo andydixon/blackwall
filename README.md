@@ -139,6 +139,29 @@ proxy_buffers           8 16k;
 proxy_busy_buffers_size 32k;
 ```
 
+### Behind Cloudflare
+
+Proxying through Cloudflare is supported, with three things nginx must do
+(`docker/admin.blackwall.cx.nginx.conf` shows all of them):
+
+- Restore the real client address with `set_real_ip_from` for the Cloudflare
+  ranges and `real_ip_header CF-Connecting-IP`. Without it every per-IP rate
+  limit keys on a Cloudflare edge address and the audit log records the edge.
+- Require Cloudflare's origin-pull client certificate (`ssl_verify_client on`
+  against Cloudflare's published CA) so a direct hit on the origin IP cannot
+  bypass the proxy. Enable Authenticated Origin Pulls on the zone first.
+- Keep the 308 HTTP→HTTPS redirect in nginx and leave Cloudflare's
+  "Always Use HTTPS" off: the edge redirect is a 301, which turns an OAuth
+  POST into a GET.
+
+On the zone use SSL mode Full (strict), minimum TLS 1.2, Rocket Loader and
+Email Obfuscation off (both rewrite HTML), and a WAF skip rule for the
+machine-to-machine paths (`/oauth/token`, `/oauth/introspect`,
+`/oauth/revoke`, `/oauth/userinfo`, `/oauth/jwks`, `/.well-known/`,
+`/licences/`, `/scim/`) so Browser Integrity Check never challenges a
+licence verifier or an OAuth client. No BlackWall config change is needed:
+`trusted_proxies` still names only nginx.
+
 ### Publish the admin console on its own hostname
 
 `docker/admin.blackwall.cx.nginx.conf` is a working nginx vhost that maps
