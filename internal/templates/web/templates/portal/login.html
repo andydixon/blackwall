@@ -67,7 +67,7 @@ document.getElementById('webauthn-form').addEventListener('submit', async functi
                 challenge: BlackWall.base64urlDecode(challengeData.challenge),
                 timeout: 60000,
                 rpId: challengeData.rpId || window.location.hostname,
-                userVerification: challengeData.userVerification || 'preferred'
+                userVerification: challengeData.userVerification || 'required'
             }
         });
 
