@@ -69,11 +69,11 @@ func (s *MaintenanceService) cleanupTokens() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	r2, err := s.db.Exec(`DELETE FROM oauth_access_tokens WHERE expires_at < NOW() - INTERVAL '7 day'`)
+	r2, err := s.db.Exec(`DELETE FROM oauth_access_tokens WHERE expires_at < DATE_SUB(NOW(), INTERVAL 7 DAY)`)
 	if err != nil {
 		return nil, err
 	}
-	r3, err := s.db.Exec(`DELETE FROM oauth_refresh_tokens WHERE expires_at < NOW() - INTERVAL '7 day'`)
+	r3, err := s.db.Exec(`DELETE FROM oauth_refresh_tokens WHERE expires_at < DATE_SUB(NOW(), INTERVAL 7 DAY)`)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (s *MaintenanceService) cleanupTokens() (map[string]interface{}, error) {
 
 func (s *MaintenanceService) cleanupAudit() (map[string]interface{}, error) {
 	days := config.Get().AuditRetentionDays
-	r, err := s.db.Exec(`DELETE FROM audit_log WHERE created_at < NOW() - (? * INTERVAL '1 day')`, days)
+	r, err := s.db.Exec(`DELETE FROM audit_log WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)`, days)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func (s *MaintenanceService) cleanupAudit() (map[string]interface{}, error) {
 
 func (s *MaintenanceService) rejectExpiredApprovals() (map[string]interface{}, error) {
 	maxAge := config.Get().ApprovalPendingMaxAgeDays
-	r, err := s.db.Exec(`UPDATE approval_requests SET status='rejected', decision_note='Auto-rejected: exceeded maximum pending age', decided_at=NOW() WHERE status='pending' AND created_at < NOW() - (? * INTERVAL '1 day')`, maxAge)
+	r, err := s.db.Exec(`UPDATE approval_requests SET status='rejected', decision_note='Auto-rejected: exceeded maximum pending age', decided_at=NOW() WHERE status='pending' AND created_at < DATE_SUB(NOW(), INTERVAL ? DAY)`, maxAge)
 	if err != nil {
 		return nil, err
 	}
@@ -104,7 +104,7 @@ func (s *MaintenanceService) rejectExpiredApprovals() (map[string]interface{}, e
 }
 
 func (s *MaintenanceService) cleanupRateLimits() (map[string]interface{}, error) {
-	r, err := s.db.Exec(`DELETE FROM rate_limits WHERE window_start < NOW() - INTERVAL '24 hour' AND (blocked_until IS NULL OR blocked_until < NOW())`)
+	r, err := s.db.Exec(`DELETE FROM rate_limits WHERE window_start < DATE_SUB(NOW(), INTERVAL 24 HOUR) AND (blocked_until IS NULL OR blocked_until < NOW())`)
 	if err != nil {
 		return nil, err
 	}

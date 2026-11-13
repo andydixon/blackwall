@@ -78,13 +78,13 @@ func (s *AuditChainService) CreateCheckpoint() (*Checkpoint, error) {
 		return nil, err
 	}
 
-	var id int64
-	err = s.db.QueryRow(`INSERT INTO audit_chain_checkpoints
+	res, err := s.db.Exec(`INSERT INTO audit_chain_checkpoints
 		(last_audit_id, last_chain_hash, row_count, signature, signing_key_id)
-		VALUES (?, ?, ?, ?, ?) RETURNING id`, lastID, lastHash.String, rowCount, sig, keyID).Scan(&id)
+		VALUES (?, ?, ?, ?, ?)`, lastID, lastHash.String, rowCount, sig, keyID)
 	if err != nil {
 		return nil, err
 	}
+	id, _ := res.LastInsertId()
 	return &Checkpoint{
 		ID:            int(id),
 		LastAuditID:   lastID,
@@ -139,7 +139,7 @@ func (s *AuditChainService) VerifyChainBetween(fromID, toID int64) (firstBadID i
 		project_id, project_uuid, organization_id, organization_uuid,
 		oauth_client_id, oauth_client_public_id, webauthn_credential_id,
 		webauthn_credential_public_id, target_type, target_id, metadata_json
-		FROM audit_log WHERE id BETWEEN ? AND CASE WHEN ?=0 THEN id ELSE ? END ORDER BY id ASC`
+		FROM audit_log WHERE id BETWEEN ? AND IF(?=0, id, ?) ORDER BY id ASC`
 	rows, err := s.db.Query(q, fromID, toID, toID)
 	if err != nil {
 		return 0, err

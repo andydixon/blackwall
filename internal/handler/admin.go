@@ -405,9 +405,9 @@ func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 
 		// Outcome rollups per period.
 		outcomeQ := `SELECT outcome,
-		             COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE)                          AS today_count,
-		             COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 day')    AS week_count,
-		             COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 day')   AS month_count
+		             SUM(created_at >= CURDATE())                          AS today_count,
+		             SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY))    AS week_count,
+		             SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY))   AS month_count
 		             FROM audit_log
 		             WHERE outcome IN ('success','fail')` +
 			scopeAndClause(scope.IsSuperAdmin, scope.ProjectIDs) +
@@ -433,8 +433,8 @@ func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 
 		// Cryptbin recent activity stats — only super-admins see these.
 		if scope.IsSuperAdmin {
-			h.DB.QueryRow(`SELECT COUNT(*) FROM audit_log WHERE event_type='cryptbin.create.success' AND created_at >= NOW() - INTERVAL '1 day'`).Scan(&cryptbin.Created24h)
-			h.DB.QueryRow(`SELECT COUNT(*) FROM audit_log WHERE event_type LIKE 'cryptbin.%' AND outcome='fail' AND created_at >= NOW() - INTERVAL '1 day'`).Scan(&cryptbin.Failed24h)
+			h.DB.QueryRow(`SELECT COUNT(*) FROM audit_log WHERE event_type='cryptbin.create.success' AND created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)`).Scan(&cryptbin.Created24h)
+			h.DB.QueryRow(`SELECT COUNT(*) FROM audit_log WHERE event_type LIKE 'cryptbin.%' AND outcome='fail' AND created_at >= DATE_SUB(NOW(), INTERVAL 1 DAY)`).Scan(&cryptbin.Failed24h)
 		}
 	}
 
@@ -473,12 +473,12 @@ func (h *AdminHandler) Dashboard(w http.ResponseWriter, r *http.Request) {
 // in the last 30 days, scoped to the admin's visible projects.
 func (h *AdminHandler) eventTypeBreakdown(scope *service.AdminScope, outcome string) []map[string]interface{} {
 	q := `SELECT event_type,
-	             COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE)                          AS today_count,
-	             COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 day')    AS week_count,
-	             COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 day')   AS month_count
+	             SUM(created_at >= CURDATE())                          AS today_count,
+	             SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY))    AS week_count,
+	             SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY))   AS month_count
 	      FROM audit_log
 	      WHERE outcome = ?
-	        AND created_at >= NOW() - INTERVAL '30 day'` +
+	        AND created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)` +
 		scopeAndClause(scope.IsSuperAdmin, scope.ProjectIDs) +
 		` GROUP BY event_type
 	      ORDER BY month_count DESC, week_count DESC, today_count DESC, event_type ASC
@@ -508,9 +508,9 @@ func (h *AdminHandler) eventTypeBreakdown(scope *service.AdminScope, outcome str
 // security event type, scoped to the admin's visible projects.
 func (h *AdminHandler) dashboardSecurityEventStats(eventType string, scope *service.AdminScope) map[string]int {
 	q := `SELECT
-	        COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE)                          AS today_count,
-	        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 day')    AS week_count,
-	        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '30 day')   AS month_count
+	        COALESCE(SUM(created_at >= CURDATE()), 0)                          AS today_count,
+	        COALESCE(SUM(created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)), 0)    AS week_count,
+	        COALESCE(SUM(created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)), 0)   AS month_count
 	      FROM audit_log
 	      WHERE event_type = ?` +
 		scopeAndClause(scope.IsSuperAdmin, scope.ProjectIDs)
@@ -733,12 +733,12 @@ func (h *AdminHandler) UserStore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userUUID := uuid.NewString()
-	var newUserID int64
-	err := h.DB.QueryRow("INSERT INTO users (organization_id, uuid, display_label, status) VALUES (?,?,?,?) RETURNING id", orgID, userUUID, label, status).Scan(&newUserID)
+	res, err := h.DB.Exec("INSERT INTO users (organization_id, uuid, display_label, status) VALUES (?,?,?,?)", orgID, userUUID, label, status)
 	if err != nil {
 		redirect(w, r, "/admin/users/create?error=duplicate")
 		return
 	}
+	newUserID, _ := res.LastInsertId()
 
 	// Enrolment tokens are stored hashed (SHA-256) — the URL carries the raw
 	// token so the recipient can use it once, but the database row never
@@ -746,8 +746,8 @@ func (h *AdminHandler) UserStore(w http.ResponseWriter, r *http.Request) {
 	token := hexToken(32)
 	tokenHash := security.HashToken(token)
 	expiry := time.Now().Add(24 * time.Hour).Format("2006-01-02 15:04:05")
-	h.DB.Exec("INSERT INTO system_config (config_key, config_value) VALUES (?,?) ON CONFLICT (config_key) DO UPDATE SET config_value=EXCLUDED.config_value", "enrollment_token_"+tokenHash, fmt.Sprintf("%d", newUserID))
-	h.DB.Exec("INSERT INTO system_config (config_key, config_value) VALUES (?,?) ON CONFLICT (config_key) DO UPDATE SET config_value=EXCLUDED.config_value", "enrollment_expiry_"+tokenHash, expiry)
+	h.DB.Exec("INSERT INTO system_config (config_key, config_value) VALUES (?,?) ON DUPLICATE KEY UPDATE config_value=VALUES(config_value)", "enrollment_token_"+tokenHash, fmt.Sprintf("%d", newUserID))
+	h.DB.Exec("INSERT INTO system_config (config_key, config_value) VALUES (?,?) ON DUPLICATE KEY UPDATE config_value=VALUES(config_value)", "enrollment_expiry_"+tokenHash, expiry)
 
 	audit.LogSuccess("admin.user.create", service.AuditMeta{
 		"actor_user_id":     actorID,
@@ -1029,8 +1029,8 @@ func (h *AdminHandler) GenerateEnrollmentLink(w http.ResponseWriter, r *http.Req
 	token := hexToken(32)
 	tokenHash := security.HashToken(token)
 	expiry := time.Now().Add(24 * time.Hour).Format("2006-01-02 15:04:05")
-	h.DB.Exec("INSERT INTO system_config (config_key, config_value) VALUES (?,?) ON CONFLICT (config_key) DO UPDATE SET config_value=EXCLUDED.config_value", "enrollment_token_"+tokenHash, fmt.Sprintf("%d", userID))
-	h.DB.Exec("INSERT INTO system_config (config_key, config_value) VALUES (?,?) ON CONFLICT (config_key) DO UPDATE SET config_value=EXCLUDED.config_value", "enrollment_expiry_"+tokenHash, expiry)
+	h.DB.Exec("INSERT INTO system_config (config_key, config_value) VALUES (?,?) ON DUPLICATE KEY UPDATE config_value=VALUES(config_value)", "enrollment_token_"+tokenHash, fmt.Sprintf("%d", userID))
+	h.DB.Exec("INSERT INTO system_config (config_key, config_value) VALUES (?,?) ON DUPLICATE KEY UPDATE config_value=VALUES(config_value)", "enrollment_expiry_"+tokenHash, expiry)
 
 	audit.LogSuccess("admin.enrollment_link.generate", service.AuditMeta{
 		"actor_user_id":  actorID,
@@ -2025,12 +2025,12 @@ func (h *AdminHandler) ProjectStore(w http.ResponseWriter, r *http.Request) {
 	}
 
 	projectUUID := uuid.NewString()
-	var projID int64
-	err := h.DB.QueryRow("INSERT INTO projects (organization_id, uuid, name, status) VALUES (?,?,?,'active') RETURNING id", orgID, projectUUID, name).Scan(&projID)
+	res, err := h.DB.Exec("INSERT INTO projects (organization_id, uuid, name, status) VALUES (?,?,?,'active')", orgID, projectUUID, name)
 	if err != nil {
 		redirect(w, r, "/admin/projects/create?error=duplicate")
 		return
 	}
+	projID, _ := res.LastInsertId()
 
 	// Seed default privilege levels matching the PHP convention.
 	defaultLevels := []struct {
@@ -2319,12 +2319,12 @@ func (h *AdminHandler) PrivilegeLevelCreate(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	var newID int64
-	err := h.DB.QueryRow("INSERT INTO project_privilege_levels (project_id, level, name) VALUES (?,?,?) RETURNING id", projectID, level, name).Scan(&newID)
+	res, err := h.DB.Exec("INSERT INTO project_privilege_levels (project_id, level, name) VALUES (?,?,?)", projectID, level, name)
 	if err != nil {
 		redirect(w, r, "/admin/projects/"+projectUUID+"/privileges?error=duplicate")
 		return
 	}
+	newID, _ := res.LastInsertId()
 	audit.LogSuccess("admin.privilege_level.create", service.AuditMeta{
 		"actor_user_id":      actorID,
 		"target_project_id":  projectID,
@@ -2641,12 +2641,12 @@ func (h *AdminHandler) AssignmentCreate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	var newID int64
-	err := h.DB.QueryRow("INSERT INTO user_project_roles (user_id, project_id, privilege_level) VALUES (?,?,?) RETURNING id", userID, projectID, level).Scan(&newID)
+	res, err := h.DB.Exec("INSERT INTO user_project_roles (user_id, project_id, privilege_level) VALUES (?,?,?)", userID, projectID, level)
 	if err != nil {
 		redirect(w, r, "/admin/projects/"+projectUUID+"/assignments?error=duplicate")
 		return
 	}
+	newID, _ := res.LastInsertId()
 	audit.LogSuccess("admin.assignment.create", service.AuditMeta{
 		"actor_user_id":     actorID,
 		"target_user_id":    userID,
@@ -2984,17 +2984,17 @@ func (h *AdminHandler) ClientStore(w http.ResponseWriter, r *http.Request) {
 	}
 	oidcEnabled := r.FormValue("oidc_enabled") == "1"
 
-	var newID int64
-	err := h.DB.QueryRow(`INSERT INTO oauth_clients
+	res, err := h.DB.Exec(`INSERT INTO oauth_clients
 		(project_id, client_id, client_secret_hash, name, redirect_uris, grants, scopes,
 		 pkce_required, access_token_type, access_token_lifetime, refresh_token_lifetime, oidc_enabled, status)
-		VALUES (?,?,?,?,?,?,?,TRUE,?,?,?,?,'active') RETURNING id`,
+		VALUES (?,?,?,?,?,?,?,1,?,?,?,?,'active')`,
 		projectID, clientPublicID, secretHashVal, name, string(redirectURIs), string(grants), string(scopes),
-		accessTokenType, accessLifetime, refreshLifetime, oidcEnabled).Scan(&newID)
+		accessTokenType, accessLifetime, refreshLifetime, boolToInt(oidcEnabled))
 	if err != nil {
 		redirect(w, r, "/admin/projects/"+projectUUID+"/clients/create?error=failed")
 		return
 	}
+	newID, _ := res.LastInsertId()
 	audit.LogSuccess("admin.client.create", service.AuditMeta{
 		"actor_user_id":          actorID,
 		"target_project_id":      projectID,
@@ -3205,7 +3205,7 @@ func (h *AdminHandler) ClientUpdate(w http.ResponseWriter, r *http.Request) {
 		         access_token_type=?, access_token_lifetime=?, refresh_token_lifetime=?, oidc_enabled=?
 		     WHERE id=?`,
 		newName, newStatus, string(redirectsJSON), string(scopesJSON),
-		newAccessTokenType, newAccessLifetime, newRefreshLifetime, newOIDC, clientID)
+		newAccessTokenType, newAccessLifetime, newRefreshLifetime, boolToInt(newOIDC), clientID)
 
 	audit.LogSuccess("admin.client.update", service.AuditMeta{
 		"actor_user_id":          actorID,
@@ -3217,6 +3217,13 @@ func (h *AdminHandler) ClientUpdate(w http.ResponseWriter, r *http.Request) {
 	})
 	sess.Save()
 	redirect(w, r, "/admin/clients/"+clientPublicID+"?success=updated")
+}
+
+func boolToInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 // ─── Audit Log ────────────────────────────────────────────────────────────────
@@ -3545,12 +3552,12 @@ func (h *AdminHandler) OrganizationStore(w http.ResponseWriter, r *http.Request)
 	}
 
 	orgUUID := uuid.NewString()
-	var orgID int64
-	err := h.DB.QueryRow("INSERT INTO organizations (uuid, name, slug, status) VALUES (?,?,?,'active') RETURNING id", orgUUID, name, slug).Scan(&orgID)
+	res, err := h.DB.Exec("INSERT INTO organizations (uuid, name, slug, status) VALUES (?,?,?,'active')", orgUUID, name, slug)
 	if err != nil {
 		redirect(w, r, "/admin/organisations?error=duplicate")
 		return
 	}
+	orgID, _ := res.LastInsertId()
 	audit.LogSuccess("admin.org.create", service.AuditMeta{
 		"actor_user_id":     actorID,
 		"organization_id":   orgID,
@@ -4644,8 +4651,8 @@ func (h *AdminHandler) OrganizationExportEnrollmentURLs(w http.ResponseWriter, r
 			token := hexToken(32)
 			tokenHash := security.HashToken(token)
 			expiry := time.Now().Add(24 * time.Hour).Format("2006-01-02 15:04:05")
-			h.DB.Exec("INSERT INTO system_config (config_key, config_value) VALUES (?,?) ON CONFLICT (config_key) DO UPDATE SET config_value=EXCLUDED.config_value", "enrollment_token_"+tokenHash, fmt.Sprintf("%d", userID))
-			h.DB.Exec("INSERT INTO system_config (config_key, config_value) VALUES (?,?) ON CONFLICT (config_key) DO UPDATE SET config_value=EXCLUDED.config_value", "enrollment_expiry_"+tokenHash, expiry)
+			h.DB.Exec("INSERT INTO system_config (config_key, config_value) VALUES (?,?) ON DUPLICATE KEY UPDATE config_value=VALUES(config_value)", "enrollment_token_"+tokenHash, fmt.Sprintf("%d", userID))
+			h.DB.Exec("INSERT INTO system_config (config_key, config_value) VALUES (?,?) ON DUPLICATE KEY UPDATE config_value=VALUES(config_value)", "enrollment_expiry_"+tokenHash, expiry)
 			url := cfg.AppURL + "/enroll?token=" + token
 			fmt.Fprintf(w, "%s,%s\n", csvField(label), csvField(url))
 			exported++

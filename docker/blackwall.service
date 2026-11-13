@@ -16,18 +16,17 @@
 
 [Unit]
 Description=blackwall (docker container)
-After=docker.service network-online.target postgresql.service
+After=docker.service network-online.target mysql.service
 Requires=docker.service
-# Ordering only, not a hard requirement: PostgreSQL usually runs on the host,
-# but it may equally be remote, in which case this simply has no effect. If it
-# is not up yet, BlackWall exits and systemd retries on RestartSec.
+# Ordering only, not a hard requirement: MySQL usually runs on the host, but
+# it may equally be remote, in which case this simply has no effect. If it is
+# not up yet, BlackWall exits and systemd retries on RestartSec.
 #
-# NOTE: if PostgreSQL is on this host and its listen_addresses includes the
-# docker0 bridge address (172.17.0.1) so containers can reach it, that is not
-# sufficient on its own — PostgreSQL must ALSO be ordered after docker.service,
-# or it races dockerd for an interface that does not exist yet. See
-# docker/systemd/postgresql-10-after-docker.conf.
-Wants=network-online.target postgresql.service
+# NOTE: if MySQL is on this host and its bind-address includes the docker0
+# bridge address (172.17.0.1) so containers can reach it, MySQL must ALSO be
+# ordered after docker.service, or it races dockerd for an interface that does
+# not exist yet. See docker/systemd/mysql-10-after-docker.conf.
+Wants=network-online.target mysql.service
 
 [Service]
 Restart=always

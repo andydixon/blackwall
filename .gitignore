@@ -27,4 +27,4 @@ BEFF
 dist
 
 # compiled migration helper
-tools/pgmigrate/pgmigrate
+tools/mysqlmigrate/mysqlmigrate

@@ -25,7 +25,7 @@ func (s *AdminAuthService) GetRole(userID int) (string, error) {
 	if err == sql.ErrNoRows {
 		// Fallback: check if any admin_roles exist at all
 		var count int
-		s.db.QueryRow(`SELECT COUNT(*) FROM admin_roles WHERE is_active=TRUE`).Scan(&count)
+		s.db.QueryRow(`SELECT COUNT(*) FROM admin_roles WHERE is_active=1`).Scan(&count)
 		if count == 0 {
 			// No roles configured — all admins are super_admin (legacy mode)
 			if s.isAdminProjectMember(userID) {
@@ -67,13 +67,13 @@ func (s *AdminAuthService) isAdminProjectMember(userID int) bool {
 }
 
 func (s *AdminAuthService) UpsertRole(userID int, role string) error {
-	_, err := s.db.Exec(`INSERT INTO admin_roles (user_id, role, is_active) VALUES (?,?,TRUE)
-		ON CONFLICT (user_id) DO UPDATE SET role=EXCLUDED.role, is_active=TRUE`, userID, role)
+	_, err := s.db.Exec(`INSERT INTO admin_roles (user_id, role, is_active) VALUES (?,?,1)
+		ON DUPLICATE KEY UPDATE role=?, is_active=1`, userID, role, role)
 	return err
 }
 
 func (s *AdminAuthService) RevokeRole(userID int) error {
-	_, err := s.db.Exec(`UPDATE admin_roles SET is_active=FALSE WHERE user_id=?`, userID)
+	_, err := s.db.Exec(`UPDATE admin_roles SET is_active=0 WHERE user_id=?`, userID)
 	return err
 }
 

@@ -78,7 +78,7 @@ func (r *OAuthClientRepository) Create(clientID, secretHash string, projectID in
 	_, err := r.db.Exec(`INSERT INTO oauth_clients
 		(client_id, client_secret_hash, project_id, name, redirect_uris, grants, scopes,
 		pkce_required, access_token_type, access_token_lifetime, refresh_token_lifetime, oidc_enabled, status)
-		VALUES (?, ?, ?, ?, ?, ?, ?, TRUE, ?, ?, ?, ?, 'active')`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, 'active')`,
 		clientID, secretHash, projectID, name, ruJSON, gJSON, sJSON,
 		tokenType, accessLifetime, refreshLifetime, oidcEnabled)
 	if err != nil {

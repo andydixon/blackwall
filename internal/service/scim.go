@@ -220,12 +220,12 @@ func (s *SCIMService) CreateUser(projectID int, in *SCIMUser, defaultPrivilege i
 		if !in.Active {
 			status = "disabled"
 		}
-		var id64 int64
-		err := s.db.QueryRow(`INSERT INTO users (organization_id, uuid, display_label, status) VALUES (?,?,?,?) RETURNING id`,
-			orgID, userUUID, in.UserName, status).Scan(&id64)
+		res, err := s.db.Exec(`INSERT INTO users (organization_id, uuid, display_label, status) VALUES (?,?,?,?)`,
+			orgID, userUUID, in.UserName, status)
 		if err != nil {
 			return nil, err
 		}
+		id64, _ := res.LastInsertId()
 		userID = int(id64)
 	}
 
@@ -233,13 +233,13 @@ func (s *SCIMService) CreateUser(projectID int, in *SCIMUser, defaultPrivilege i
 	if defaultPrivilege <= 0 {
 		defaultPrivilege = 4 // "Member" in the seeded ladder.
 	}
-	s.db.Exec(`INSERT INTO user_project_roles (user_id, project_id, privilege_level)
-		VALUES (?, ?, ?) ON CONFLICT (user_id, project_id) DO NOTHING`, userID, projectID, defaultPrivilege)
+	s.db.Exec(`INSERT IGNORE INTO user_project_roles (user_id, project_id, privilege_level)
+		VALUES (?, ?, ?)`, userID, projectID, defaultPrivilege)
 
 	// External ID mapping.
 	if in.ExternalID != "" {
-		s.db.Exec(`INSERT INTO scim_user_mapping (project_id, user_id, external_id)
-			VALUES (?, ?, ?) ON CONFLICT (project_id, external_id) DO NOTHING`, projectID, userID, in.ExternalID)
+		s.db.Exec(`INSERT IGNORE INTO scim_user_mapping (project_id, user_id, external_id)
+			VALUES (?, ?, ?)`, projectID, userID, in.ExternalID)
 	}
 
 	return s.LookupUserByID(projectID, userUUID)
@@ -266,7 +266,7 @@ func (s *SCIMService) ReplaceUser(projectID int, scimID string, in *SCIMUser) (*
 	}
 	if in.ExternalID != "" {
 		s.db.Exec(`INSERT INTO scim_user_mapping (project_id, user_id, external_id)
-			VALUES (?, ?, ?) ON CONFLICT (project_id, external_id) DO UPDATE SET user_id=EXCLUDED.user_id`,
+			VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE user_id=VALUES(user_id)`,
 			projectID, userID, in.ExternalID)
 	}
 	return s.LookupUserByID(projectID, scimID)
@@ -328,10 +328,9 @@ func (s *SCIMService) PatchUser(projectID int, scimID string, ops []SCIMPatchOp)
 // — a misconfigured HRIS connector that bulk-fires DELETE shouldn't be able to
 // wipe an organisation's identity store. Disabling preserves audit lineage.
 func (s *SCIMService) DeactivateUser(projectID int, scimID string) error {
-	res, err := s.db.Exec(`UPDATE users SET status='disabled'
-		WHERE uuid=? AND EXISTS (
-			SELECT 1 FROM user_project_roles upr
-			WHERE upr.user_id=users.id AND upr.project_id=?)`, scimID, projectID)
+	res, err := s.db.Exec(`UPDATE users u
+		JOIN user_project_roles upr ON upr.user_id=u.id AND upr.project_id=?
+		SET u.status='disabled' WHERE u.uuid=?`, projectID, scimID)
 	if err != nil {
 		return err
 	}

@@ -89,14 +89,14 @@ func (s *AdminTokenService) Create(userID int, name string, scopes []string, exp
 		expiresVal = expires.UTC()
 	}
 
-	var id int64
-	err = s.db.QueryRow(`INSERT INTO admin_api_tokens
+	res, err := s.db.Exec(`INSERT INTO admin_api_tokens
 		(public_id, prefix, token_hash, user_id, name, scopes_json, expires_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-		pubID, prefix, hash, userID, name, string(scopesJSON), expiresVal).Scan(&id)
+		VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		pubID, prefix, hash, userID, name, string(scopesJSON), expiresVal)
 	if err != nil {
 		return nil, "", err
 	}
+	id, _ := res.LastInsertId()
 	tok := &AdminToken{
 		ID: int(id), PublicID: pubID, Prefix: prefix, UserID: userID, Name: name, Scopes: scopes,
 		CreatedAt: time.Now(),

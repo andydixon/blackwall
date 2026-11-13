@@ -77,14 +77,14 @@ func (s *WebhookService) CreateEndpoint(projectID int, targetURL, description st
 	publicID := uuid.NewString()
 	secret := generateWebhookSecret()
 
-	var id int64
-	err := s.db.QueryRow(`INSERT INTO webhook_endpoints
+	res, err := s.db.Exec(`INSERT INTO webhook_endpoints
 		(project_id, public_id, target_url, secret, events_json, status, description)
-		VALUES (?, ?, ?, ?, ?, 'active', ?) RETURNING id`,
-		projectID, publicID, targetURL, secret, string(eventsJSON), description).Scan(&id)
+		VALUES (?, ?, ?, ?, ?, 'active', ?)`,
+		projectID, publicID, targetURL, secret, string(eventsJSON), description)
 	if err != nil {
 		return nil, err
 	}
+	id, _ := res.LastInsertId()
 	return &WebhookEndpoint{
 		ID:        int(id),
 		PublicID:  publicID,
@@ -116,11 +116,8 @@ func (s *WebhookService) UpdateEndpoint(publicID, targetURL, description string,
 			return nil, err
 		}
 	}
-	// consecutive_failures is intentionally left as-is here: the original
-	// statement assigned it IF(status='active', consecutive_failures,
-	// consecutive_failures), i.e. the same value on both arms.
-	if _, err := s.db.Exec(`UPDATE webhook_endpoints SET target_url=?, description=?, events_json=?, status=? WHERE public_id=?`,
-		targetURL, description, string(eventsJSON), status, publicID); err != nil {
+	if _, err := s.db.Exec(`UPDATE webhook_endpoints SET target_url=?, description=?, events_json=?, status=?, consecutive_failures=IF(?='active',consecutive_failures,consecutive_failures) WHERE public_id=?`,
+		targetURL, description, string(eventsJSON), status, status, publicID); err != nil {
 		return nil, err
 	}
 	return s.GetEndpoint(publicID)
@@ -312,7 +309,7 @@ func (s *WebhookService) DeliverPending(ctx context.Context, batchSize int) int 
 				j.attempts, status, excerpt, j.id)
 		} else {
 			delay := backoff[j.attempts-1]
-			s.db.Exec(`UPDATE webhook_deliveries SET attempts=?, last_status_code=?, last_response_excerpt=?, next_attempt_at=NOW() + (? * INTERVAL '1 second'), updated_at=NOW() WHERE id=?`,
+			s.db.Exec(`UPDATE webhook_deliveries SET attempts=?, last_status_code=?, last_response_excerpt=?, next_attempt_at=DATE_ADD(NOW(), INTERVAL ? SECOND), updated_at=NOW() WHERE id=?`,
 				j.attempts, status, excerpt, delay, j.id)
 		}
 		s.db.Exec(`UPDATE webhook_endpoints SET last_failure_at=NOW(), consecutive_failures=consecutive_failures+1 WHERE id=?`, j.endpointID)

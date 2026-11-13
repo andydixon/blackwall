@@ -40,8 +40,6 @@ authentication. Single static binary, no external runtime dependencies.
 - [Editable Scribus source](docs/user-guide/BlackWall-User-Guide.sla) and its
   [rebuild notes](docs/user-guide/README.md).
 - [Complete repository manual](docs/MANUAL.md).
-- [MySQL to PostgreSQL migration notes](docs/POSTGRES_MIGRATION.md) — what
-  changed, how to re-run the migration, and the rollback position.
 - [Normative project licence verification guide](docs/licensing/VERIFYING_LICENCES.md)
   with PHP, Go, Rust, and Java examples.
 - [Licence renewal reminder operations guide](docs/licensing/RENEWAL_REMINDERS.md).
@@ -49,7 +47,7 @@ authentication. Single static binary, no external runtime dependencies.
 ## Requirements
 
 - Go 1.25+ (for compiling from source)
-- PostgreSQL 14+ (16 recommended; the `citext` extension must be available)
+- MySQL 8.0+
 - Docker + Docker Compose for the supported deployment path
 - `systemd` on the host for process supervision (sample unit included)
 
@@ -106,8 +104,9 @@ docker run -d --name blackwall \
     blackwall:latest
 ```
 
-Or use the bundled `docker-compose.yml`, which also starts PostgreSQL. An empty
-database is fine: the application installs its baseline schema on first start.
+Or use the bundled `docker-compose.yml`, which also starts MySQL. Load
+`internal/db/schema.sql` into the database before starting the application for
+the first time (see [Schema migrations](#schema-migrations)).
 
 ## Run behind a reverse proxy
 
@@ -200,38 +199,26 @@ Three bind mounts matter, and all three are required: the config file, the
 Cryptbin storage directory, and the licence signing key. Dropping the licence
 mount does not fail loudly — it silently disables licence issuance.
 
-The unit is ordered `After=postgresql.service`, which is ordering only. If the
+The unit is ordered `After=mysql.service`, which is ordering only. If the
 database is remote the directive simply has no effect; if it is local but not
 yet accepting connections, BlackWall exits and systemd retries on
 `RestartSec`.
 
-### If PostgreSQL is on the same host
+### If MySQL is on the same host
 
 A container on Docker's default bridge reaches the host at `172.17.0.1`, so a
-host PostgreSQL typically has that address in `listen_addresses`. That address
-belongs to the `docker0` interface, which **dockerd creates** — so PostgreSQL
-cannot bind it until Docker is running, and by default nothing orders the two.
+host MySQL typically has that address in `bind-address`. That address belongs
+to the `docker0` interface, which **dockerd creates** — so MySQL cannot bind it
+until Docker is running, and by default nothing orders the two.
 
-The failure is quiet rather than loud. PostgreSQL still binds `localhost`, so
-it logs the miss as a `WARNING`, starts anyway, and systemd reports it active
-and healthy — while every containerised client is locked out until someone
-restarts it by hand.
-
-Install the drop-in to order PostgreSQL after Docker:
+Install the drop-in to order MySQL after Docker:
 
 ```bash
-sudo mkdir -p /etc/systemd/system/postgresql@.service.d
-sudo cp docker/systemd/postgresql-10-after-docker.conf \
-        /etc/systemd/system/postgresql@.service.d/10-after-docker.conf
+sudo mkdir -p /etc/systemd/system/mysql.service.d
+sudo cp docker/systemd/mysql-10-after-docker.conf \
+        /etc/systemd/system/mysql.service.d/10-after-docker.conf
 sudo systemctl daemon-reload
-```
-
-Verify the whole chain resolves as
-`docker.service` → `postgresql@<version>-main` → `postgresql.service` →
-`blackwall.service`:
-
-```bash
-systemctl show postgresql@16-main.service -p After --value | tr ' ' '\n' | grep docker
+systemctl show mysql.service -p After --value | tr ' ' '\n' | grep docker
 ```
 
 ## Configuration
@@ -258,7 +245,7 @@ openssl rand -base64 32    # cryptbin_kek_base64
 
 To enable project licence issuance, generate a separate Ed25519 PKCS#8 key and
 mount it read-only. The application refuses loose permissions and never stores
-the private key in the database:
+the private key in MySQL:
 
 ```bash
 umask 077
@@ -270,24 +257,25 @@ Set `licence_signing_key_file` to that path. Leave it blank when the instance
 must verify and revoke existing licences without issuing new ones. See the
 [complete verification and key-rotation guide](docs/licensing/VERIFYING_LICENCES.md).
 
-Renewal email is independently optional. It uses a duplicate-safe database queue,
+Renewal email is independently optional. It uses a duplicate-safe MySQL queue,
 the active designated organisation administrator, and mandatory encrypted SMTP.
 See the [renewal reminder operations guide](docs/licensing/RENEWAL_REMINDERS.md)
 for configuration, recipient rules, retries, privacy, and monitoring.
 
 ## Schema migrations
 
-On startup the binary brings the database up to date, tracked in a
-`schema_migrations` table:
+On startup, the binary applies any pending migrations from
+`internal/db/migrations.go`, tracked in a `schema_migrations` table.
+The base schema is `internal/db/schema.sql`, which already includes
+migrations 1 to 8 and records them as applied. Load it into an empty database
+before first start:
 
-1. An empty database gets the complete baseline schema from
-   `internal/db/schema.sql`, recorded as versions 1-7. No manual restore step
-   is needed for a fresh install.
-2. Any migrations in `internal/db/migrations.go` above the baseline version are
-   then applied in order.
+```bash
+mysql -u blackwall -p blackwall < internal/db/schema.sql
+```
 
-`internal/db/schema.sql` is generated — regenerate it with
-`tools/pgmigrate/gen_schema.py` rather than editing it by hand.
+A schema change must land both in `schema.sql` (fresh installs) and as a new
+numbered migration (existing databases), so the two paths converge.
 
 ## Bootstrap
 
@@ -378,7 +366,7 @@ internal/templates/web/
 cmd/blackwall/         entry point, router setup, graceful shutdown
 internal/
   config/              YAML + env-var configuration with start-up validation
-  db/                  PostgreSQL pool, baseline schema, forward-only migrations
+  db/                  MySQL pool + forward-only schema migrations
   handler/             HTTP handlers (admin, oauth, portal, cryptbin, bootstrap, metrics)
   middleware/          chi middleware (auth, rate limit, audit context, IP extraction)
   model/               shared data types
@@ -404,9 +392,9 @@ docker/
   the raw token, the database column never does).
 - CSRF tokens are single-use HMAC-SHA-256 values stored in the encrypted
   session.
-- Audit log entries are SHA-256 chained under a PostgreSQL transaction-scoped
-  advisory lock so concurrent writes serialise correctly; tampering is
-  detectable. Export CSV ends with an HMAC-signed manifest line.
+- Audit log entries are SHA-256 chained under a MySQL `GET_LOCK` so
+  concurrent writes serialise correctly; tampering is detectable. Export
+  CSV ends with an HMAC-signed manifest line.
 - CryptBin blobs are encrypted client-side; the server only stores ciphertext
   and a wrapped DEK. Server-side wrapping uses XChaCha20-Poly1305-IETF
   (libsodium-compatible) with the blob ID bound via AAD.

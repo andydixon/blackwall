@@ -78,7 +78,7 @@ func (h *MetricsHandler) collect() map[string]interface{} {
 	row.Scan(&creds)
 	payload["webauthn_credentials_total"] = creds
 
-	row = h.DB.QueryRow("SELECT COUNT(*) FROM audit_log WHERE created_at >= CURRENT_DATE")
+	row = h.DB.QueryRow("SELECT COUNT(*) FROM audit_log WHERE created_at >= CURDATE()")
 	var auditToday int64
 	row.Scan(&auditToday)
 	payload["audit_events_today"] = auditToday

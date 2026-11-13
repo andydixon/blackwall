@@ -44,7 +44,7 @@ func (s *BrandingService) HostMatchesCustomDomain(host string) (*Branding, error
 	}
 	var orgID int
 	err := s.db.QueryRow(`SELECT organization_id FROM org_custom_domains
-		WHERE hostname=? AND verified=TRUE`, host).Scan(&orgID)
+		WHERE hostname=? AND verified=1`, host).Scan(&orgID)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -107,7 +107,7 @@ func (s *BrandingService) AddCustomDomain(orgID int, host string) error {
 		return errors.New("invalid hostname")
 	}
 	_, err := s.db.Exec(`INSERT INTO org_custom_domains (organization_id, hostname, verified)
-		VALUES (?, ?, FALSE)`, orgID, host)
+		VALUES (?, ?, 0)`, orgID, host)
 	return err
 }
 
@@ -116,7 +116,7 @@ func (s *BrandingService) AddCustomDomain(orgID int, host string) error {
 // manually after confirming DNS is in place.
 func (s *BrandingService) VerifyCustomDomain(orgID int, host string) error {
 	host = normaliseHost(host)
-	_, err := s.db.Exec(`UPDATE org_custom_domains SET verified=TRUE WHERE organization_id=? AND hostname=?`, orgID, host)
+	_, err := s.db.Exec(`UPDATE org_custom_domains SET verified=1 WHERE organization_id=? AND hostname=?`, orgID, host)
 	return err
 }
 

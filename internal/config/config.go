@@ -17,12 +17,11 @@ type Config struct {
 	AppDebug bool   `yaml:"app_debug"`
 	AppURL   string `yaml:"app_url"`
 
-	DBHost    string `yaml:"db_host"`
-	DBPort    string `yaml:"db_port"`
-	DBName    string `yaml:"db_name"`
-	DBUser    string `yaml:"db_user"`
-	DBPass    string `yaml:"db_pass"`
-	DBSSLMode string `yaml:"db_sslmode"`
+	DBHost string `yaml:"db_host"`
+	DBPort string `yaml:"db_port"`
+	DBName string `yaml:"db_name"`
+	DBUser string `yaml:"db_user"`
+	DBPass string `yaml:"db_pass"`
 
 	SessionName        string `yaml:"session_name"`
 	SessionSecret      string `yaml:"session_secret"`
@@ -319,7 +318,7 @@ func defaults() *Config {
 		AppDebug:                        false,
 		AppURL:                          "https://localhost",
 		DBHost:                          "localhost",
-		DBPort:                          "5432",
+		DBPort:                          "3306",
 		DBName:                          "blackwall",
 		DBUser:                          "blackwall",
 		DBPass:                          "",
@@ -392,7 +391,6 @@ func overrideFromEnv(cfg *Config) {
 	setStr(&cfg.DBName, "DB_NAME")
 	setStr(&cfg.DBUser, "DB_USER")
 	setStr(&cfg.DBPass, "DB_PASS")
-	setStr(&cfg.DBSSLMode, "DB_SSLMODE")
 	setStr(&cfg.SessionName, "SESSION_NAME")
 	setStr(&cfg.SessionSecret, "SESSION_SECRET")
 	setInt(&cfg.SessionLifetime, "SESSION_LIFETIME")

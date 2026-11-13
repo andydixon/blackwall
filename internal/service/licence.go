@@ -222,8 +222,8 @@ func (s *LicenceService) registerActiveKey() error {
 	if _, err := tx.Exec(`INSERT INTO licence_signing_keys
 		(kid, algorithm, public_key_base64, status)
 		VALUES (?, 'Ed25519', ?, 'active')
-		ON CONFLICT (kid) DO UPDATE SET
-		algorithm='Ed25519', public_key_base64=EXCLUDED.public_key_base64,
+		ON DUPLICATE KEY UPDATE
+		algorithm='Ed25519', public_key_base64=VALUES(public_key_base64),
 		status='active', retired_at=NULL`, s.keyID, encoded); err != nil {
 		return err
 	}
@@ -298,19 +298,19 @@ func (s *LicenceService) Issue(input LicenceIssueRequest) (*ProjectLicence, erro
 	if input.IssuedByUserID > 0 {
 		issuedBy = input.IssuedByUserID
 	}
-	var id int64
-	err = s.db.QueryRow(`INSERT INTO project_licences
+	res, err := s.db.Exec(`INSERT INTO project_licences
 		(public_id, project_id, entity_type, entity_name, entity_reference,
 		hostnames_json, features_json, max_instances, not_before, expires_at,
 		issued_at, issued_by_user_id, signing_key_id, payload_json, signature_base64)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		claims.LicenceID, input.ProjectID, entity.Type, entity.Name, entityReference,
 		string(hostnamesJSON), string(featuresJSON), input.MaxInstances,
 		time.Unix(claims.NotBefore, 0).UTC(), time.Unix(claims.ExpiresAt, 0).UTC(), now,
-		issuedBy, s.keyID, string(payload), base64.RawURLEncoding.EncodeToString(signature)).Scan(&id)
+		issuedBy, s.keyID, string(payload), base64.RawURLEncoding.EncodeToString(signature))
 	if err != nil {
 		return nil, err
 	}
+	id, _ := res.LastInsertId()
 	return &ProjectLicence{
 		ID: id, PublicID: claims.LicenceID, ProjectID: input.ProjectID,
 		EntityType: entity.Type, EntityName: entity.Name,

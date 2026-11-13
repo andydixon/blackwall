@@ -92,16 +92,16 @@ func (s *SAMLService) CreateSP(projectID int, entityID, acsURL, sloURL, nameIDFo
 	}
 	attrJSON, _ := json.Marshal(attrMap)
 	publicID := uuid.NewString()
-	var id int64
-	err := s.db.QueryRow(`INSERT INTO saml_service_providers
+	res, err := s.db.Exec(`INSERT INTO saml_service_providers
 		(public_id, project_id, entity_id, acs_url, slo_url, name_id_format,
 		 sign_assertions, sign_response, sp_cert_pem, attribute_map_json, audience, status)
-		VALUES (?, ?, ?, ?, ?, ?, TRUE, TRUE, ?, ?, ?, 'active') RETURNING id`,
+		VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?, 'active')`,
 		publicID, projectID, entityID, acsURL, nullable(sloURL), nameIDFormat,
-		nullable(spCertPEM), string(attrJSON), nullable(audience)).Scan(&id)
+		nullable(spCertPEM), string(attrJSON), nullable(audience))
 	if err != nil {
 		return nil, err
 	}
+	id, _ := res.LastInsertId()
 	return &SAMLSP{
 		ID: int(id), PublicID: publicID, ProjectID: projectID,
 		EntityID: entityID, ACSURL: acsURL, SLOURL: sloURL,
@@ -404,7 +404,7 @@ func projectAttrs(in map[string]string, sp *SAMLSP) []byte {
 // (so metadata stays stable across restarts).
 func (s *SAMLService) signingKeyAndCert() (*rsa.PrivateKey, []byte, error) {
 	var privPEM, pubPEM string
-	if err := s.db.QueryRow(`SELECT private_key, public_key FROM jwt_signing_keys WHERE is_active=TRUE ORDER BY created_at DESC LIMIT 1`).Scan(&privPEM, &pubPEM); err != nil {
+	if err := s.db.QueryRow(`SELECT private_key, public_key FROM jwt_signing_keys WHERE is_active=1 ORDER BY created_at DESC LIMIT 1`).Scan(&privPEM, &pubPEM); err != nil {
 		return nil, nil, fmt.Errorf("load signing key: %w", err)
 	}
 	block, _ := pem.Decode([]byte(privPEM))
