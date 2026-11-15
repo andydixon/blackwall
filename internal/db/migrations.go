@@ -445,6 +445,28 @@ var migrations = []migration{
 			return err
 		},
 	},
+	{
+		Version:     8,
+		Description: "Restore the organisation branding columns migration 3 failed to add",
+		Apply: func(db *sql.DB) error {
+			// Migration 3 added logo_url, primary_color, login_message and
+			// support_email in a single multi-column ALTER. logo_url already
+			// existed, so MySQL rejected the whole statement as a duplicate
+			// column — and the error was swallowed as "already applied",
+			// leaving the other three columns absent. One column per ALTER
+			// means a duplicate can only ever skip the column it names.
+			for _, statement := range []string{
+				`ALTER TABLE organizations ADD COLUMN primary_color VARCHAR(16) NULL`,
+				`ALTER TABLE organizations ADD COLUMN login_message VARCHAR(2048) NULL`,
+				`ALTER TABLE organizations ADD COLUMN support_email VARCHAR(255) NULL`,
+			} {
+				if _, err := db.Exec(statement); err != nil && !isMySQLDupColumnErr(err) {
+					return err
+				}
+			}
+			return nil
+		},
+	},
 }
 
 // Migrate applies every pending migration in order under a single tracking

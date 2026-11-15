@@ -848,8 +848,9 @@ func (h *OAuthHandler) LoginChallenge(w http.ResponseWriter, r *http.Request) {
 	sess.Save()
 
 	jsonOK(w, map[string]string{
-		"challenge":  encoded,
-		"csrf_token": nextCSRF,
+		"challenge":        encoded,
+		"csrf_token":       nextCSRF,
+		"userVerification": "required",
 	})
 }
 

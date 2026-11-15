@@ -77,7 +77,7 @@ func (s *WebAuthnService) GenerateRegistrationOptions(userUUID, userName string)
 		"authenticatorSelection": map[string]interface{}{
 			"residentKey":        "required",
 			"requireResidentKey": true,
-			"userVerification":   "preferred",
+			"userVerification":   "required",
 		},
 	}
 }
@@ -104,7 +104,7 @@ func (s *WebAuthnService) GenerateAuthenticationOptions(userID int) (map[string]
 		"timeout":          60000,
 		"rpId":             s.rpID,
 		"allowCredentials": allowCredentials,
-		"userVerification": "preferred",
+		"userVerification": "required",
 	}, nil
 }
 

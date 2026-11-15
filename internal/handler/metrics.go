@@ -83,10 +83,18 @@ func (h *MetricsHandler) collect() map[string]interface{} {
 	row.Scan(&auditToday)
 	payload["audit_events_today"] = auditToday
 
-	row = h.DB.QueryRow("SELECT COUNT(*) FROM oauth_tokens WHERE expires_at > NOW() AND revoked_at IS NULL")
+	// oauth_tokens has never existed; access and refresh tokens live in
+	// separate tables. Counting them separately keeps the figures meaningful —
+	// summing two different kinds of token into one gauge would not be.
+	row = h.DB.QueryRow("SELECT COUNT(*) FROM oauth_access_tokens WHERE expires_at > NOW() AND revoked_at IS NULL")
 	var activeTokens int64
 	row.Scan(&activeTokens)
 	payload["oauth_tokens_active"] = activeTokens
+
+	row = h.DB.QueryRow("SELECT COUNT(*) FROM oauth_refresh_tokens WHERE expires_at > NOW() AND revoked_at IS NULL")
+	var activeRefreshTokens int64
+	row.Scan(&activeRefreshTokens)
+	payload["oauth_refresh_tokens_active"] = activeRefreshTokens
 
 	row = h.DB.QueryRow("SELECT COUNT(*) FROM approval_requests WHERE status='pending'")
 	var pendingApprovals int64

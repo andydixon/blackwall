@@ -2,8 +2,8 @@
 #
 # BlackWall container image — runs the blackwall binary directly as PID 1
 # under an unprivileged user. Process supervision is the host's job (see the
-# example docker/blackwall.supervisor.conf for a supervisord unit that runs
-# `docker run` with the right environment).
+# example docker/blackwall.service for a systemd unit that runs `docker run`
+# with the right mounts and resource limits).
 #
 # Stage 1 compiles a fully-static binary (CGO disabled) so the runtime layer
 # can be a tiny Alpine image with no glibc dependency.

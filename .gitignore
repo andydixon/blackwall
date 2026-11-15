@@ -25,3 +25,6 @@ tmp/
 __storage
 BEFF
 dist
+
+# compiled migration helper
+tools/mysqlmigrate/mysqlmigrate

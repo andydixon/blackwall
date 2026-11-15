@@ -526,6 +526,31 @@ func (h *AdminHandler) dashboardSecurityEventStats(eventType string, scope *serv
 
 // scopeAndClause returns " AND project_id IN (?,?,?)" for non-super-admin
 // scopes, or empty string for super-admin (visibility wide open).
+// sumJobStats totals the row counts a maintenance job recorded in stats_json,
+// which is what the admin table's "rows affected" column reports. Each job
+// stores a flat object of counter name to count, for example
+// {"auth_codes":3,"access_tokens":12,"refresh_tokens":4}.
+//
+// Anything unparseable or non-numeric contributes nothing rather than failing
+// the page: this is a display figure, and a job that ran is worth showing even
+// if its stats blob is malformed.
+func sumJobStats(statsJSON string) int64 {
+	if statsJSON == "" {
+		return 0
+	}
+	var stats map[string]interface{}
+	if err := json.Unmarshal([]byte(statsJSON), &stats); err != nil {
+		return 0
+	}
+	var total int64
+	for _, v := range stats {
+		if n, ok := v.(float64); ok {
+			total += int64(n)
+		}
+	}
+	return total
+}
+
 func scopeAndClause(isSuperAdmin bool, projectIDs []int) string {
 	if isSuperAdmin {
 		return ""
@@ -4129,18 +4154,21 @@ func (h *AdminHandler) Maintenance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// maintenance_job_runs has never had rows_affected or error_message
+	// columns; the per-job counts live in stats_json and the failure text in
+	// error_trace.
 	rows, _ := h.DB.Query(`SELECT job_name, started_at, finished_at, status,
-	                              COALESCE(rows_affected, 0), COALESCE(error_message, '')
+	                              COALESCE(stats_json, ''), COALESCE(error_trace, '')
 	                      FROM maintenance_job_runs
 	                      ORDER BY started_at DESC LIMIT 100`)
 	var jobs []map[string]interface{}
 	if rows != nil {
 		defer rows.Close()
 		for rows.Next() {
-			var jobName, status, errMsg string
+			var jobName, status, errMsg, statsJSON string
 			var startedAt, finishedAt sql.NullTime
-			var rowsAffected int64
-			rows.Scan(&jobName, &startedAt, &finishedAt, &status, &rowsAffected, &errMsg)
+			rows.Scan(&jobName, &startedAt, &finishedAt, &status, &statsJSON, &errMsg)
+			rowsAffected := sumJobStats(statsJSON)
 			var duration string
 			if startedAt.Valid && finishedAt.Valid {
 				duration = finishedAt.Time.Sub(startedAt.Time).Truncate(time.Millisecond).String()

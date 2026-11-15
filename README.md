@@ -49,7 +49,7 @@ authentication. Single static binary, no external runtime dependencies.
 - Go 1.25+ (for compiling from source)
 - MySQL 8.0+
 - Docker + Docker Compose for the supported deployment path
-- `supervisord` on the host if you want process supervision (sample unit included)
+- `systemd` on the host for process supervision (sample unit included)
 
 ## Build
 
@@ -104,9 +104,9 @@ docker run -d --name blackwall \
     blackwall:latest
 ```
 
-Or use the bundled `docker-compose.yml`, which also starts MySQL. The Compose
-file does not seed Blackwall's historical base schema: restore that baseline
-into the database volume before starting the application for the first time.
+Or use the bundled `docker-compose.yml`, which also starts MySQL. Load
+`internal/db/schema.sql` into the database before starting the application for
+the first time (see [Schema migrations](#schema-migrations)).
 
 ## Run behind a reverse proxy
 
@@ -138,6 +138,29 @@ proxy_buffers           8 16k;
 proxy_busy_buffers_size 32k;
 ```
 
+### Behind Cloudflare
+
+Proxying through Cloudflare is supported, with three things nginx must do
+(`docker/admin.blackwall.cx.nginx.conf` shows all of them):
+
+- Restore the real client address with `set_real_ip_from` for the Cloudflare
+  ranges and `real_ip_header CF-Connecting-IP`. Without it every per-IP rate
+  limit keys on a Cloudflare edge address and the audit log records the edge.
+- Require Cloudflare's origin-pull client certificate (`ssl_verify_client on`
+  against Cloudflare's published CA) so a direct hit on the origin IP cannot
+  bypass the proxy. Enable Authenticated Origin Pulls on the zone first.
+- Keep the 308 HTTP→HTTPS redirect in nginx and leave Cloudflare's
+  "Always Use HTTPS" off: the edge redirect is a 301, which turns an OAuth
+  POST into a GET.
+
+On the zone use SSL mode Full (strict), minimum TLS 1.2, Rocket Loader and
+Email Obfuscation off (both rewrite HTML), and a WAF skip rule for the
+machine-to-machine paths (`/oauth/token`, `/oauth/introspect`,
+`/oauth/revoke`, `/oauth/userinfo`, `/oauth/jwks`, `/.well-known/`,
+`/licences/`, `/scim/`) so Browser Integrity Check never challenges a
+licence verifier or an OAuth client. No BlackWall config change is needed:
+`trusted_proxies` still names only nginx.
+
 ### Publish the admin console on its own hostname
 
 `docker/admin.blackwall.cx.nginx.conf` is a working nginx vhost that maps
@@ -156,19 +179,46 @@ Existing passkeys keep working: they are scoped to `webauthn_rp_id`, which
 the new hostname must sit under. See the reverse-proxy chapter of
 `docs/MANUAL.md` for the full rationale and the caveats.
 
-## Run with supervisord on the host
+## Run under systemd on the host
 
-A sample supervisor unit is at `docker/blackwall.supervisor.conf`. It runs
-`docker run --rm` so supervisord (not Docker's `--restart` flag) owns the
-process lifecycle — that gives you exponential-backoff retries and a clean
-single-source-of-truth config file for all the environment variables.
+A sample unit is at `docker/blackwall.service`. It runs `docker run --rm` in
+the foreground so systemd — not Docker's `--restart` flag — owns the process
+lifecycle. Do not enable both: they fight over the container, and a container
+left behind by one makes the other's next start fail on a name conflict. The
+unit's `ExecStartPre` clears any stale container for that reason.
 
 ```bash
-sudo cp docker/blackwall.supervisor.conf /etc/supervisor/conf.d/blackwall.conf
-# edit the env vars + image tag
-sudo supervisorctl reread
-sudo supervisorctl update
-sudo supervisorctl status blackwall
+sudo cp docker/blackwall.service /etc/systemd/system/blackwall.service
+# adjust the bind-mount paths and image tag to match your host
+sudo systemctl daemon-reload
+sudo systemctl enable --now blackwall
+systemctl status blackwall
+```
+
+Three bind mounts matter, and all three are required: the config file, the
+Cryptbin storage directory, and the licence signing key. Dropping the licence
+mount does not fail loudly — it silently disables licence issuance.
+
+The unit is ordered `After=mysql.service`, which is ordering only. If the
+database is remote the directive simply has no effect; if it is local but not
+yet accepting connections, BlackWall exits and systemd retries on
+`RestartSec`.
+
+### If MySQL is on the same host
+
+A container on Docker's default bridge reaches the host at `172.17.0.1`, so a
+host MySQL typically has that address in `bind-address`. That address belongs
+to the `docker0` interface, which **dockerd creates** — so MySQL cannot bind it
+until Docker is running, and by default nothing orders the two.
+
+Install the drop-in to order MySQL after Docker:
+
+```bash
+sudo mkdir -p /etc/systemd/system/mysql.service.d
+sudo cp docker/systemd/mysql-10-after-docker.conf \
+        /etc/systemd/system/mysql.service.d/10-after-docker.conf
+sudo systemctl daemon-reload
+systemctl show mysql.service -p After --value | tr ' ' '\n' | grep docker
 ```
 
 ## Configuration
@@ -216,11 +266,16 @@ for configuration, recipient rules, retries, privacy, and monitoring.
 
 On startup, the binary applies any pending migrations from
 `internal/db/migrations.go`, tracked in a `schema_migrations` table.
-The application assumes the established Blackwall base schema already exists;
-this source tree does not include a fresh-install baseline SQL file. Restore
-the correct baseline from an existing deployment or obtain the baseline for
-your deployment before first start. An empty database will fail when the first
-incremental migration refers to a base table such as `users` or `projects`.
+The base schema is `internal/db/schema.sql`, which already includes
+migrations 1 to 8 and records them as applied. Load it into an empty database
+before first start:
+
+```bash
+mysql -u blackwall -p blackwall < internal/db/schema.sql
+```
+
+A schema change must land both in `schema.sql` (fresh installs) and as a new
+numbered migration (existing databases), so the two paths converge.
 
 ## Bootstrap
 
@@ -321,7 +376,9 @@ internal/
                        approval, admin scope, OIDC claims, JWT, maintenance)
   templates/           embed wrappers + web assets + parse tests
 docker/
-  blackwall.supervisor.conf   sample host-side supervisord unit
+  blackwall.service           sample host-side systemd unit
+  blackwall.apache.conf       sample Apache reverse-proxy vhost
+  admin.blackwall.cx.nginx.conf  sample nginx vhost for the admin subdomain
 ```
 
 ## Security notes
