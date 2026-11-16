@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2025-2026 Andy Dixon
+
 """Build the editable Scribus and PDF editions of the BlackWall user guide.
 
 Run this script through Scribus rather than a standalone Python interpreter:

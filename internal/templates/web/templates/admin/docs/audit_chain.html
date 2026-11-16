@@ -1,3 +1,5 @@
+{{/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2025-2026 Andy Dixon */ -}}
 {{define "doc_body"}}
 <p>BlackWall's audit log is hash-chained per row: every <code>audit_log</code> entry stores <code>chain_hash = SHA-256(prev_hash || canonical_payload)</code>. That makes it impossible to alter an old row without invalidating every later row's hash. What chain_hash alone <em>doesn't</em> catch is wholesale truncation or replacement of the entire table; an attacker who can replay a clean snapshot can avoid hash drift.</p>
 

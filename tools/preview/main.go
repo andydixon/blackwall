@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2025-2026 Andy Dixon
+
 // Command preview renders the public marketing pages to standalone HTML so
 // they can be eyeballed in a browser without running the full server.
 // This is a scratch development aid and is not part of the shipped product.

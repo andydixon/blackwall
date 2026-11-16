@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2025-2026 Andy Dixon
+
 # Example: drive BlackWall claim defaults and webhook endpoints from
 # Terraform. Run with:
 #

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2025-2026 Andy Dixon
+
 package cx.blackwall.examples;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;

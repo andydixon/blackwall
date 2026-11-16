@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2025-2026 Andy Dixon
+
 // Command render_screenshots renders Blackwall's real templates with synthetic,
 // non-sensitive example data. The resulting HTML is consumed by the companion
 // capture_screenshots.sh script to produce reproducible user-guide images

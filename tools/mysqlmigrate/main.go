@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2025-2026 Andy Dixon
+
 // Command mysqlmigrate copies BlackWall's data from PostgreSQL back into
 // MySQL, table by table. It is the reverse of the removed tools/pgmigrate.
 //

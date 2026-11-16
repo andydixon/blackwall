@@ -1,3 +1,5 @@
+{{/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2025-2026 Andy Dixon */ -}}
 {{define "doc_body"}}
 <p>Admin API tokens are bearer credentials for the JSON admin API at <code>/api/v1/*</code>, the SCIM 2.0 surface at <code>/scim/v2/*</code>, and the Terraform provider. Each token is bound to a specific user and inherits that user's admin capabilities <em>at request time</em> — there is no token-side capability escalation. Revoking a user's admin role takes effect for their tokens on the next request.</p>
 

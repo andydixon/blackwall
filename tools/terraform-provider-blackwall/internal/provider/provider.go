@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2025-2026 Andy Dixon
+
 // Package provider hosts the terraform-plugin-framework provider definition
 // for BlackWall, the resources it exposes, and the data sources for read-
 // only lookups.

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2025-2026 Andy Dixon
+
 use chrono::{DateTime, Utc};
 use reqwest::blocking::Client;
 use reqwest::redirect::Policy;

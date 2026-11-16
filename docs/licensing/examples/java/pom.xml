@@ -6,6 +6,12 @@
     <groupId>cx.blackwall.examples</groupId>
     <artifactId>verify-licence</artifactId>
     <version>1.0.0</version>
+    <licenses>
+        <license>
+            <name>GPL-3.0-or-later</name>
+            <url>https://www.gnu.org/licenses/gpl-3.0.html</url>
+        </license>
+    </licenses>
     <properties>
         <maven.compiler.release>17</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>

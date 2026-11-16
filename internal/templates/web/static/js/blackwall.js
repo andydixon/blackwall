@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2025-2026 Andy Dixon
+
 // BlackWall front-end utilities. Exposed as a single global so the inline
 // scripts in admin/login, portal/login, bootstrap/enroll, oauth/login,
 // portal/dashboard, and enroll templates have one well-known namespace

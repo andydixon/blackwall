@@ -1,3 +1,6 @@
+-- SPDX-License-Identifier: GPL-3.0-or-later
+-- Copyright (C) 2025-2026 Andy Dixon
+
 -- BlackWall MySQL base schema (MySQL 8.0+).
 --
 -- Converted from the PostgreSQL baseline when BlackWall moved back to MySQL,

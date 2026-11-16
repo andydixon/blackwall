@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2025-2026 Andy Dixon
+
 // Package buildinfo exposes deliberately limited provenance data embedded by
 // the release pipeline. It must never grow to include module versions or other
 // dependency inventory: the values are rendered to authenticated administrators.

@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2025-2026 Andy Dixon
+
 // terraform-provider-blackwall — Terraform provider for managing BlackWall
 // resources (projects, OAuth clients, claim defaults, webhooks) via the
 // admin JSON API. Built on terraform-plugin-framework v1.

@@ -1,3 +1,5 @@
+{{/* SPDX-License-Identifier: GPL-3.0-or-later
+   Copyright (C) 2025-2026 Andy Dixon */ -}}
 {{define "doc_body"}}
 <p>By default BlackWall stores its JWT signing key as an RSA private key in the <code>jwt_signing_keys</code> table. That's fine for development and most single-operator deployments, but it's a SOC 2 / FedRAMP / HIPAA finding waiting to happen: an attacker with database access can mint tokens that say anything.</p>
 

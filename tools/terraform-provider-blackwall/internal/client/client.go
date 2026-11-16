@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2025-2026 Andy Dixon
+
 // Package client is a tiny HTTP client against BlackWall's /api/v1 surface.
 // Intentionally minimal — the provider reaches into it for one verb at a
 // time, so we don't paginate, don't cache, don't share connections beyond
