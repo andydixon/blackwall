@@ -160,7 +160,6 @@ func main() {
 
 	r := chi.NewRouter()
 
-	r.Use(chimiddleware.RealIP)
 	r.Use(chimiddleware.Recoverer)
 	r.Use(middleware.RequestBodyLimit(cfg.RequestBodyMaxBytes))
 	r.Use(middleware.CorrelationID)
