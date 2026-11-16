@@ -9,7 +9,7 @@
 # can be a tiny Alpine image with no glibc dependency.
 
 # ─── builder ─────────────────────────────────────────────────────────────────
-FROM golang:1.26.6-alpine AS builder
+FROM golang:1.27.3-alpine AS builder
 
 # git is needed so `git describe` produces a real version string when the
 # image is built standalone (build.sh passes VERSION explicitly via --build-arg).
