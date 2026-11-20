@@ -38,7 +38,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     ./cmd/blackwall
 
 # ─── runtime ─────────────────────────────────────────────────────────────────
-FROM alpine:3.23.4
+FROM alpine:3.24.4
 
 # ca-certificates: outbound TLS (event-metrics push, etc.).
 # tzdata: correct local-time formatting in audit log entries.
